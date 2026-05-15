@@ -12,14 +12,15 @@ def new_transaction():
         amount = request.form['amount']
         description = request.form['description']
         transaction_date = request.form['transaction_date']
+        category_id = request.form['category_id']
         conn = None
         cursor = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date) VALUES (%s, %s, %s)",
-                (amount, description, transaction_date)
+                "INSERT INTO transactions (amount, description, transaction_date, category_id) VALUES (%s, %s, %s, %s)",
+                (amount, description, transaction_date, category_id)
             )
             conn.commit()
             flash('Transaction added successfully')
@@ -33,4 +34,49 @@ def new_transaction():
             if conn:
                 conn.close()
         return redirect(url_for('new_transaction'))
-    return render_template('new_transaction.html')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    all_categories = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('new_transaction.html', categories=all_categories)
+
+@app.route('/categories', methods=['GET', 'POST'])
+def categories():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        description = request.form.get('description', '').strip()
+        try:
+            cursor.execute(
+                "INSERT INTO categories (name, description) VALUES (%s, %s)",
+                (name, description)
+            )
+            conn.commit()
+            flash('Category added successfully')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        return redirect(url_for('categories'))
+    cursor.execute("SELECT id, name, description FROM categories ORDER BY name")
+    all_categories = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('categories.html', categories=all_categories)
+
+@app.route('/transactions')
+def transactions():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT t.id, t.amount, t.description, c.name, t.transaction_date
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        ORDER BY t.transaction_date DESC
+    """)
+    all_transactions = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('history.html', transactions=all_transactions)

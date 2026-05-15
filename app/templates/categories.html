@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><title>Categories</title></head>
+<body>
+    <h1>Categories</h1>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}<ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+    <h2>Add category</h2>
+    <form method="post">
+        <label>Name: <input type="text" name="name" required></label><br>
+        <label>Description: <input type="text" name="description"></label><br>
+        <button type="submit">Add Category</button>
+    </form>
+    <h2>Existing categories</h2>
+    <table>
+        <tr><th>Name</th><th>Description</th></tr>
+        {% for cat in categories %}
+        <tr><td>{{ cat[1] }}</td><td>{{ cat[2] }}</td></tr>
+        {% endfor %}
+    </table>
+    <a href="/">Back to home</a>
+</body>
+</html>

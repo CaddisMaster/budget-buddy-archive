@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><title>Transaction History</title></head>
+<body>
+    <h1>Transaction history</h1>
+    <table>
+        <tr>
+            <th>Amount</th><th>Description</th><th>Category</th><th>Date</th>
+        </tr>
+        {% for t in transactions %}
+        <tr>
+            <td>{{ t[1] }}</td>
+            <td>{{ t[2] }}</td>
+            <td>{{ t[3] or 'Uncategorised' }}</td>
+            <td>{{ t[4] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <a href="/">Back to home</a>
+</body>
+</html>

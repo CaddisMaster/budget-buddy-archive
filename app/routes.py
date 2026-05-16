@@ -9,10 +9,26 @@ def index():
 @app.route('/transactions/new', methods=['GET', 'POST'])
 def new_transaction():
     if request.method == 'POST':
-        amount = request.form['amount']
-        description = request.form['description']
-        transaction_date = request.form['transaction_date']
-        category_id = request.form['category_id']
+        amount_str = request.form['amount'].strip()
+        description = request.form['description'].strip()
+        transaction_date = request.form['transaction_date'].strip()
+        category_id = request.form.get('category_id') or None
+        errors = []
+        if not amount_str:
+            errors.append('Amount is required')
+        else:
+            try:
+                amount = float(amount_str)
+                if amount <= 0:
+                    errors.append('Amount must be greater than zero')
+            except ValueError:
+                errors.append('Amount must be a valid number')
+        if not transaction_date:
+            errors.append('Date is required')
+        if errors:
+            for error in errors:
+                flash(error)
+            return redirect(url_for('new_transaction'))
         conn = None
         cursor = None
         try:
@@ -29,11 +45,10 @@ def new_transaction():
             if conn:
                 conn.rollback()
         finally:
-            if cursor:
-                cursor.close()
-            if conn:
-                conn.close()
+            if cursor: cursor.close()
+            if conn: conn.close()
         return redirect(url_for('new_transaction'))
+
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name FROM categories ORDER BY name")

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head><title>Accounts</title></head>
+<body>
+    <h1>Accounts</h1>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}<ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+    <h2>Add Account</h2>
+    <form method="post">
+        <label>Name: <input type="text" name="name" required></label><br>
+        <label>Type: </label>
+        <select name="type" required>
+        <option value="">-- select type --</option>
+        <option value="Credit Card">Credit Card</option>
+        <option value="Debit Card">Debit Card</option>
+        <option value="Bank Account">Bank Account</option>
+    </select>
+        <button type="submit">Add Account</button>
+    </form>
+    <h2>Existing Accounts</h2>
+    <table>
+        <tr><th>Name</th><th>Type</th></tr>
+        {% for account in accounts %}
+        <tr><td>{{ account[1] }}</td><td>{{ account[2] }}</td></tr>
+        {% endfor %}
+    </table>
+    <a href="/">Back to home</a>
+</body>
+</html>

@@ -10,3 +10,4 @@ ADD CONSTRAINT fk_budgets_category
 FOREIGN KEY (category_id)
 REFERENCES categories (id)
 ON DELETE RESTRICT;
+

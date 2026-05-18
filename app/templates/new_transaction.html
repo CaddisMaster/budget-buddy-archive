@@ -19,6 +19,14 @@
                 {% endfor %}
             </select>
         </label><br>
+        <label>Account:
+            <select name="account_id">
+                <option value="">-- select account --</option>
+                {% for account in accounts %}
+                <option value="{{ account[0] }}">{{ account[1] }}</option>
+                {% endfor %}
+            </select>
+        </label><br>
         <label>Date: <input type="date" name="transaction_date" required></label><br>
         <button type="submit">Add Transaction</button>
     </form>

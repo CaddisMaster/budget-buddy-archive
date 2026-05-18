@@ -13,6 +13,7 @@ def new_transaction():
         description = request.form['description'].strip()
         transaction_date = request.form['transaction_date'].strip()
         category_id = request.form.get('category_id') or None
+        account_id = request.form.get('account_id') or None
         errors = []
         if not amount_str:
             errors.append('Amount is required')
@@ -25,6 +26,8 @@ def new_transaction():
                 errors.append('Amount must be a valid number')
         if not transaction_date:
             errors.append('Date is required')
+        if not account_id:
+            errors.append('Account is required')
         if errors:
             for error in errors:
                 flash(error)
@@ -35,8 +38,8 @@ def new_transaction():
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, category_id) VALUES (%s, %s, %s, %s)",
-                (amount, description, transaction_date, category_id)
+                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id) VALUES (%s, %s, %s, %s, %s)",
+                (amount, description, transaction_date, category_id, account_id)
             )
             conn.commit()
             flash('Transaction added successfully')
@@ -53,9 +56,11 @@ def new_transaction():
     cursor = conn.cursor()
     cursor.execute("SELECT id, name FROM categories ORDER BY name")
     all_categories = cursor.fetchall()
+    cursor.execute("SELECT account_id, account_name FROM account ORDER BY account_name")
+    all_accounts = cursor.fetchall()
     cursor.close()
     conn.close()
-    return render_template('new_transaction.html', categories=all_categories)
+    return render_template('new_transaction.html', categories=all_categories, accounts=all_accounts)
 
 @app.route('/categories', methods=['GET', 'POST'])
 def categories():
@@ -86,12 +91,37 @@ def transactions():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT t.id, t.amount, t.description, c.name, t.transaction_date
+        SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id
+        RIGHT JOIN account a ON t.account_id = a.account_id
         ORDER BY t.transaction_date DESC
     """)
     all_transactions = cursor.fetchall()
     cursor.close()
     conn.close()
     return render_template('history.html', transactions=all_transactions)
+
+@app.route('/accounts', methods=['GET', 'POST'])
+def accounts():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        account_type = request.form.get('type', '').strip()
+        try:
+            cursor.execute(
+                "INSERT INTO account (account_name, type) VALUES (%s, %s)",
+                 (name, account_type)
+            )
+            conn.commit()
+            flash('Account added successfully')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        return redirect(url_for('accounts'))
+    cursor.execute("SELECT account_id, account_name, type FROM account ORDER BY account_name")
+    all_accounts = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('accounts.html', accounts=all_accounts)

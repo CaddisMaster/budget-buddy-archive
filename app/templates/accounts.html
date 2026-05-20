@@ -20,9 +20,15 @@
     </form>
     <h2>Existing Accounts</h2>
     <table>
-        <tr><th>Name</th><th>Type</th></tr>
+        <tr><th>Name</th><th>Type</th><th>Balance</th></tr>
         {% for account in accounts %}
-        <tr><td>{{ account[1] }}</td><td>{{ account[2] }}</td></tr>
+        <tr>
+            <td>{{ account[1] }}</td>
+            <td>{{ account[2] }}</td>
+            <td style="color: {% if account[3] >= 0 %}green{% else %}red{% endif %};">
+                ${{ "%.2f"|format(account[3]) }}
+            </td>
+        </tr>
         {% endfor %}
     </table>
     <a href="/">Back to home</a>

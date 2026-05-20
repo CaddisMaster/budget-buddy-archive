@@ -123,7 +123,21 @@ def accounts():
             flash(f'Error: {e}')
             conn.rollback()
         return redirect(url_for('accounts'))
-    cursor.execute("SELECT account_id, account_name, type FROM account ORDER BY account_name")
+    cursor.execute("""
+        SELECT
+            a.account_id,
+            a.account_name,
+            a.type,
+            COALESCE(SUM(
+                CASE WHEN t.transaction_type = 'income'
+                THEN t.amount
+                ELSE -t.amount END
+            ), 0) AS balance
+        FROM account a
+        LEFT JOIN transactions t ON a.account_id = t.account_id
+        GROUP BY a.account_id, a.account_name, a.type
+        ORDER BY a.account_name
+    """)
     all_accounts = cursor.fetchall()
     cursor.close()
     conn.close()

@@ -14,6 +14,7 @@ def new_transaction():
         transaction_date = request.form['transaction_date'].strip()
         category_id = request.form.get('category_id') or None
         account_id = request.form.get('account_id') or None
+        transaction_type = request.form.get('transaction_type', 'expense')
         errors = []
         if not amount_str:
             errors.append('Amount is required')
@@ -28,6 +29,8 @@ def new_transaction():
             errors.append('Date is required')
         if not account_id:
             errors.append('Account is required')
+        if transaction_type not in ('income', 'expense'):
+            errors.append('Transaction type must be income or expense')
         if errors:
             for error in errors:
                 flash(error)
@@ -38,8 +41,8 @@ def new_transaction():
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id) VALUES (%s, %s, %s, %s, %s)",
-                (amount, description, transaction_date, category_id, account_id)
+                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type) VALUES (%s, %s, %s, %s, %s, %s)",
+                (amount, description, transaction_date, category_id, account_id, transaction_type)
             )
             conn.commit()
             flash('Transaction added successfully')
@@ -91,10 +94,10 @@ def transactions():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date
+        SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date, t.transaction_type
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id
-        RIGHT JOIN account a ON t.account_id = a.account_id
+        LEFT JOIN account a ON t.account_id = a.account_id
         ORDER BY t.transaction_date DESC
     """)
     all_transactions = cursor.fetchall()

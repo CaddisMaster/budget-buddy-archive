@@ -5,15 +5,16 @@
     <h1>Transaction history</h1>
     <table>
         <tr>
-            <th>Amount</th><th>Description</th><th>Category</th><th>Account</th><th>Date</th>
+            <th>Date</th><th>Type</th><th>Amount</th><th>Description</th><th>Category</th><th>Account</th>
         </tr>
         {% for t in transactions %}
-        <tr>
+        <tr style="color: {% if t[6] == 'income' %}green{% else %}red{% endif %};">
+            <td>{{ t[5] }}</td>
+            <td>{{ t[6] | capitalize }}</td>
             <td>{{ t[1] }}</td>
             <td>{{ t[2] }}</td>
             <td>{{ t[3] or 'Uncategorised' }}</td>
-            <td>{{ t[4] or 'No Account' }}</td>
-            <td>{{ t[5] }}</td>
+            <td>{{ t[4] or 'No account' }}</td>
         </tr>
         {% endfor %}
     </table>

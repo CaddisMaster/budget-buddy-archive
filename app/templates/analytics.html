@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head><title>Analytics</title></head>
+<body>
+    <h1>Analytics</h1>
+    <h2>Summary</h2>
+    <p>Total income: <strong style="color: green;">${{ "%.2f"|format(total_income) }}</strong></p>
+    <p>Total expenses: <strong style="color: red;">${{ "%.2f"|format(total_expenses) }}</strong></p>
+    <p>Net balance: <strong style="color: {% if net_balance >= 0 %}green{% else %}red{% endif %};">${{ "%.2f"|format(net_balance) }}</strong></p>
+
+    <h2>Spending by category</h2>
+    <table>
+        <tr><th>Category</th><th>Total spent</th></tr>
+        {% for row in spending_by_category %}
+        <tr><td>{{ row[0] }}</td><td>${{ "%.2f"|format(row[1]) }}</td></tr>
+        {% endfor %}
+    </table>
+    <a href="/">Back to home</a>
+</body>
+</html>

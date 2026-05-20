@@ -142,3 +142,44 @@ def accounts():
     cursor.close()
     conn.close()
     return render_template('accounts.html', accounts=all_accounts)
+
+@app.route('/analytics')
+def analytics():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT c.name, SUM(t.amount) AS total
+        FROM transactions t
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.transaction_type = 'expense'
+        GROUP BY c.name
+        ORDER BY total DESC
+    """)
+    spending_by_category = cursor.fetchall()
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE transaction_type = 'income'
+    """)
+    total_income = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE transaction_type = 'expense'
+    """)
+    total_expenses = cursor.fetchone()[0]
+    cursor.execute("""
+    SELECT
+            COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0) AS net_balance
+        FROM transactions
+    """)
+    net_balance = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
+    return render_template('analytics.html',
+        spending_by_category=spending_by_category,
+        total_income=total_income,
+        total_expenses=total_expenses,
+        net_balance=net_balance
+    )

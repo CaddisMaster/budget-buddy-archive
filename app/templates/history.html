@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html>
-<head><title>Transaction History</title></head>
+<head>
+    <title>Transaction History</title>
+    <style>
+        .income { color: green; }
+        .expense { color: red; }
+    </style>
+</head>
 <body>
     <h1>Transaction history</h1>
     <table>
@@ -8,7 +14,7 @@
             <th>Date</th><th>Type</th><th>Amount</th><th>Description</th><th>Category</th><th>Account</th>
         </tr>
         {% for t in transactions %}
-        <tr style="color: {% if t[6] == 'income' %}green{% else %}red{% endif %};">
+        <tr class="{% if t[6] == 'income' %}income{% else %}expense{% endif %}">
             <td>{{ t[5] }}</td>
             <td>{{ t[6] | capitalize }}</td>
             <td>{{ t[1] }}</td>

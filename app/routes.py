@@ -170,16 +170,43 @@ def analytics():
     """)
     total_expenses = cursor.fetchone()[0]
     cursor.execute("""
-    SELECT
+        SELECT
             COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0) AS net_balance
         FROM transactions
     """)
     net_balance = cursor.fetchone()[0]
+    cursor.execute("""
+        SELECT
+            TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+            SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+            SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+        FROM transactions
+        GROUP BY DATE_TRUNC('month', transaction_date)
+        ORDER BY DATE_TRUNC('month', transaction_date)
+    """)
+    cash_flow = cursor.fetchall()
+    cursor.execute("""
+        SELECT
+            c.name AS category,
+            b.amount AS budget,
+            COALESCE(SUM(t.amount), 0) AS actual,
+            b.amount - COALESCE(SUM(t.amount), 0) AS remaining
+        FROM budgets b
+        JOIN categories c ON b.category_id = c.id
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+            AND t.transaction_type = 'expense'
+            AND t.transaction_date BETWEEN b.period_start AND b.period_end
+        GROUP BY c.name, b.amount, b.period_start, b.period_end
+        ORDER BY c.name
+    """)
+    budget_vs_actual = cursor.fetchall()
     cursor.close()
     conn.close()
     return render_template('analytics.html',
         spending_by_category=spending_by_category,
         total_income=total_income,
         total_expenses=total_expenses,
-        net_balance=net_balance
+        net_balance=net_balance,
+        cash_flow=cash_flow,
+        budget_vs_actual=budget_vs_actual
     )

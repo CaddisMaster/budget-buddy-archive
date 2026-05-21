@@ -15,6 +15,35 @@
         <tr><td>{{ row[0] }}</td><td>${{ "%.2f"|format(row[1]) }}</td></tr>
         {% endfor %}
     </table>
+        <h2>Cash flow by month</h2>
+    <table>
+        <tr><th>Month</th><th>Income</th><th>Expenses</th><th>Net</th></tr>
+        {% for row in cash_flow %}
+        <tr>
+            <td>{{ row[0] }}</td>
+            <td style="color:green">${{ "%.2f"|format(row[1]) }}</td>
+            <td style="color:red">${{ "%.2f"|format(row[2]) }}</td>
+            <td style="color: {% if row[1] - row[2] >= 0 %}green{% else %}red{% endif %};">
+                ${{ "%.2f"|format(row[1] - row[2]) }}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h2>Budget vs actual</h2>
+    <table>
+        <tr><th>Category</th><th>Budget</th><th>Actual</th><th>Remaining</th></tr>
+        {% for row in budget_vs_actual %}
+        <tr>
+            <td>{{ row[0] }}</td>
+            <td>${{ "%.2f"|format(row[1]) }}</td>
+            <td>${{ "%.2f"|format(row[2]) }}</td>
+            <td style="color: {% if row[3] >= 0 %}green{% else %}red{% endif %};">
+                ${{ "%.2f"|format(row[3]) }}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
     <a href="/">Back to home</a>
 </body>
 </html>

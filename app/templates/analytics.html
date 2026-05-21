@@ -44,6 +44,12 @@
         </tr>
         {% endfor %}
     </table>
+    <script>
+        const cashFlowData = {{ cash_flow_json | safe }};
+        const movingAvgData = {{ moving_avg_json | safe }};
+        console.log('Cash flow data ready:', cashFlowData);
+        console.log('Moving avg data ready:', movingAvgData);
+    </script>
     <a href="/">Back to home</a>
 </body>
 </html>

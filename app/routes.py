@@ -1,6 +1,7 @@
 from app import app
 from app.db import get_db_connection
 from flask import render_template, request, redirect, url_for, flash
+import json
 
 @app.route('/')
 def index():
@@ -115,7 +116,7 @@ def accounts():
         try:
             cursor.execute(
                 "INSERT INTO account (account_name, type) VALUES (%s, %s)",
-                 (name, account_type)
+                (name, account_type)
             )
             conn.commit()
             flash('Account added successfully')
@@ -147,6 +148,7 @@ def accounts():
 def analytics():
     conn = get_db_connection()
     cursor = conn.cursor()
+
     cursor.execute("""
         SELECT c.name, SUM(t.amount) AS total
         FROM transactions t
@@ -156,6 +158,7 @@ def analytics():
         ORDER BY total DESC
     """)
     spending_by_category = cursor.fetchall()
+
     cursor.execute("""
         SELECT COALESCE(SUM(amount), 0)
         FROM transactions
@@ -169,12 +172,14 @@ def analytics():
         WHERE transaction_type = 'expense'
     """)
     total_expenses = cursor.fetchone()[0]
+
     cursor.execute("""
         SELECT
             COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0) AS net_balance
         FROM transactions
     """)
     net_balance = cursor.fetchone()[0]
+
     cursor.execute("""
         SELECT
             TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
@@ -185,6 +190,7 @@ def analytics():
         ORDER BY DATE_TRUNC('month', transaction_date)
     """)
     cash_flow = cursor.fetchall()
+
     cursor.execute("""
         SELECT
             c.name AS category,
@@ -200,6 +206,38 @@ def analytics():
         ORDER BY c.name
     """)
     budget_vs_actual = cursor.fetchall()
+
+    cursor.execute("""
+        WITH weekly_totals AS (
+            SELECT
+                DATE_TRUNC('week', transaction_date) AS week,
+                SUM(amount) AS weekly_total
+            FROM transactions
+            WHERE transaction_type = 'expense'
+            GROUP BY DATE_TRUNC('week', transaction_date)
+        )
+        SELECT
+            TO_CHAR(week, 'YYYY-MM-DD') AS week_label,
+            weekly_total,
+            AVG(weekly_total) OVER (
+                ORDER BY week
+                ROWS BETWEEN 3 PRECEDING AND CURRENT ROW
+            ) AS moving_avg
+        FROM weekly_totals
+        ORDER BY week
+    """)
+    moving_averages = cursor.fetchall()
+
+    cash_flow_json = json.dumps([
+        {'month': row[0], 'income': float(row[1]), 'expenses': float(row[2])}
+        for row in cash_flow
+    ])
+
+    moving_avg_json = json.dumps([
+        {'week': row[0], 'total': float(row[1]), 'avg': float(row[2])}
+        for row in moving_averages
+    ])
+
     cursor.close()
     conn.close()
     return render_template('analytics.html',
@@ -208,5 +246,8 @@ def analytics():
         total_expenses=total_expenses,
         net_balance=net_balance,
         cash_flow=cash_flow,
-        budget_vs_actual=budget_vs_actual
+        budget_vs_actual=budget_vs_actual,
+        moving_averages=moving_averages,
+        cash_flow_json=cash_flow_json,
+        moving_avg_json=moving_avg_json
     )

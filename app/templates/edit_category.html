@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head><title>Edit Category</title></head>
+<body>
+    <h1>Edit category</h1>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}<ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+    <form method="post">
+        <label>Name: <input type="text" name="name" value="{{ category[1] }}" required></label><br>
+        <label>Description: <input type="text" name="description" value="{{ category[2] }}"></label><br>
+        <button type="submit">Save changes</button>
+    </form>
+    <a href="/categories">Cancel</a>
+</body>
+</html>

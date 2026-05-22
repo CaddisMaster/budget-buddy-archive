@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><title>Delete Category</title></head>
+<body>
+    <h1>Delete category</h1>
+    <p>Are you sure you want to delete <strong>{{ category[1] }}</strong>?</p>
+    <p>This will fail if any transactions or budgets are still using this category.</p>
+    <form method="post">
+        <button type="submit">Yes, delete</button>
+    </form>
+    <a href="/categories">Cancel</a>
+</body>
+</html>

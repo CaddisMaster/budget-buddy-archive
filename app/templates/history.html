@@ -21,7 +21,7 @@
 </form>
     <table>
         <tr>
-            <th>Date</th><th>Type</th><th>Amount</th><th>Description</th><th>Category</th><th>Account</th>
+            <th>Date</th><th>Type</th><th>Amount</th><th>Description</th><th>Category</th><th>Account</th><th>Actions</th>
         </tr>
         {% for t in transactions %}
         <tr class="{% if t[6] == 'income' %}income{% else %}expense{% endif %}">
@@ -31,6 +31,7 @@
             <td>{{ t[2] }}</td>
             <td>{{ t[3] or 'Uncategorised' }}</td>
             <td>{{ t[4] or 'No account' }}</td>
+            <td><a href="/transactions/edit/{{ t[0] }}">Edit</a> | <a href="/transactions/delete/{{ t[0] }}">Delete</a></td>
         </tr>
         {% endfor %}
     </table>

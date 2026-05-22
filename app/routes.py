@@ -452,3 +452,166 @@ def delete_budget(budget_id):
     conn.close()
     return render_template('delete_budget.html', budget=budget)
 
+@app.route('/transactions/edit/<int:transaction_id>', methods=['GET', 'POST'])
+def edit_transaction(transaction_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        amount_str = request.form['amount'].strip()
+        description = request.form['description'].strip()
+        transaction_date = request.form['transaction_date'].strip()
+        category_id = request.form.get('category_id') or None
+        account_id = request.form.get('account_id') or None
+        transaction_type = request.form.get('transaction_type', 'expense')
+        try:
+            amount = float(amount_str)
+            cursor.execute(
+                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s WHERE id=%s",
+                (amount, description, transaction_date, category_id, account_id, transaction_type, transaction_id)
+            )
+            conn.commit()
+            flash('Transaction updated successfully')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('transactions'))
+    cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type FROM transactions WHERE id = %s", (transaction_id,))
+    transaction = cursor.fetchone()
+    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    all_categories = cursor.fetchall()
+    cursor.execute("SELECT account_id, account_name FROM account ORDER BY account_name")
+    all_accounts = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('edit_transaction.html', transaction=transaction, categories=all_categories, accounts=all_accounts)
+
+
+@app.route('/transactions/delete/<int:transaction_id>', methods=['GET', 'POST'])
+def delete_transaction(transaction_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        try:
+            cursor.execute("DELETE FROM transactions WHERE id = %s", (transaction_id,))
+            conn.commit()
+            flash('Transaction deleted')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('transactions'))
+    cursor.execute("""
+        SELECT t.id, t.amount, t.description, t.transaction_date, t.transaction_type
+        FROM transactions t WHERE t.id = %s
+    """, (transaction_id,))
+    transaction = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return render_template('delete_transaction.html', transaction=transaction)
+
+
+@app.route('/categories/edit/<int:category_id>', methods=['GET', 'POST'])
+def edit_category(category_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        description = request.form.get('description', '').strip()
+        try:
+            cursor.execute(
+                "UPDATE categories SET name=%s, description=%s WHERE id=%s",
+                (name, description, category_id)
+            )
+            conn.commit()
+            flash('Category updated successfully')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('categories'))
+    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s", (category_id,))
+    category = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return render_template('edit_category.html', category=category)
+
+
+@app.route('/categories/delete/<int:category_id>', methods=['GET', 'POST'])
+def delete_category(category_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        try:
+            cursor.execute("DELETE FROM categories WHERE id = %s", (category_id,))
+            conn.commit()
+            flash('Category deleted')
+        except Exception as e:
+            if 'foreign key' in str(e).lower():
+                flash('Cannot delete — this category is used by existing transactions or budgets')
+            else:
+                flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('categories'))
+    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s", (category_id,))
+    category = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return render_template('delete_category.html', category=category)
+
+
+@app.route('/accounts/edit/<int:account_id>', methods=['GET', 'POST'])
+def edit_account(account_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        name = request.form['name'].strip()
+        account_type = request.form.get('type', '').strip()
+        try:
+            cursor.execute(
+                "UPDATE account SET account_name=%s, type=%s WHERE account_id=%s",
+                (name, account_type, account_id)
+            )
+            conn.commit()
+            flash('Account updated successfully')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('accounts'))
+    cursor.execute("SELECT account_id, account_name, type FROM account WHERE account_id = %s", (account_id,))
+    account = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return render_template('edit_account.html', account=account)
+
+
+@app.route('/accounts/delete/<int:account_id>', methods=['GET', 'POST'])
+def delete_account(account_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        try:
+            cursor.execute("DELETE FROM account WHERE account_id = %s", (account_id,))
+            conn.commit()
+            flash('Account deleted')
+        except Exception as e:
+            if 'foreign key' in str(e).lower():
+                flash('Cannot delete — this account is used by existing transactions')
+            else:
+                flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('accounts'))
+    cursor.execute("SELECT account_id, account_name, type FROM account WHERE account_id = %s", (account_id,))
+    account = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return render_template('delete_account.html', account=account)

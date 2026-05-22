@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><title>Edit Transaction</title></head>
+<body>
+    <h1>Edit transaction</h1>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}<ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+    <form method="post">
+        <label>Type:
+            <select name="transaction_type" required>
+                <option value="expense" {% if transaction[6] == 'expense' %}selected{% endif %}>Expense</option>
+                <option value="income" {% if transaction[6] == 'income' %}selected{% endif %}>Income</option>
+            </select>
+        </label><br>
+        <label>Amount: <input type="number" step="0.01" name="amount" value="{{ transaction[1] }}" required></label><br>
+        <label>Description: <input type="text" name="description" value="{{ transaction[2] }}"></label><br>
+        <label>Date: <input type="date" name="transaction_date" value="{{ transaction[3] }}" required></label><br>
+        <label>Category:
+            <select name="category_id">
+                <option value="">-- no category --</option>
+                {% for cat in categories %}
+                <option value="{{ cat[0] }}" {% if cat[0] == transaction[4] %}selected{% endif %}>{{ cat[1] }}</option>
+                {% endfor %}
+            </select>
+        </label><br>
+        <label>Account:
+            <select name="account_id">
+                <option value="">-- no account --</option>
+                {% for acc in accounts %}
+                <option value="{{ acc[0] }}" {% if acc[0] == transaction[5] %}selected{% endif %}>{{ acc[1] }}</option>
+                {% endfor %}
+            </select>
+        </label><br>
+        <button type="submit">Save changes</button>
+    </form>
+    <a href="/transactions">Cancel</a>
+</body>
+</html>

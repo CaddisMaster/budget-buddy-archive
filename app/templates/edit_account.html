@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><title>Edit Account</title></head>
+<body>
+    <h1>Edit account</h1>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}<ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
+    {% endwith %}
+    <form method="post">
+        <label>Name: <input type="text" name="name" value="{{ account[1] }}" required></label><br>
+        <label>Type:
+            <select name="type" required>
+                <option value="Credit Card" {% if account[2] == 'Credit Card' %}selected{% endif %}>Credit Card</option>
+                <option value="Debit Card" {% if account[2] == 'Debit Card' %}selected{% endif %}>Debit Card</option>
+                <option value="Bank Account" {% if account[2] == 'Bank Account' %}selected{% endif %}>Bank Account</option>
+            </select>
+        </label><br>
+        <button type="submit">Save changes</button>
+    </form>
+    <a href="/accounts">Cancel</a>
+</body>
+</html>

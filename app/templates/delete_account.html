@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><title>Delete Account</title></head>
+<body>
+    <h1>Delete account</h1>
+    <p>Are you sure you want to delete <strong>{{ account[1] }}</strong>?</p>
+    <p>This will fail if any transactions are still using this account.</p>
+    <form method="post">
+        <button type="submit">Yes, delete</button>
+    </form>
+    <a href="/accounts">Cancel</a>
+</body>
+</html>

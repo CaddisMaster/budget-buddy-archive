@@ -2,6 +2,7 @@ from app import app
 from app.db import get_db_connection
 from flask import render_template, request, redirect, url_for, flash
 import json
+from datetime import datetime, date
 
 @app.route('/')
 def index():
@@ -92,19 +93,45 @@ def categories():
 
 @app.route('/transactions')
 def transactions():
+    selected_month = request.args.get('month')
+    months = []
+    today = datetime.today()
+    for i in range(12):
+        month = today.month - i
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        months.append(f'{year}-{month:02d}')
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date, t.transaction_type
-        FROM transactions t
-        LEFT JOIN categories c ON t.category_id = c.id
-        LEFT JOIN account a ON t.account_id = a.account_id
-        ORDER BY t.transaction_date DESC
-    """)
+    if selected_month:
+        year, month = selected_month.split('-')
+        cursor.execute("""
+            SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date, t.transaction_type
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            LEFT JOIN account a ON t.account_id = a.account_id
+            WHERE EXTRACT(YEAR FROM t.transaction_date) = %s
+            AND EXTRACT(MONTH FROM t.transaction_date) = %s
+            ORDER BY t.transaction_date DESC
+        """, (year, month))
+    else:
+        cursor.execute("""
+            SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date, t.transaction_type
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            LEFT JOIN account a ON t.account_id = a.account_id
+            ORDER BY t.transaction_date DESC
+        """)
     all_transactions = cursor.fetchall()
     cursor.close()
     conn.close()
-    return render_template('history.html', transactions=all_transactions)
+    return render_template('history.html',
+        transactions=all_transactions,
+        months=months,
+        selected_month=selected_month
+    )
 
 @app.route('/accounts', methods=['GET', 'POST'])
 def accounts():
@@ -146,65 +173,148 @@ def accounts():
 
 @app.route('/analytics')
 def analytics():
+    selected_month = request.args.get('month')
+    months = []
+    today = datetime.today()
+    for i in range(12):
+        month = today.month - i
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        months.append(f'{year}-{month:02d}')
+    filter_year = None
+    filter_month = None
+    if selected_month:
+        filter_year, filter_month = selected_month.split('-')
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT c.name, SUM(t.amount) AS total
-        FROM transactions t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.transaction_type = 'expense'
-        GROUP BY c.name
-        ORDER BY total DESC
-    """)
+    if selected_month:
+        cursor.execute("""
+            SELECT c.name, SUM(t.amount) AS total
+            FROM transactions t
+            JOIN categories c ON t.category_id = c.id
+            WHERE t.transaction_type = 'expense'
+            AND EXTRACT(YEAR FROM t.transaction_date) = %s
+            AND EXTRACT(MONTH FROM t.transaction_date) = %s
+            GROUP BY c.name
+            ORDER BY total DESC
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT c.name, SUM(t.amount) AS total
+            FROM transactions t
+            JOIN categories c ON t.category_id = c.id
+            WHERE t.transaction_type = 'expense'
+            GROUP BY c.name
+            ORDER BY total DESC
+        """)
     spending_by_category = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT COALESCE(SUM(amount), 0)
-        FROM transactions
-        WHERE transaction_type = 'income'
-    """)
+    if selected_month:
+        cursor.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM transactions
+            WHERE transaction_type = 'income'
+            AND EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM transactions
+            WHERE transaction_type = 'income'
+        """)
     total_income = cursor.fetchone()[0]
 
-    cursor.execute("""
-        SELECT COALESCE(SUM(amount), 0)
-        FROM transactions
-        WHERE transaction_type = 'expense'
-    """)
+    if selected_month:
+        cursor.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM transactions
+            WHERE transaction_type = 'expense'
+            AND EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT COALESCE(SUM(amount), 0)
+            FROM transactions
+            WHERE transaction_type = 'expense'
+        """)
     total_expenses = cursor.fetchone()[0]
 
-    cursor.execute("""
-        SELECT
-            COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0) AS net_balance
-        FROM transactions
-    """)
+    if selected_month:
+        cursor.execute("""
+            SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
+            FROM transactions
+            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
+            FROM transactions
+        """)
     net_balance = cursor.fetchone()[0]
 
-    cursor.execute("""
-        SELECT
-            TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
-            SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
-            SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
-        FROM transactions
-        GROUP BY DATE_TRUNC('month', transaction_date)
-        ORDER BY DATE_TRUNC('month', transaction_date)
-    """)
+    if selected_month:
+        cursor.execute("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+                SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+                SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+            FROM transactions
+            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+            GROUP BY DATE_TRUNC('month', transaction_date)
+            ORDER BY DATE_TRUNC('month', transaction_date)
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+                SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+                SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+            FROM transactions
+            GROUP BY DATE_TRUNC('month', transaction_date)
+            ORDER BY DATE_TRUNC('month', transaction_date)
+        """)
     cash_flow = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT
-            c.name AS category,
-            b.amount AS budget,
-            COALESCE(SUM(t.amount), 0) AS actual,
-            b.amount - COALESCE(SUM(t.amount), 0) AS remaining
-        FROM budgets b
-        JOIN categories c ON b.category_id = c.id
-        LEFT JOIN transactions t ON t.category_id = b.category_id
-            AND t.transaction_type = 'expense'
-            AND t.transaction_date BETWEEN b.period_start AND b.period_end
-        GROUP BY c.name, b.amount, b.period_start, b.period_end
-        ORDER BY c.name
-    """)
+    if selected_month:
+        cursor.execute("""
+            SELECT
+                c.name AS category,
+                b.amount AS budget,
+                COALESCE(SUM(t.amount), 0) AS actual,
+                b.amount - COALESCE(SUM(t.amount), 0) AS remaining
+            FROM budgets b
+            JOIN categories c ON b.category_id = c.id
+            LEFT JOIN transactions t ON t.category_id = b.category_id
+                AND t.transaction_type = 'expense'
+                AND t.transaction_date BETWEEN b.period_start AND b.period_end
+            WHERE EXTRACT(YEAR FROM b.period_start) = %s
+            AND EXTRACT(MONTH FROM b.period_start) = %s
+            GROUP BY c.name, b.amount, b.period_start, b.period_end
+            ORDER BY c.name
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT
+                c.name AS category,
+                b.amount AS budget,
+                COALESCE(SUM(t.amount), 0) AS actual,
+                b.amount - COALESCE(SUM(t.amount), 0) AS remaining
+            FROM budgets b
+            JOIN categories c ON b.category_id = c.id
+            LEFT JOIN transactions t ON t.category_id = b.category_id
+                AND t.transaction_type = 'expense'
+                AND t.transaction_date BETWEEN b.period_start AND b.period_end
+            GROUP BY c.name, b.amount, b.period_start, b.period_end
+            ORDER BY c.name
+        """)
     budget_vs_actual = cursor.fetchall()
 
     cursor.execute("""
@@ -249,5 +359,7 @@ def analytics():
         budget_vs_actual=budget_vs_actual,
         moving_averages=moving_averages,
         cash_flow_json=cash_flow_json,
-        moving_avg_json=moving_avg_json
+        moving_avg_json=moving_avg_json,
+        months=months,
+        selected_month=selected_month
     )

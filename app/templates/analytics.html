@@ -3,6 +3,16 @@
 <head><title>Analytics</title></head>
 <body>
     <h1>Analytics</h1>
+        <form method="get">
+    <label>Filter by month:
+        <select name="month" onchange="this.form.submit()">
+            <option value="">All months</option>
+            {% for m in months %}
+            <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+        </select>
+    </label>
+</form>
     <h2>Summary</h2>
     <p>Total income: <strong style="color: green;">${{ "%.2f"|format(total_income) }}</strong></p>
     <p>Total expenses: <strong style="color: red;">${{ "%.2f"|format(total_expenses) }}</strong></p>

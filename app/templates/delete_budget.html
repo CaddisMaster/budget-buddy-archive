@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head><title>Delete Budget</title></head>
+<body>
+    <h1>Delete budget</h1>
+    <p>Are you sure you want to delete the budget for <strong>{{ budget[1] }}</strong> ({{ budget[3] }} to {{ budget[4] }})?</p>
+    <form method="post">
+        <button type="submit">Yes, delete</button>
+    </form>
+    <a href="/budgets">Cancel</a>
+</body>
+</html>

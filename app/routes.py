@@ -347,7 +347,6 @@ def analytics():
         {'week': row[0], 'total': float(row[1]), 'avg': float(row[2])}
         for row in moving_averages
     ])
-
     cursor.close()
     conn.close()
     return render_template('analytics.html',
@@ -363,3 +362,93 @@ def analytics():
         months=months,
         selected_month=selected_month
     )
+
+@app.route('/budgets', methods=['GET', 'POST'])
+def budgets():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        category_id = request.form.get('category_id')
+        amount = request.form.get('amount')
+        period_start = request.form.get('period_start')
+        period_end = request.form.get('period_end')
+        try:
+            cursor.execute(
+                "INSERT INTO budgets (category_id, amount, period_start, period_end) VALUES (%s, %s, %s, %s)",
+                (category_id, amount, period_start, period_end)
+            )
+            conn.commit()
+            flash('Budget added successfully')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        return redirect(url_for('budgets'))
+    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    all_categories = cursor.fetchall()
+    cursor.execute("""
+        SELECT b.id, c.name, b.amount, b.period_start, b.period_end
+        FROM budgets b
+        JOIN categories c ON b.category_id = c.id
+        ORDER BY b.period_start DESC
+    """)
+    all_budgets = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('budgets.html', categories=all_categories, budgets=all_budgets)
+
+
+@app.route('/budgets/edit/<int:budget_id>', methods=['GET', 'POST'])
+def edit_budget(budget_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        category_id = request.form.get('category_id')
+        amount = request.form.get('amount')
+        period_start = request.form.get('period_start')
+        period_end = request.form.get('period_end')
+        try:
+            cursor.execute(
+                "UPDATE budgets SET category_id=%s, amount=%s, period_start=%s, period_end=%s WHERE id=%s",
+                (category_id, amount, period_start, period_end, budget_id)
+            )
+            conn.commit()
+            flash('Budget updated successfully')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('budgets'))
+    cursor.execute("SELECT id, category_id, amount, period_start, period_end FROM budgets WHERE id = %s", (budget_id,))
+    budget = cursor.fetchone()
+    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    all_categories = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('edit_budget.html', budget=budget, categories=all_categories)
+
+@app.route('/budgets/delete/<int:budget_id>', methods=['GET', 'POST'])
+def delete_budget(budget_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if request.method == 'POST':
+        try:
+            cursor.execute("DELETE FROM budgets WHERE id = %s", (budget_id,))
+            conn.commit()
+            flash('Budget deleted')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('budgets'))
+    cursor.execute("""
+        SELECT b.id, c.name, b.amount, b.period_start, b.period_end
+        FROM budgets b JOIN categories c ON b.category_id = c.id
+        WHERE b.id = %s
+    """, (budget_id,))
+    budget = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return render_template('delete_budget.html', budget=budget)
+

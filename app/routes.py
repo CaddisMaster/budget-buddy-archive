@@ -704,19 +704,36 @@ def dashboard():
     """)
     account_balances = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT
-            c.name AS category,
-            b.amount AS budget,
-            COALESCE(SUM(t.amount), 0) AS actual
-        FROM budgets b
-        JOIN categories c ON b.category_id = c.id
-        LEFT JOIN transactions t ON t.category_id = b.category_id
-            AND t.transaction_type = 'expense'
-            AND t.transaction_date BETWEEN b.period_start AND b.period_end
-        GROUP BY c.name, b.amount, b.period_start, b.period_end
-        ORDER BY c.name
-    """)
+    if selected_month:
+        cursor.execute("""
+            SELECT
+                c.name AS category,
+                b.amount AS budget,
+                COALESCE(SUM(t.amount), 0) AS actual
+            FROM budgets b
+            JOIN categories c ON b.category_id = c.id
+            LEFT JOIN transactions t ON t.category_id = b.category_id
+                AND t.transaction_type = 'expense'
+                AND t.transaction_date BETWEEN b.period_start AND b.period_end
+            WHERE EXTRACT(YEAR FROM b.period_start) = %s
+            AND EXTRACT(MONTH FROM b.period_start) = %s
+            GROUP BY c.name, b.amount, b.period_start, b.period_end
+            ORDER BY c.name
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT
+                c.name AS category,
+                b.amount AS budget,
+                COALESCE(SUM(t.amount), 0) AS actual
+            FROM budgets b
+            JOIN categories c ON b.category_id = c.id
+            LEFT JOIN transactions t ON t.category_id = b.category_id
+                AND t.transaction_type = 'expense'
+                AND t.transaction_date BETWEEN b.period_start AND b.period_end
+            GROUP BY c.name, b.amount, b.period_start, b.period_end
+            ORDER BY c.name
+        """)
     budget_data = cursor.fetchall()
 
     cursor.close()

@@ -682,15 +682,58 @@ def dashboard():
         """)
     cash_flow = cursor.fetchall()
 
+    cursor.execute("""
+        SELECT
+            TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+            SUM(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END))
+            OVER (ORDER BY DATE_TRUNC('month', transaction_date)) AS running_balance
+        FROM transactions
+        GROUP BY DATE_TRUNC('month', transaction_date)
+        ORDER BY DATE_TRUNC('month', transaction_date)
+    """)
+    net_balance_trend = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT
+            a.account_name,
+            COALESCE(SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE -t.amount END), 0) AS balance
+        FROM account a
+        LEFT JOIN transactions t ON a.account_id = t.account_id
+        GROUP BY a.account_id, a.account_name
+        ORDER BY balance DESC
+    """)
+    account_balances = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT
+            c.name AS category,
+            b.amount AS budget,
+            COALESCE(SUM(t.amount), 0) AS actual
+        FROM budgets b
+        JOIN categories c ON b.category_id = c.id
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+            AND t.transaction_type = 'expense'
+            AND t.transaction_date BETWEEN b.period_start AND b.period_end
+        GROUP BY c.name, b.amount, b.period_start, b.period_end
+        ORDER BY c.name
+    """)
+    budget_data = cursor.fetchall()
+
     cursor.close()
     conn.close()
 
     spending_json = json.dumps([{'category': r[0], 'total': float(r[1])} for r in spending])
     cash_flow_json = json.dumps([{'month': r[0], 'income': float(r[1]), 'expenses': float(r[2])} for r in cash_flow])
+    net_balance_json = json.dumps([{'month': r[0], 'balance': float(r[1])} for r in net_balance_trend])
+    account_json = json.dumps([{'account': r[0], 'balance': float(r[1])} for r in account_balances])
+    budget_json = json.dumps([{'category': r[0], 'budget': float(r[1]), 'actual': float(r[2])} for r in budget_data])
 
     return render_template('dashboard.html',
         spending_json=spending_json,
         cash_flow_json=cash_flow_json,
+        net_balance_json=net_balance_json,
+        account_json=account_json,
+        budget_json=budget_json,
         months=months,
         selected_month=selected_month
     )

@@ -618,32 +618,79 @@ def delete_account(account_id):
 
 @app.route('/dashboard')
 def dashboard():
+    selected_month = request.args.get('month')
+    months = []
+    today = datetime.today()
+    for i in range(12):
+        month = today.month - i
+        year = today.year
+        if month <= 0:
+            month += 12
+            year -= 1
+        months.append(f'{year}-{month:02d}')
+    filter_year = None
+    filter_month = None
+    if selected_month:
+        filter_year, filter_month = selected_month.split('-')
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT c.name, SUM(t.amount) AS total
-        FROM transactions t
-        JOIN categories c ON t.category_id = c.id
-        WHERE t.transaction_type = 'expense'
-        GROUP BY c.name
-        ORDER BY total DESC
-    """)
+
+    if selected_month:
+        cursor.execute("""
+            SELECT c.name, SUM(t.amount) AS total
+            FROM transactions t
+            JOIN categories c ON t.category_id = c.id
+            WHERE t.transaction_type = 'expense'
+            AND EXTRACT(YEAR FROM t.transaction_date) = %s
+            AND EXTRACT(MONTH FROM t.transaction_date) = %s
+            GROUP BY c.name
+            ORDER BY total DESC
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT c.name, SUM(t.amount) AS total
+            FROM transactions t
+            JOIN categories c ON t.category_id = c.id
+            WHERE t.transaction_type = 'expense'
+            GROUP BY c.name
+            ORDER BY total DESC
+        """)
     spending = cursor.fetchall()
-    cursor.execute("""
-        SELECT
-            TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
-            SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
-            SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
-        FROM transactions
-        GROUP BY DATE_TRUNC('month', transaction_date)
-        ORDER BY DATE_TRUNC('month', transaction_date)
-    """)
+
+    if selected_month:
+        cursor.execute("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+                SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+                SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+            FROM transactions
+            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+            GROUP BY DATE_TRUNC('month', transaction_date)
+            ORDER BY DATE_TRUNC('month', transaction_date)
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+                SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+                SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+            FROM transactions
+            GROUP BY DATE_TRUNC('month', transaction_date)
+            ORDER BY DATE_TRUNC('month', transaction_date)
+        """)
     cash_flow = cursor.fetchall()
+
     cursor.close()
     conn.close()
+
     spending_json = json.dumps([{'category': r[0], 'total': float(r[1])} for r in spending])
     cash_flow_json = json.dumps([{'month': r[0], 'income': float(r[1]), 'expenses': float(r[2])} for r in cash_flow])
+
     return render_template('dashboard.html',
         spending_json=spending_json,
-        cash_flow_json=cash_flow_json
+        cash_flow_json=cash_flow_json,
+        months=months,
+        selected_month=selected_month
     )

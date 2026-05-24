@@ -615,3 +615,35 @@ def delete_account(account_id):
     cursor.close()
     conn.close()
     return render_template('delete_account.html', account=account)
+
+@app.route('/dashboard')
+def dashboard():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT c.name, SUM(t.amount) AS total
+        FROM transactions t
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.transaction_type = 'expense'
+        GROUP BY c.name
+        ORDER BY total DESC
+    """)
+    spending = cursor.fetchall()
+    cursor.execute("""
+        SELECT
+            TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+            SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+            SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+        FROM transactions
+        GROUP BY DATE_TRUNC('month', transaction_date)
+        ORDER BY DATE_TRUNC('month', transaction_date)
+    """)
+    cash_flow = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    spending_json = json.dumps([{'category': r[0], 'total': float(r[1])} for r in spending])
+    cash_flow_json = json.dumps([{'month': r[0], 'income': float(r[1]), 'expenses': float(r[2])} for r in cash_flow])
+    return render_template('dashboard.html',
+        spending_json=spending_json,
+        cash_flow_json=cash_flow_json
+    )

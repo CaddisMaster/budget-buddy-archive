@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head><title>Dashboard</title></head>
+<body>
+    <h1>Dashboard</h1>
+    <h2>Spending by category</h2>
+    <div style="max-width: 400px;">
+        <canvas id="spendingPie"></canvas>
+    </div>
+    <h2>Income vs expenses by month</h2>
+    <div style="max-width: 700px;">
+        <canvas id="cashFlowBar"></canvas>
+    </div>
+    <a href="/">Back to home</a>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+    const spendingData = {{ spending_json | safe }};
+    const cashFlowData = {{ cash_flow_json | safe }};
+    new Chart(document.getElementById('spendingPie'), {
+        type: 'pie',
+        data: {
+            labels: spendingData.map(d => d.category),
+            datasets: [{
+                data: spendingData.map(d => d.total),
+                backgroundColor: ['#378ADD','#1D9E75','#EF9F27','#E24B4A','#7F77DD','#D4537E','#639922']
+            }]
+        }
+    });
+    new Chart(document.getElementById('cashFlowBar'), {
+        type: 'bar',
+        data: {
+            labels: cashFlowData.map(d => d.month),
+            datasets: [
+                {
+                    label: 'Income',
+                    data: cashFlowData.map(d => d.income),
+                    backgroundColor: '#1D9E75'
+                },
+                {
+                    label: 'Expenses',
+                    data: cashFlowData.map(d => d.expenses),
+                    backgroundColor: '#E24B4A'
+                }
+            ]
+        },
+        options: {
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+    </script>
+</body>
+</html>

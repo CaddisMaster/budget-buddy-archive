@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
   web:
-    build: .
+    image: caddismaster/budget-buddy:latest
     env_file:
       - .env
     ports:

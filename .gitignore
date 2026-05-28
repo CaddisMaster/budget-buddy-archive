@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 .DS_store
 data/*.csv
+.dockerignore

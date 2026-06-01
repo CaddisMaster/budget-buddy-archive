@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Budget Buddy{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-wrapper">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Budget Buddy</span>
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Close menu">☰</button>
+    </div>
+    <nav>
+      <a href="/" {% if request.path == '/' %}class="active"{% endif %}>Home</a>
+      <a href="/transactions/new" {% if '/transactions/new' in request.path %}class="active"{% endif %}>Add transaction</a>
+      <a href="/transactions" {% if request.path == '/transactions' %}class="active"{% endif %}>History</a>
+      <a href="/analytics" {% if '/analytics' in request.path %}class="active"{% endif %}>Analytics</a>
+      <a href="/dashboard" {% if '/dashboard' in request.path %}class="active"{% endif %}>Dashboard</a>
+      <a href="/budgets" {% if '/budgets' in request.path %}class="active"{% endif %}>Budgets</a>
+      <a href="/categories" {% if '/categories' in request.path %}class="active"{% endif %}>Categories</a>
+      <a href="/accounts" {% if '/accounts' in request.path %}class="active"{% endif %}>Accounts</a>
+    </nav>
+  </aside>
+  <main class="main-content" id="main">
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Open menu" style="margin-bottom:1rem">☰</button>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="flash">{% for m in messages %}{{ m }}{% endfor %}</div>
+    {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script>
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main');
+  sidebar.classList.toggle('collapsed');
+  main.classList.toggle('expanded');
+}
+</script>
+</body>
+</html>

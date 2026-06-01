@@ -1,28 +1,24 @@
-<!DOCTYPE html>
-<html>
-<head><title>Categories</title></head>
-<body>
-    <h1>Categories</h1>
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}<ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
-    {% endwith %}
-    <h2>Add category</h2>
-    <form method="post">
-        <label>Name: <input type="text" name="name" required></label><br>
-        <label>Description: <input type="text" name="description"></label><br>
-        <button type="submit">Add Category</button>
-    </form>
-    <h2>Existing categories</h2>
-    <table>
-        <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
-        {% for cat in categories %}
-        <tr>
-            <td>{{ cat[1] }}</td>
-            <td>{{ cat[2] }}</td>
-            <td><a href="/categories/edit/{{ cat[0] }}">Edit</a> | <a href="/categories/delete/{{ cat[0] }}">Delete</a></td>
-        </tr>
-        {% endfor %}
-    </table>
-    <a href="/">Back to home</a>
-</body>
-</html>
+{% extends 'base.html' %}
+{% block title %}Categories — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Categories</h1>
+<h2>Add category</h2>
+<form method="post">
+    <label>Name</label>
+    <input type="text" name="name" required>
+    <label>Description</label>
+    <input type="text" name="description">
+    <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add category</button>
+</form>
+<h2>Existing categories</h2>
+<table>
+    <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
+    {% for cat in categories %}
+    <tr>
+        <td>{{ cat[1] }}</td>
+        <td>{{ cat[2] }}</td>
+        <td><a href="/categories/edit/{{ cat[0] }}">Edit</a> | <a href="/categories/delete/{{ cat[0] }}">Delete</a></td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

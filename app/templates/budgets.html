@@ -1,42 +1,35 @@
-<!DOCTYPE html>
-<html>
-<head><title>Budgets</title></head>
-<body>
-    <h1>Budgets</h1>
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}<ul>{% for m in messages %}<li>{{ m }}</li>{% endfor %}</ul>{% endif %}
-    {% endwith %}
-    <h2>Add budget</h2>
-    <form method="post">
-        <label>Category:
-            <select name="category_id" required>
-                <option value="">-- select category --</option>
-                {% for cat in categories %}
-                <option value="{{ cat[0] }}">{{ cat[1] }}</option>
-                {% endfor %}
-            </select>
-        </label><br>
-        <label>Amount: <input type="number" step="0.01" name="amount" required></label><br>
-        <label>Period start: <input type="date" name="period_start" required></label><br>
-        <label>Period end: <input type="date" name="period_end" required></label><br>
-        <button type="submit">Add Budget</button>
-    </form>
-    <h2>Existing budgets</h2>
-    <table>
-        <tr><th>Category</th><th>Amount</th><th>From</th><th>To</th><th>Actions</th></tr>
-        {% for b in budgets %}
-        <tr>
-            <td>{{ b[1] }}</td>
-            <td>${{ "%.2f"|format(b[2]) }}</td>
-            <td>{{ b[3] }}</td>
-            <td>{{ b[4] }}</td>
-            <td>
-                <a href="/budgets/edit/{{ b[0] }}">Edit</a> |
-                <a href="/budgets/delete/{{ b[0] }}">Delete</a>
-            </td>
-        </tr>
+{% extends 'base.html' %}
+{% block title %}Budgets — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Budgets</h1>
+<h2>Add budget</h2>
+<form method="post">
+    <label>Category</label>
+    <select name="category_id" required>
+        <option value="">-- select category --</option>
+        {% for cat in categories %}
+        <option value="{{ cat[0] }}">{{ cat[1] }}</option>
         {% endfor %}
-    </table>
-    <a href="/">Back to home</a>
-</body>
-</html>
+    </select>
+    <label>Amount</label>
+    <input type="number" step="0.01" name="amount" required>
+    <label>Period start</label>
+    <input type="date" name="period_start" required>
+    <label>Period end</label>
+    <input type="date" name="period_end" required>
+    <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add budget</button>
+</form>
+<h2>Existing budgets</h2>
+<table>
+    <tr><th>Category</th><th>Amount</th><th>From</th><th>To</th><th>Actions</th></tr>
+    {% for b in budgets %}
+    <tr>
+        <td>{{ b[1] }}</td>
+        <td>${{ "%.2f"|format(b[2]) }}</td>
+        <td>{{ b[3] }}</td>
+        <td>{{ b[4] }}</td>
+        <td><a href="/budgets/edit/{{ b[0] }}">Edit</a> | <a href="/budgets/delete/{{ b[0] }}">Delete</a></td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

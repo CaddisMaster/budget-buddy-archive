@@ -1,16 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head><title>Budget Buddy</title></head>
-<body>
-    <h1>Budget Buddy</h1>
-    <ul>
-        <li><a href="/transactions/new">Add a transaction</a></li>
-        <li><a href="/transactions">View transaction history</a></li>
-        <li><a href="/categories">Manage categories</a></li>
-        <li><a href="/accounts">Manage accounts</a></li>
-        <li><a href="/analytics">Analytics</a></li>
-        <li><a href="/budgets">Manage budgets</a></li>
-        <li><a href="/dashboard">Dashboard</a></li>
-    </ul>
-</body>
-</html>
+{% extends 'base.html' %}
+{% block title %}Home — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Budget Buddy</h1>
+<p style="color: var(--text-muted);">Use the sidebar to navigate.</p>
+{% endblock %}

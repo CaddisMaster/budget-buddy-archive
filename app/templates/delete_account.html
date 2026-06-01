@@ -1,13 +1,15 @@
-<!DOCTYPE html>
-<html>
-<head><title>Delete Account</title></head>
-<body>
-    <h1>Delete account</h1>
+{% extends 'base.html' %}
+{% block title %}Delete Account — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Delete account</h1>
+<div class="card">
     <p>Are you sure you want to delete <strong>{{ account[1] }}</strong>?</p>
-    <p>This will fail if any transactions are still using this account.</p>
+    <p style="margin-top:0.5rem;color:var(--text-muted)">This will fail if any transactions are still using this account.</p>
+</div>
+<div style="display:flex;gap:1rem;margin-top:1rem">
     <form method="post">
-        <button type="submit">Yes, delete</button>
+        <button type="submit" class="btn btn-danger">Yes, delete</button>
     </form>
-    <a href="/accounts">Cancel</a>
-</body>
-</html>
+    <a href="/accounts" class="btn">Cancel</a>
+</div>
+{% endblock %}

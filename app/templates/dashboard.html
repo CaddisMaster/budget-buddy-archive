@@ -1,134 +1,101 @@
-<!DOCTYPE html>
-<html>
-<head><title>Dashboard</title></head>
-<body>
-    <h1>Dashboard</h1>
-    <form method="get">
-        <label>Filter by month:
-            <select name="month" onchange="this.form.submit()">
-                <option value="">All months</option>
-                {% for m in months %}
-                <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
-                {% endfor %}
-            </select>
-        </label>
-    </form>
-
-    <h2>Spending by category</h2>
-    <div style="max-width: 400px;">
-        <canvas id="spendingPie"></canvas>
-    </div>
-
-    <h2>Income vs expenses by month</h2>
-    <div style="max-width: 700px;">
-        <canvas id="cashFlowBar"></canvas>
-    </div>
-
-    <h2>Net balance over time</h2>
-    <div style="max-width: 700px;">
-        <canvas id="netBalanceLine"></canvas>
-    </div>
-
-    <h2>Account balances</h2>
-    <div style="max-width: 500px;">
-        <canvas id="accountBar"></canvas>
-    </div>
-
-    <h2>Budget vs actual</h2>
-    <div style="max-width: 700px;">
-        <canvas id="budgetBar"></canvas>
-    </div>
-
-    <a href="/">Back to home</a>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-    const spendingData = {{ spending_json | safe }};
-    const cashFlowData = {{ cash_flow_json | safe }};
-    const netBalanceData = {{ net_balance_json | safe }};
-    const accountData = {{ account_json | safe }};
-    const budgetData = {{ budget_json | safe }};
-
-    new Chart(document.getElementById('spendingPie'), {
-        type: 'pie',
-        data: {
-            labels: spendingData.map(d => d.category),
-            datasets: [{
-                data: spendingData.map(d => d.total),
-                backgroundColor: ['#378ADD','#1D9E75','#EF9F27','#E24B4A','#7F77DD','#D4537E','#639922']
-            }]
-        }
-    });
-
-    new Chart(document.getElementById('cashFlowBar'), {
-        type: 'bar',
-        data: {
-            labels: cashFlowData.map(d => d.month),
-            datasets: [
-                {
-                    label: 'Income',
-                    data: cashFlowData.map(d => d.income),
-                    backgroundColor: '#1D9E75'
-                },
-                {
-                    label: 'Expenses',
-                    data: cashFlowData.map(d => d.expenses),
-                    backgroundColor: '#E24B4A'
-                }
-            ]
-        },
-        options: {
-            scales: { y: { beginAtZero: true } }
-        }
-    });
-
-    new Chart(document.getElementById('netBalanceLine'), {
-        type: 'line',
-        data: {
-            labels: netBalanceData.map(d => d.month),
-            datasets: [{
-                label: 'Net balance',
-                data: netBalanceData.map(d => d.balance),
-                borderColor: '#378ADD',
-                backgroundColor: 'rgba(55,138,221,0.1)',
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: {
-            scales: { y: { beginAtZero: false } }
-        }
-    });
-
-    new Chart(document.getElementById('accountBar'), {
-        type: 'bar',
-        data: {
-            labels: accountData.map(d => d.account),
-            datasets: [{
-                label: 'Balance',
-                data: accountData.map(d => d.balance),
-                backgroundColor: accountData.map(d => d.balance >= 0 ? '#1D9E75' : '#E24B4A')
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            scales: { x: { beginAtZero: true } }
-        }
-    });
-
-    new Chart(document.getElementById('budgetBar'), {
-        type: 'bar',
-        data: {
-            labels: budgetData.map(d => d.category),
-            datasets: [
-                {label: 'Budget', data: budgetData.map(d => d.budget), backgroundColor: '#378ADD'},
-                {label: 'Actual', data: budgetData.map(d => d.actual), backgroundColor: '#E24B4A'}
-            ]
-        },
-        options: {
-            scales: { y: { beginAtZero: true } }
-        }
-    });
-    </script>
-</body>
-</html>
+{% extends 'base.html' %}
+{% block title %}Dashboard — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<form method="get" style="margin-bottom:1rem">
+    <label>Filter by month</label>
+    <select name="month" onchange="this.form.submit()">
+        <option value="">All months</option>
+        {% for m in months %}
+        <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+    </select>
+</form>
+<h2>Spending by category</h2>
+<div style="max-width: 400px;">
+    <canvas id="spendingPie"></canvas>
+</div>
+<h2>Income vs expenses by month</h2>
+<div style="max-width: 700px;">
+    <canvas id="cashFlowBar"></canvas>
+</div>
+<h2>Net balance over time</h2>
+<div style="max-width: 700px;">
+    <canvas id="netBalanceLine"></canvas>
+</div>
+<h2>Account balances</h2>
+<div style="max-width: 500px;">
+    <canvas id="accountBar"></canvas>
+</div>
+<h2>Budget vs actual</h2>
+<div style="max-width: 700px;">
+    <canvas id="budgetBar"></canvas>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const spendingData = {{ spending_json | safe }};
+const cashFlowData = {{ cash_flow_json | safe }};
+const netBalanceData = {{ net_balance_json | safe }};
+const accountData = {{ account_json | safe }};
+const budgetData = {{ budget_json | safe }};
+new Chart(document.getElementById('spendingPie'), {
+    type: 'pie',
+    data: {
+        labels: spendingData.map(d => d.category),
+        datasets: [{
+            data: spendingData.map(d => d.total),
+            backgroundColor: ['#378ADD','#1D9E75','#EF9F27','#E24B4A','#7F77DD','#D4537E','#639922']
+        }]
+    }
+});
+new Chart(document.getElementById('cashFlowBar'), {
+    type: 'bar',
+    data: {
+        labels: cashFlowData.map(d => d.month),
+        datasets: [
+            {label: 'Income', data: cashFlowData.map(d => d.income), backgroundColor: '#1D9E75'},
+            {label: 'Expenses', data: cashFlowData.map(d => d.expenses), backgroundColor: '#E24B4A'}
+        ]
+    },
+    options: { scales: { y: { beginAtZero: true } } }
+});
+new Chart(document.getElementById('netBalanceLine'), {
+    type: 'line',
+    data: {
+        labels: netBalanceData.map(d => d.month),
+        datasets: [{
+            label: 'Net balance',
+            data: netBalanceData.map(d => d.balance),
+            borderColor: '#378ADD',
+            backgroundColor: 'rgba(55,138,221,0.1)',
+            fill: true,
+            tension: 0.3
+        }]
+    },
+    options: { scales: { y: { beginAtZero: false } } }
+});
+new Chart(document.getElementById('accountBar'), {
+    type: 'bar',
+    data: {
+        labels: accountData.map(d => d.account),
+        datasets: [{
+            label: 'Balance',
+            data: accountData.map(d => d.balance),
+            backgroundColor: accountData.map(d => d.balance >= 0 ? '#1D9E75' : '#E24B4A')
+        }]
+    },
+    options: { indexAxis: 'y', scales: { x: { beginAtZero: true } } }
+});
+new Chart(document.getElementById('budgetBar'), {
+    type: 'bar',
+    data: {
+        labels: budgetData.map(d => d.category),
+        datasets: [
+            {label: 'Budget', data: budgetData.map(d => d.budget), backgroundColor: '#378ADD'},
+            {label: 'Actual', data: budgetData.map(d => d.actual), backgroundColor: '#E24B4A'}
+        ]
+    },
+    options: { scales: { y: { beginAtZero: true } } }
+});
+</script>
+{% endblock %}

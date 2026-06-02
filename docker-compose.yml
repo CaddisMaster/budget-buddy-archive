@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16
+    restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -12,6 +13,7 @@ services:
       - "5432:5432"
   web:
     image: caddismaster/budget-buddy:latest
+    restart: always
     env_file:
       - .env
     ports:

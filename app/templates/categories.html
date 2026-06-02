@@ -11,14 +11,16 @@
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add category</button>
 </form>
 <h2>Existing categories</h2>
-<table>
-    <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
-    {% for cat in categories %}
-    <tr>
-        <td>{{ cat[1] }}</td>
-        <td>{{ cat[2] }}</td>
-        <td><a href="/categories/edit/{{ cat[0] }}">Edit</a> | <a href="/categories/delete/{{ cat[0] }}">Delete</a></td>
-    </tr>
-    {% endfor %}
-</table>
+<div class="table-wrapper">
+    <table>
+        <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
+        {% for cat in categories %}
+        <tr>
+            <td>{{ cat[1] }}</td>
+            <td>{{ cat[2] }}</td>
+            <td><a href="/categories/edit/{{ cat[0] }}">Edit</a> | <a href="/categories/delete/{{ cat[0] }}">Delete</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
 {% endblock %}

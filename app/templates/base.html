@@ -8,6 +8,7 @@
 </head>
 <body>
 <div class="app-wrapper">
+  <div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-title">Budget Buddy</span>
@@ -35,11 +36,24 @@
   </main>
 </div>
 <script>
+const sidebar = document.getElementById('sidebar');
+const main = document.getElementById('main');
+const overlay = document.getElementById('overlay');
+const isMobile = () => window.innerWidth <= 768;
+
 function toggleSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const main = document.getElementById('main');
-  sidebar.classList.toggle('collapsed');
-  main.classList.toggle('expanded');
+  if (isMobile()) {
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('active');
+  } else {
+    sidebar.classList.toggle('collapsed');
+    main.classList.toggle('expanded');
+  }
+}
+
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  overlay.classList.remove('active');
 }
 </script>
 </body>

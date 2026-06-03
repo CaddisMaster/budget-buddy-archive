@@ -3,6 +3,7 @@ from app.db import get_db_connection
 from flask import render_template, request, redirect, url_for, flash
 import json
 from datetime import datetime, date
+import math
 
 @app.route('/')
 def index():
@@ -94,6 +95,10 @@ def categories():
 @app.route('/transactions')
 def transactions():
     selected_month = request.args.get('month')
+    search = request.args.get('search', '').strip()
+    page = int(request.args.get('page', 1))
+    per_page = 25
+    offset = (page - 1) * per_page
     months = []
     today = datetime.today()
     for i in range(12):
@@ -105,32 +110,53 @@ def transactions():
         months.append(f'{year}-{month:02d}')
     conn = get_db_connection()
     cursor = conn.cursor()
+    filters = []
+    params = []
     if selected_month:
         year, month = selected_month.split('-')
-        cursor.execute("""
-            SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date, t.transaction_type
-            FROM transactions t
-            LEFT JOIN categories c ON t.category_id = c.id
-            LEFT JOIN account a ON t.account_id = a.account_id
-            WHERE EXTRACT(YEAR FROM t.transaction_date) = %s
-            AND EXTRACT(MONTH FROM t.transaction_date) = %s
-            ORDER BY t.transaction_date DESC
-        """, (year, month))
-    else:
-        cursor.execute("""
-            SELECT t.id, t.amount, t.description, c.name, a.account_name, t.transaction_date, t.transaction_type
-            FROM transactions t
-            LEFT JOIN categories c ON t.category_id = c.id
-            LEFT JOIN account a ON t.account_id = a.account_id
-            ORDER BY t.transaction_date DESC
-        """)
-    all_transactions = cursor.fetchall()
+        filters.append("EXTRACT(YEAR FROM t.transaction_date) = %s AND EXTRACT(MONTH FROM t.transaction_date) = %s")
+        params.extend([year, month])
+    if search:
+        filters.append("t.description ILIKE %s")
+        params.append(f'%{search}%')
+    where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+    count_query = f"""
+        SELECT COUNT(*) FROM transactions t {where_clause}
+    """
+    cursor.execute(count_query, params)
+    total = cursor.fetchone()[0]
+    total_pages = math.ceil(total / per_page) if total > 0 else 1
+    main_query = f"""
+        SELECT t.id, t.amount, t.description, c.name, a.account_name,
+               t.transaction_date, t.transaction_type
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        LEFT JOIN account a ON t.account_id = a.account_id
+        {where_clause}
+        ORDER BY t.transaction_date DESC, t.id DESC
+        LIMIT %s OFFSET %s
+    """
+    cursor.execute(main_query, params + [per_page, offset])
+    rows = cursor.fetchall()
     cursor.close()
     conn.close()
+    running_balance = 0
+    transactions_with_balance = []
+    for t in reversed(rows):
+        if t[6] == 'income':
+            running_balance += t[1]
+        else:
+            running_balance -= t[1]
+        transactions_with_balance.append(t + (running_balance,))
+    transactions_with_balance.reverse()
     return render_template('history.html',
-        transactions=all_transactions,
+        transactions=transactions_with_balance,
         months=months,
-        selected_month=selected_month
+        selected_month=selected_month,
+        search=search,
+        page=page,
+        total_pages=total_pages,
+        total=total
     )
 
 @app.route('/accounts', methods=['GET', 'POST'])

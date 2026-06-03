@@ -4,7 +4,9 @@
   "workspaceFolder": "/workspaces/budget-buddy",
   "forwardPorts": [5000],
   "postCreateCommand": "pip install -r requirements.txt",
-  "mounts": ["source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,readonly"],
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "${localEnv:SSH_AUTH_SOCK}"
+  },
   "customizations": {
     "vscode": {
       "extensions": [

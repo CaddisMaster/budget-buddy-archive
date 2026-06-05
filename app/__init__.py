@@ -1,4 +1,5 @@
 import os
+import hmac
 from flask import Flask, request, Response
 from dotenv import load_dotenv
 from functools import wraps
@@ -8,7 +9,7 @@ from flask_limiter.util import get_remote_address
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key')
+app.secret_key = os.getenv('SECRET_KEY')
 
 limiter = Limiter(
     get_remote_address,
@@ -18,7 +19,11 @@ limiter = Limiter(
 )
 
 def check_auth(username, password):
-    return username == os.getenv('APP_USERNAME') and password == os.getenv('APP_PASSWORD')
+    correct_username = os.getenv('APP_USERNAME', '')
+    correct_password = os.getenv('APP_PASSWORD', '')
+    username_valid = hmac.compare_digest(username, correct_username)
+    password_valid = hmac.compare_digest(password, correct_password)
+    return username_valid and password_valid
 
 def require_auth():
     auth = request.authorization

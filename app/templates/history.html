@@ -45,7 +45,7 @@
     </td>
     <td>{{ t[3] or 'Uncategorised' }}</td>
     <td>{{ t[4] or 'No account' }}</td>
-    <td class="{% if t[7] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(t[7]) }}</td>
+    <td class="{% if t[9] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(t[9]) }}</td>
     <td>
       <a href="/transactions/edit/{{ t[0] }}">Edit</a> |
       <a href="/transactions/delete/{{ t[0] }}">Delete</a>

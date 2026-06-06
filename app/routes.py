@@ -390,13 +390,22 @@ def analytics():
     """)
     moving_averages = cursor.fetchall()
 
-    cursor.execute(f"""
-  SELECT
-        SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
-        SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
-    FROM transactions
-    {where_clause}
-    """, params)
+    if selected_month:
+        cursor.execute("""
+            SELECT
+                SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
+                SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
+            FROM transactions
+            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT
+                SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
+                SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
+            FROM transactions
+        """)
     row = cursor.fetchone()
     s_income, s_expenses = float(row[0] or 0), float(row[1] or 0)
     if s_income > 0:
@@ -424,23 +433,31 @@ def analytics():
             }
         else:
             yoy = None
-    
-    day_params = []
+            
     if selected_month:
-        y2, m2 = selected_month.split('-')
-        day_params.extend([y2, m2])
-    
-    cursor.execute(f"""
-        SELECT
-            EXTRACT(DOW FROM transaction_date) AS dow,
-            TO_CHAR(transaction_date, 'Day') AS day_name,
-            SUM(amount) AS total
-        FROM transactions
-        WHERE transaction_type = 'expense'
-        {('AND ' + ' AND '.join(filters)) if filters else ''}
-        GROUP BY dow, day_name
-        ORDER BY dow
-    """, day_params)
+        cursor.execute("""
+            SELECT
+                EXTRACT(DOW FROM transaction_date) AS dow,
+                TO_CHAR(transaction_date, 'Day') AS day_name,
+                SUM(amount) AS total
+            FROM transactions
+            WHERE transaction_type = 'expense'
+            AND EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+            GROUP BY dow, day_name
+            ORDER BY dow
+        """, (filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT
+                EXTRACT(DOW FROM transaction_date) AS dow,
+                TO_CHAR(transaction_date, 'Day') AS day_name,
+                SUM(amount) AS total
+            FROM transactions
+            WHERE transaction_type = 'expense'
+            GROUP BY dow, day_name
+            ORDER BY dow
+        """)
     spending_by_day = cursor.fetchall()
 
     cursor.execute("""

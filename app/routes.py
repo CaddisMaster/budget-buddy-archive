@@ -390,6 +390,81 @@ def analytics():
     """)
     moving_averages = cursor.fetchall()
 
+    cursor.execute(f"""
+  SELECT
+        SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
+        SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
+    FROM transactions
+    {where_clause}
+    """, params)
+    row = cursor.fetchone()
+    s_income, s_expenses = float(row[0] or 0), float(row[1] or 0)
+    if s_income > 0:
+        savings_rate = round((s_income - s_expenses) / s_income * 100, 1)
+    else:
+        savings_rate = None
+    
+    yoy = None
+    if selected_month:
+        y, m = selected_month.split('-')
+        cursor.execute("""
+            SELECT
+            SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
+            FROM transactions
+            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+        """, (int(y) - 1, m))
+        last_year_row = cursor.fetchone()
+        last_year_expenses = float(last_year_row[0] or 0)
+        if last_year_expenses > 0:
+            yoy = {
+                'last_year': last_year_expenses,
+                'this_year': float(total_expenses),
+                'change': round(((float(total_expenses) - last_year_expenses) / last_year_expenses) * 100, 1)
+            }
+        else:
+            yoy = None
+    
+    day_params = []
+    if selected_month:
+        y2, m2 = selected_month.split('-')
+        day_params.extend([y2, m2])
+    
+    cursor.execute(f"""
+        SELECT
+            EXTRACT(DOW FROM transaction_date) AS dow,
+            TO_CHAR(transaction_date, 'Day') AS day_name,
+            SUM(amount) AS total
+        FROM transactions
+        WHERE transaction_type = 'expense'
+        {('AND ' + ' AND '.join(filters)) if filters else ''}
+        GROUP BY dow, day_name
+        ORDER BY dow
+    """, day_params)
+    spending_by_day = cursor.fetchall()
+
+    cursor.execute("""
+    SELECT
+        c.name AS category,
+        ROUND(AVG(monthly_total)::numeric, 2) AS suggested_budget
+    FROM (
+        SELECT
+        category_id,
+        DATE_TRUNC('month', transaction_date) AS month,
+        SUM(amount) AS monthly_total
+        FROM transactions
+        WHERE transaction_type = 'expense'
+        AND transaction_date >= NOW() - INTERVAL '6 months'
+        AND category_id IS NOT NULL
+        GROUP BY category_id, DATE_TRUNC('month', transaction_date)
+    ) monthly
+    JOIN categories c ON c.id = monthly.category_id
+    GROUP BY c.name
+    HAVING COUNT(DISTINCT month) >= 1
+    ORDER BY suggested_budget DESC
+    """)
+    budget_suggestions = cursor.fetchall()
+
     cash_flow_json = json.dumps([
         {'month': row[0], 'income': float(row[1]), 'expenses': float(row[2])}
         for row in cash_flow
@@ -412,7 +487,11 @@ def analytics():
         cash_flow_json=cash_flow_json,
         moving_avg_json=moving_avg_json,
         months=months,
-        selected_month=selected_month
+        selected_month=selected_month,
+        savings_rate=savings_rate,
+        yoy=yoy,
+        spending_by_day=spending_by_day,
+        budget_suggestions=budget_suggestions
     )
 
 @app.route('/budgets', methods=['GET', 'POST'])

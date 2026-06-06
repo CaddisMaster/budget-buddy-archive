@@ -63,6 +63,50 @@
         {% endfor %}
     </table>
 </div>
+<h2>Savings rate</h2>
+{% if savings_rate is not none %}
+<p class="stat-value {% if savings_rate >= 0 %}income{% else %}expense{% endif %}">{{ savings_rate }}%</p>
+<p style="color:var(--text-muted);font-size:13px">Of income saved after expenses</p>
+{% else %}
+<p style="color:var(--text-muted)">No income recorded for this period</p>
+{% endif %}
+<h2>Year over year</h2>
+{% if yoy %}
+<p>This month: <strong class="{% if yoy.this_year <= yoy.last_year %}income{% else %}expense{% endif %}">${{ "%.2f"|format(yoy.this_year) }}</strong></p>
+<p>Same month last year: <strong>${{ "%.2f"|format(yoy.last_year) }}</strong></p>
+<p>Change: <strong class="{% if yoy.change <= 0 %}income{% else %}expense{% endif %}">{{ yoy.change }}%</strong></p>
+{% elif selected_month %}
+<p style="color:var(--text-muted)">No data for the same month last year</p>
+{% else %}
+<p style="color:var(--text-muted)">Select a month to see year over year comparison</p>
+{% endif %}
+
+<h2>Spending by day of week</h2>
+<div class="table-wrapper">
+<table>
+    <tr><th>Day</th><th>Total spent</th></tr>
+    {% for row in spending_by_day %}
+    <tr>
+        <td>{{ row[1].strip() }}</td>
+        <td>${{ "%.2f"|format(row[2]) }}</td>
+    </tr>
+    {% endfor %}
+</table>
+</div>
+
+<h2>Suggested budgets</h2>
+<p style="font-size:13px;color:var(--text-muted);margin-bottom:0.75rem">Based on average monthly spending over the last 6 months</p>
+<div class="table-wrapper">
+<table>
+    <tr><th>Category</th><th>Suggested budget</th></tr>
+    {% for row in budget_suggestions %}
+    <tr>
+        <td>{{ row[0] }}</td>
+        <td>${{ "%.2f"|format(row[1]) }}</td>
+    </tr>
+    {% endfor %}
+</table>
+</div>
 <script>
     const cashFlowData = {{ cash_flow_json | safe }};
     const movingAvgData = {{ moving_avg_json | safe }};

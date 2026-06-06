@@ -29,6 +29,24 @@
     </select>
     <label>Date</label>
     <input type="date" name="transaction_date" required>
+    <label>Recurring</label>
+    <select name="is_recurring" id="recurringSelect" onchange="toggleFrequency()">
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+    </select>
+    <div id="frequencyDiv" style="display:none">
+        <label>Frequency</label>
+        <select name="frequency">
+            <option value="monthly">Monthly</option>
+            <option value="weekly">Weekly</option>
+        </select>
+    </div>
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add transaction</button>
 </form>
+<script>
+function toggleFrequency() {
+    const val = document.getElementById('recurringSelect').value;
+    document.getElementById('frequencyDiv').style.display = val === 'true' ? 'block' : 'none';
+}
+</script>
 {% endblock %}

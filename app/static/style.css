@@ -113,6 +113,17 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 }
 .sidebar-overlay.active { display: block; }
 
+/* Recurring badge */
+.recurring-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
 /* Mobile */
 @media (max-width: 768px) {
   .sidebar {

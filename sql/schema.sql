@@ -35,6 +35,9 @@ CREATE TABLE public.transactions (
     transaction_date date NOT NULL DEFAULT CURRENT_DATE,
     transaction_type character varying(10) NOT NULL DEFAULT 'expense',
     created_at timestamp without time zone DEFAULT now(),
+    is_recurring BOOLEAN NOT NULL DEFAULT false,
+    frequency VARCHAR(10) DEFAULT NULL,
+    next_due DATE DEFAULT NULL,
     CONSTRAINT valid_transaction_type CHECK (transaction_type IN ('expense', 'income'))
 );
 

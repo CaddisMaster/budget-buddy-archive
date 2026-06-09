@@ -107,8 +107,15 @@ def categories():
     conn.close()
     return render_template('categories.html', categories=all_categories)
 
+@app.route('/recurring/process')
+def process_recurring():
+    run_process_recurring()
+    flash('Recurring transactions processed')
+    return redirect('/transactions')
+
 @app.route('/transactions')
 def transactions():
+    run_process_recurring()
     selected_month = request.args.get('month')
     search = request.args.get('search', '').strip()
     page = int(request.args.get('page', 1))

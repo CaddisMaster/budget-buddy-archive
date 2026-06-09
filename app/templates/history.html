@@ -24,9 +24,6 @@
       </select>
     </div>
   </form>
-  <form method="get" action="/recurring/process">
-    <button type="submit" class="btn btn-primary">Process recurring</button>
-  </form>
   <a href="/transactions/export{% if selected_month %}?month={{ selected_month }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn">Export CSV</a>
 </div>
 <p style="font-size:13px;color:var(--text-muted);margin-bottom:0.75rem">{{ total }} transaction{{ 's' if total != 1 else '' }}</p>

@@ -6,32 +6,260 @@
   <title>Sean DeSmet</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; }
-    h1 { font-size: 2rem; font-weight: 500; margin-bottom: 0.5rem; }
-    p.subtitle { color: #666; margin-bottom: 3rem; font-size: 1rem; }
-    .projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; width: 100%; max-width: 800px; }
-    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 12px; padding: 1.5rem; text-decoration: none; color: inherit; transition: box-shadow 0.2s; }
-    .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
-    .card h2 { font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem; }
-    .card p { font-size: 0.9rem; color: #666; line-height: 1.6; }
-    .card .tag { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: #f0f0f0; color: #444; margin-top: 1rem; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 4rem 2rem;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .name {
+      font-size: 2rem;
+      font-weight: 500;
+      margin-bottom: 0.4rem;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      color: #666;
+      margin-bottom: 2.5rem;
+    }
+
+    .project {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .card-top {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .card-link {
+      flex: 1;
+      padding: 1.25rem;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    .card-link:hover .card-title {
+      color: #378ADD;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: 6px;
+      transition: color 0.15s;
+    }
+
+    .card-desc {
+      font-size: 0.875rem;
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+
+    .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: #f0f0f0;
+      color: #555;
+      border: 1px solid #e0e0e0;
+    }
+
+    .btn-wrap {
+      padding-right: 1.25rem;
+      flex-shrink: 0;
+    }
+
+    .btn-details {
+      font-size: 0.75rem;
+      padding: 5px 14px;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      background: transparent;
+      color: #666;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-details:hover {
+      background: #f5f5f5;
+    }
+
+    .detail {
+      display: none;
+      border-top: 1px solid #e0e0e0;
+      padding: 1.25rem;
+    }
+
+    .detail.open {
+      display: block;
+    }
+
+    .about-intro {
+      font-size: 0.875rem;
+      color: #555;
+      line-height: 1.75;
+      margin-bottom: 1.25rem;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .feat-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .feat-item {
+      font-size: 0.875rem;
+      color: #1a1a1a;
+      padding: 5px 0;
+      border-bottom: 1px solid #f0f0f0;
+      line-height: 1.5;
+    }
+
+    .feat-item:last-child {
+      border-bottom: none;
+    }
+
+    .stack-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .stack-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .stack-tag {
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 6px;
+      background: #f0f0f0;
+      color: #555;
+      border: 1px solid #e0e0e0;
+    }
+
     @media (prefers-color-scheme: dark) {
       body { background: #1a1a1a; color: #f0f0f0; }
-      .card { background: #242424; border-color: #333; }
-      .card p, p.subtitle { color: #aaa; }
-      .card .tag { background: #333; color: #ccc; }
+      .project { background: #242424; border-color: #333; }
+      .card-desc, .about-intro, .subtitle { color: #aaa; }
+      .tag, .stack-tag { background: #333; color: #ccc; border-color: #444; }
+      .btn-details { border-color: #444; color: #aaa; }
+      .btn-details:hover { background: #2a2a2a; }
+      .detail { border-color: #333; }
+      .feat-item { color: #f0f0f0; border-color: #2a2a2a; }
+      .feat-label, .stack-label { color: #666; }
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 2rem 1.25rem; }
+      .name { font-size: 1.5rem; }
+      .two-col { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <h1>Sean DeSmet</h1>
-  <p class="subtitle">Full stack projects</p>
-  <div class="projects">
-    <a href="https://budget.seandesmet.com" class="card">
-      <h2>Budget Buddy</h2>
-      <p>Personal budget tracking and ledger system with analytics, recurring transactions, and dashboard.</p>
-      <span class="tag">Flask · PostgreSQL · Docker</span>
-    </a>
+  <div class="container">
+
+    <p class="name">Sean DeSmet</p>
+    <p class="subtitle">Full stack projects</p>
+
+    <div class="project">
+      <div class="card-top">
+        <a href="https://budget.seandesmet.com" class="card-link">
+          <p class="card-title">Budget Buddy</p>
+          <p class="card-desc">Personal budget tracking and ledger system with analytics, recurring transactions, and dashboard.</p>
+          <div class="tags">
+            <span class="tag">Flask</span>
+            <span class="tag">PostgreSQL</span>
+            <span class="tag">Docker</span>
+          </div>
+        </a>
+        <div class="btn-wrap">
+          <button class="btn-details" onclick="toggle('bb', this)">Details ↓</button>
+        </div>
+      </div>
+      <div class="detail" id="detail-bb">
+        <p class="about-intro">I decided to build Budget Buddy because I was looking to expand my understanding of SQL, Python, and database systems. Rather than focusing on courses I decided to build something real — that is where Budget Buddy came along. The project grew from a simple transaction tracker into a full production web application with a custom domain, HTTPS, and automated deployments.</p>
+        <div class="two-col">
+          <div>
+            <div class="feat-label">Features</div>
+            <div class="feat-item">Transaction tracking</div>
+            <div class="feat-item">Recurring transactions</div>
+            <div class="feat-item">Analytics dashboard</div>
+            <div class="feat-item">Budget vs actual</div>
+            <div class="feat-item">CSV export</div>
+            <div class="feat-item">Dark mode</div>
+          </div>
+          <div>
+            <div class="feat-label">Infrastructure</div>
+            <div class="feat-item">DigitalOcean Droplet</div>
+            <div class="feat-item">Nginx reverse proxy</div>
+            <div class="feat-item">Let's Encrypt SSL</div>
+            <div class="feat-item">Docker + Gunicorn</div>
+            <div class="feat-item">Automated deploys</div>
+            <div class="feat-item">Rate limiting</div>
+          </div>
+        </div>
+        <div class="stack-label">Tech stack</div>
+        <div class="stack-row">
+          <span class="stack-tag">Python</span>
+          <span class="stack-tag">Flask</span>
+          <span class="stack-tag">PostgreSQL</span>
+          <span class="stack-tag">Docker</span>
+          <span class="stack-tag">Gunicorn</span>
+          <span class="stack-tag">Nginx</span>
+          <span class="stack-tag">DigitalOcean</span>
+          <span class="stack-tag">Let's Encrypt</span>
+          <span class="stack-tag">Chart.js</span>
+        </div>
+      </div>
+    </div>
+
   </div>
+
+  <script>
+    function toggle(id, btn) {
+      var d = document.getElementById('detail-' + id);
+      var open = d.classList.toggle('open');
+      btn.textContent = open ? 'Details ↑' : 'Details ↓';
+    }
+  </script>
 </body>
 </html>

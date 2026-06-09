@@ -2,7 +2,7 @@ from app import app
 from app.db import get_db_connection
 from flask import render_template, request, redirect, url_for, flash
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import math
 from dateutil.relativedelta import relativedelta
 import csv
@@ -13,21 +13,25 @@ import os
 from flask_login import login_user, logout_user, login_required, current_user
 from app import bcrypt
 from app.models import User
-from app.db import get_db_connection
+from app.db
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-  if current_user.is_authenticated:
-    return redirect(url_for('index'))
-  if request.method == 'POST':
-    email = request.form.get('email', '').strip()
-    password = request.form.get('password', '')
-    user = User.get_by_email(email)
-    if user and bcrypt.check_password_hash(user.password_hash, password):
-      login_user(user)
-      return redirect(url_for('index'))
-    flash('Invalid email or password')
-  return render_template('login.html')
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '')
+        user = User.get_by_email(email)
+        print(f"DEBUG: email={email}, user={user}, password={password}", flush=True)
+        if user:
+            result = bcrypt.check_password_hash(user.password_hash, password)
+            print(f"DEBUG: hash check result={result}", flush=True)
+        if user and bcrypt.check_password_hash(user.password_hash, password):
+            login_user(user)
+            return redirect(url_for('index'))
+        flash('Invalid email or password')
+    return render_template('login.html')
 
 @app.route('/logout')
 @login_required

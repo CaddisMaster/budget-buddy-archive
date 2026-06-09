@@ -841,26 +841,29 @@ def export_transactions():
 @app.route('/admin/backup')
 @login_required
 def backup_database():
-  db_host = os.getenv('DB_HOST', 'db')
-  db_name = os.getenv('DB_NAME', 'budget')
-  db_user = os.getenv('DB_USER', 'admin')
-  db_password = os.getenv('DB_PASSWORD', '')
-  env = os.environ.copy()
-  env['PGPASSWORD'] = db_password
-  result = subprocess.run(
-    ['pg_dump', '-h', db_host, '-U', db_user, db_name],
-    capture_output=True,
-    env=env
-  )
-  if result.returncode != 0:
-    flash('Backup failed')
-    return redirect('/')
-  from datetime import date
-  filename = f'budget_backup_{date.today()}.sql'
-  response = make_response(result.stdout)
-  response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-  response.headers['Content-Type'] = 'application/octet-stream'
-  return response
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('index'))
+    db_host = os.getenv('DB_HOST', 'db')
+    db_name = os.getenv('DB_NAME', 'budget')
+    db_user = os.getenv('DB_USER', 'admin')
+    db_password = os.getenv('DB_PASSWORD', '')
+    env = os.environ.copy()
+    env['PGPASSWORD'] = db_password
+    result = subprocess.run(
+        ['pg_dump', '-h', db_host, '-U', db_user, db_name],
+        capture_output=True,
+        env=env
+    )
+    if result.returncode != 0:
+        flash('Backup failed')
+        return redirect('/')
+    from datetime import date
+    filename = f'budget_backup_{date.today()}.sql'
+    response = make_response(result.stdout)
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    response.headers['Content-Type'] = 'application/octet-stream'
+    return response
 
 @app.route('/categories/edit/<int:category_id>', methods=['GET', 'POST'])
 @login_required
@@ -1111,4 +1114,7 @@ def dashboard():
 @app.route('/settings')
 @login_required
 def settings():
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('index'))
     return render_template('settings.html')

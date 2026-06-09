@@ -23,7 +23,9 @@
       <a href="/budgets" {% if '/budgets' in request.path %}class="active"{% endif %}>Budgets</a>
       <a href="/categories" {% if '/categories' in request.path %}class="active"{% endif %}>Categories</a>
       <a href="/accounts" {% if '/accounts' in request.path %}class="active"{% endif %}>Accounts</a>
+      {% if current_user.is_admin %}
       <a href="/settings" {% if '/settings' in request.path %}class="active"{% endif %}>Settings</a>
+      {% endif %}
       <a href="/logout">Logout</a>
     </nav>
   </aside>

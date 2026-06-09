@@ -2,10 +2,19 @@
 {% block title %}Settings — Budget Buddy{% endblock %}
 {% block content %}
 <h1>Settings</h1>
+
 <h2>Database</h2>
 <div class="card">
     <p style="font-size:14px;color:var(--text-muted);margin-bottom:1rem">Download a full SQL backup of the database.</p>
     <a href="/admin/backup" class="btn btn-primary">Download backup</a>
-    {% if current_user.is_admin %}<a href="/admin/create-user">Create user</a>{% endif %}
 </div>
+
+{% if current_user.is_admin %}
+<h2>User management</h2>
+<div class="card">
+    <p style="font-size:14px;color:var(--text-muted);margin-bottom:1rem">Create a new user account.</p>
+    <a href="/admin/create-user" class="btn btn-primary">Create user</a>
+</div>
+{% endif %}
+
 {% endblock %}

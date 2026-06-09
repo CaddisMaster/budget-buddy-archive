@@ -107,6 +107,45 @@ def categories():
     conn.close()
     return render_template('categories.html', categories=all_categories)
 
+def run_process_recurring():
+    from dateutil.relativedelta import relativedelta
+    today = datetime.today().date()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, amount, description, category_id, account_id,
+               transaction_type, frequency, next_due
+        FROM transactions
+        WHERE is_recurring = true AND next_due <= %s
+    """, (today,))
+    due = cursor.fetchall()
+    for t in due:
+        tid, amount, desc, cat_id, acc_id, ttype, freq, next_due = t
+        cursor.execute("""
+            INSERT INTO transactions
+                (amount, description, category_id, account_id,
+                 transaction_date, transaction_type,
+                 is_recurring, frequency, next_due)
+            VALUES (%s,%s,%s,%s,%s,%s,true,%s,%s)
+        """, (
+            amount, desc, cat_id, acc_id, next_due, ttype, freq,
+            (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
+            if freq == 'monthly' else
+            (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d')
+        ))
+        cursor.execute(
+            "UPDATE transactions SET next_due = %s WHERE id = %s",
+            (
+                (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
+                if freq == 'monthly' else
+                (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d'),
+                tid
+            )
+        )
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 @app.route('/recurring/process')
 def process_recurring():
     run_process_recurring()

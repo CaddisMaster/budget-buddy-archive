@@ -10,12 +10,90 @@ import io
 from flask import make_response
 import subprocess
 import os
+from flask_login import login_user, logout_user, login_required, current_user
+from app import bcrypt
+from app.models import User
+from app.db import get_db_connection
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+  if current_user.is_authenticated:
+    return redirect(url_for('index'))
+  if request.method == 'POST':
+    email = request.form.get('email', '').strip()
+    password = request.form.get('password', '')
+    user = User.get_by_email(email)
+    if user and bcrypt.check_password_hash(user.password_hash, password):
+      login_user(user)
+      return redirect(url_for('index'))
+    flash('Invalid email or password')
+  return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+  logout_user()
+  return redirect(url_for('login'))
+
+@app.route('/admin/create-user', methods=['GET', 'POST'])
+@login_required
+def create_user():
+  if not current_user.is_admin:
+    flash('Access denied')
+    return redirect(url_for('index'))
+  if request.method == 'POST':
+    email = request.form.get('email', '').strip()
+    password = request.form.get('password', '')
+    is_admin = request.form.get('is_admin') == 'on'
+    password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+      cursor.execute(
+        "INSERT INTO users (email, password_hash, is_admin) VALUES (%s, %s, %s)",
+        (email, password_hash, is_admin)
+      )
+      conn.commit()
+      flash(f'Account created for {email}')
+    except Exception as e:
+      flash(f'Error: {e}')
+      conn.rollback()
+    finally:
+      cursor.close()
+      conn.close()
+    return redirect(url_for('create_user'))
+  return render_template('create_user.html')
+
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+  if request.method == 'POST':
+    current_password = request.form.get('current_password', '')
+    new_password = request.form.get('new_password', '')
+    if not bcrypt.check_password_hash(current_user.password_hash, current_password):
+      flash('Current password is incorrect')
+      return redirect(url_for('change_password'))
+    new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+      "UPDATE users SET password_hash = %s WHERE id = %s",
+      (new_hash, current_user.id)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Password updated')
+    return redirect(url_for('settings'))
+  return render_template('change_password.html')
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/transactions/new', methods=['GET', 'POST'])
+@login_required
 def new_transaction():
     if request.method == 'POST':
         amount_str = request.form['amount'].strip()
@@ -85,6 +163,7 @@ def new_transaction():
     return render_template('new_transaction.html', categories=all_categories, accounts=all_accounts)
 
 @app.route('/categories', methods=['GET', 'POST'])
+@login_required
 def categories():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -148,12 +227,14 @@ def run_process_recurring():
     conn.close()
 
 @app.route('/recurring/process')
+@login_required
 def process_recurring():
     run_process_recurring()
     flash('Recurring transactions processed')
     return redirect('/transactions')
 
 @app.route('/transactions')
+@login_required
 def transactions():
     run_process_recurring()
     selected_month = request.args.get('month')
@@ -223,6 +304,7 @@ def transactions():
     )
 
 @app.route('/transactions/cancel-recurring/<int:id>', methods=['POST'])
+@login_required
 def cancel_recurring(id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -237,6 +319,7 @@ def cancel_recurring(id):
     return redirect('/transactions')
 
 @app.route('/accounts', methods=['GET', 'POST'])
+@login_required
 def accounts():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -275,6 +358,7 @@ def accounts():
     return render_template('accounts.html', accounts=all_accounts)
 
 @app.route('/analytics')
+@login_required
 def analytics():
     selected_month = request.args.get('month')
     months = []
@@ -563,6 +647,7 @@ def analytics():
     )
 
 @app.route('/budgets', methods=['GET', 'POST'])
+@login_required
 def budgets():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -597,6 +682,7 @@ def budgets():
 
 
 @app.route('/budgets/edit/<int:budget_id>', methods=['GET', 'POST'])
+@login_required
 def edit_budget(budget_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -627,6 +713,7 @@ def edit_budget(budget_id):
     return render_template('edit_budget.html', budget=budget, categories=all_categories)
 
 @app.route('/budgets/delete/<int:budget_id>', methods=['GET', 'POST'])
+@login_required
 def delete_budget(budget_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -652,6 +739,7 @@ def delete_budget(budget_id):
     return render_template('delete_budget.html', budget=budget)
 
 @app.route('/transactions/edit/<int:transaction_id>', methods=['GET', 'POST'])
+@login_required
 def edit_transaction(transaction_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -688,6 +776,7 @@ def edit_transaction(transaction_id):
 
 
 @app.route('/transactions/delete/<int:transaction_id>', methods=['GET', 'POST'])
+@login_required
 def delete_transaction(transaction_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -712,6 +801,7 @@ def delete_transaction(transaction_id):
     return render_template('delete_transaction.html', transaction=transaction)
 
 @app.route('/transactions/export')
+@login_required
 def export_transactions():
   selected_month = request.args.get('month')
   search = request.args.get('search', '').strip()
@@ -750,6 +840,7 @@ def export_transactions():
   return response
 
 @app.route('/admin/backup')
+@login_required
 def backup_database():
   db_host = os.getenv('DB_HOST', 'db')
   db_name = os.getenv('DB_NAME', 'budget')
@@ -773,6 +864,7 @@ def backup_database():
   return response
 
 @app.route('/categories/edit/<int:category_id>', methods=['GET', 'POST'])
+@login_required
 def edit_category(category_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -800,6 +892,7 @@ def edit_category(category_id):
 
 
 @app.route('/categories/delete/<int:category_id>', methods=['GET', 'POST'])
+@login_required
 def delete_category(category_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -825,6 +918,7 @@ def delete_category(category_id):
 
 
 @app.route('/accounts/edit/<int:account_id>', methods=['GET', 'POST'])
+@login_required
 def edit_account(account_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -852,6 +946,7 @@ def edit_account(account_id):
 
 
 @app.route('/accounts/delete/<int:account_id>', methods=['GET', 'POST'])
+@login_required
 def delete_account(account_id):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -876,6 +971,7 @@ def delete_account(account_id):
     return render_template('delete_account.html', account=account)
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
     selected_month = request.args.get('month')
     months = []
@@ -1014,5 +1110,6 @@ def dashboard():
         selected_month=selected_month
     )
 @app.route('/settings')
+@login_required
 def settings():
     return render_template('settings.html')

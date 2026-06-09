@@ -6,5 +6,6 @@
 <div class="card">
     <p style="font-size:14px;color:var(--text-muted);margin-bottom:1rem">Download a full SQL backup of the database.</p>
     <a href="/admin/backup" class="btn btn-primary">Download backup</a>
+    {% if current_user.is_admin %}<a href="/admin/create-user">Create user</a>{% endif %}
 </div>
 {% endblock %}

@@ -1,0 +1,25 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Budget Buddy</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)">
+  <div style="width:100%;max-width:380px;padding:2rem">
+    <h1 style="margin-bottom:1.5rem">Budget Buddy</h1>
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}
+    {% endwith %}
+    <form method="post">
+      <label>Email</label>
+      <input type="email" name="email" required autofocus>
+      <label>Password</label>
+      <input type="password" name="password" required>
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1.5rem">Sign in</button>
+    </form>
+  </div>
+</body>
+</html>

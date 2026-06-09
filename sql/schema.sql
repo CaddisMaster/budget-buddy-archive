@@ -2,7 +2,7 @@
 -- Budget Buddy — Complete Database Schema
 -- Run this single file on a fresh database to set up everything
 -- ============================================================
-
+ 
 -- ------------------------------------------------------------
 -- Categories
 -- ------------------------------------------------------------
@@ -12,7 +12,7 @@ CREATE TABLE public.categories (
     description text,
     created_at timestamp without time zone DEFAULT now()
 );
-
+ 
 -- ------------------------------------------------------------
 -- Account
 -- ------------------------------------------------------------
@@ -22,7 +22,7 @@ CREATE TABLE public.account (
     type character varying(50) NOT NULL,
     created_at timestamp without time zone DEFAULT now()
 );
-
+ 
 -- ------------------------------------------------------------
 -- Transactions
 -- ------------------------------------------------------------
@@ -40,7 +40,7 @@ CREATE TABLE public.transactions (
     next_due DATE DEFAULT NULL,
     CONSTRAINT valid_transaction_type CHECK (transaction_type IN ('expense', 'income'))
 );
-
+ 
 -- ------------------------------------------------------------
 -- Budgets
 -- ------------------------------------------------------------
@@ -53,7 +53,18 @@ CREATE TABLE public.budgets (
     created_at timestamp without time zone DEFAULT now(),
     CONSTRAINT valid_period CHECK (period_end > period_start)
 );
-
+ 
+-- ------------------------------------------------------------
+-- Users
+-- ------------------------------------------------------------
+CREATE TABLE public.users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    is_admin BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+ 
 -- ------------------------------------------------------------
 -- Foreign Key Constraints
 -- ------------------------------------------------------------
@@ -62,13 +73,13 @@ ALTER TABLE transactions
     FOREIGN KEY (category_id)
     REFERENCES categories (id)
     ON DELETE RESTRICT;
-
+ 
 ALTER TABLE transactions
     ADD CONSTRAINT fk_transactions_account
     FOREIGN KEY (account_id)
     REFERENCES account (account_id)
     ON DELETE RESTRICT;
-
+ 
 ALTER TABLE budgets
     ADD CONSTRAINT fk_budgets_category
     FOREIGN KEY (category_id)

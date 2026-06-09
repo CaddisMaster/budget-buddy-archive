@@ -27,6 +27,7 @@
   <form method="get" action="/recurring/process">
     <button type="submit" class="btn btn-primary">Process recurring</button>
   </form>
+  <a href="/transactions/export{% if selected_month %}?month={{ selected_month }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn">Export CSV</a>
 </div>
 <p style="font-size:13px;color:var(--text-muted);margin-bottom:0.75rem">{{ total }} transaction{{ 's' if total != 1 else '' }}</p>
 <div class="table-wrapper">
@@ -39,8 +40,8 @@
     <td>{{ t[1] }}</td>
     <td>
       {{ t[2] }}
-      {% if t[8] %}
-      <span class="recurring-badge">↻ {{ t[9] }}</span>
+      {% if t[7] %}
+      <span class="recurring-badge">↻ {{ t[8] }}</span>
       {% endif %}
     </td>
     <td>{{ t[3] or 'Uncategorised' }}</td>
@@ -49,7 +50,7 @@
     <td>
       <a href="/transactions/edit/{{ t[0] }}">Edit</a> |
       <a href="/transactions/delete/{{ t[0] }}">Delete</a>
-      {% if t[8] %}
+      {% if t[7] %}
       | <form method="post" action="/transactions/cancel-recurring/{{ t[0] }}" style="display:inline">
           <button type="submit" class="btn btn-danger" style="font-size:12px;padding:2px 8px">Cancel recurring</button>
         </form>

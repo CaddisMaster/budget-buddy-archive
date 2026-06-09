@@ -5,6 +5,10 @@ import json
 from datetime import datetime, date
 import math
 from dateutil.relativedelta import relativedelta
+import csv
+import io
+from flask import make_response
+import subprocess
 
 @app.route('/')
 def index():
@@ -703,6 +707,67 @@ def process_recurring():
     flash(f'{count} recurring transaction(s) processed')
     return redirect('/transactions')
 
+@app.route('/transactions/export')
+def export_transactions():
+  selected_month = request.args.get('month')
+  search = request.args.get('search', '').strip()
+  conn = get_db_connection()
+  cursor = conn.cursor()
+  filters = []
+  params = []
+  if selected_month:
+    year, month = selected_month.split('-')
+    filters.append("EXTRACT(YEAR FROM t.transaction_date) = %s AND EXTRACT(MONTH FROM t.transaction_date) = %s")
+    params.extend([year, month])
+  if search:
+    filters.append("t.description ILIKE %s")
+    params.append(f'%{search}%')
+  where_clause = "WHERE " + " AND ".join(filters) if filters else ""
+  cursor.execute(f"""
+    SELECT t.transaction_date, t.transaction_type, t.amount,
+           t.description, c.name, a.account_name
+    FROM transactions t
+    LEFT JOIN categories c ON t.category_id = c.id
+    LEFT JOIN account a ON t.account_id = a.account_id
+    {where_clause}
+    ORDER BY t.transaction_date DESC, t.id DESC
+  """, params)
+  rows = cursor.fetchall()
+  cursor.close()
+  conn.close()
+  output = io.StringIO()
+  writer = csv.writer(output)
+  writer.writerow(['Date', 'Type', 'Amount', 'Description', 'Category', 'Account'])
+  writer.writerows(rows)
+  output.seek(0)
+  response = make_response(output.getvalue())
+  response.headers['Content-Disposition'] = 'attachment; filename=transactions.csv'
+  response.headers['Content-Type'] = 'text/csv'
+  return response
+
+@app.route('/admin/backup')
+def backup_database():
+  db_host = os.getenv('DB_HOST', 'db')
+  db_name = os.getenv('DB_NAME', 'budget')
+  db_user = os.getenv('DB_USER', 'admin')
+  db_password = os.getenv('DB_PASSWORD', '')
+  env = os.environ.copy()
+  env['PGPASSWORD'] = db_password
+  result = subprocess.run(
+    ['pg_dump', '-h', db_host, '-U', db_user, db_name],
+    capture_output=True,
+    env=env
+  )
+  if result.returncode != 0:
+    flash('Backup failed')
+    return redirect('/')
+  from datetime import date
+  filename = f'budget_backup_{date.today()}.sql'
+  response = make_response(result.stdout)
+  response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+  response.headers['Content-Type'] = 'application/octet-stream'
+  return response
+
 @app.route('/categories/edit/<int:category_id>', methods=['GET', 'POST'])
 def edit_category(category_id):
     conn = get_db_connection()
@@ -944,3 +1009,6 @@ def dashboard():
         months=months,
         selected_month=selected_month
     )
+@app.route('/settings')
+def settings():
+    return render_template('settings.html')

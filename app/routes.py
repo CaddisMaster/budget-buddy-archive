@@ -19,17 +19,13 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        email = request.form.get('email', '').strip()
+        username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        user = User.get_by_email(email)
-        print(f"DEBUG: email={email}, user={user}, password={password}", flush=True)
-        if user:
-            result = bcrypt.check_password_hash(user.password_hash, password)
-            print(f"DEBUG: hash check result={result}", flush=True)
+        user = User.get_by_username(username)
         if user and bcrypt.check_password_hash(user.password_hash, password):
             login_user(user)
             return redirect(url_for('index'))
-        flash('Invalid email or password')
+        flash('Invalid username or password')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -41,31 +37,31 @@ def logout():
 @app.route('/admin/create-user', methods=['GET', 'POST'])
 @login_required
 def create_user():
-  if not current_user.is_admin:
-    flash('Access denied')
-    return redirect(url_for('index'))
-  if request.method == 'POST':
-    email = request.form.get('email', '').strip()
-    password = request.form.get('password', '')
-    is_admin = request.form.get('is_admin') == 'on'
-    password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-      cursor.execute(
-        "INSERT INTO users (email, password_hash, is_admin) VALUES (%s, %s, %s)",
-        (email, password_hash, is_admin)
-      )
-      conn.commit()
-      flash(f'Account created for {email}')
-    except Exception as e:
-      flash(f'Error: {e}')
-      conn.rollback()
-    finally:
-      cursor.close()
-      conn.close()
-    return redirect(url_for('create_user'))
-  return render_template('create_user.html')
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        is_admin = request.form.get('is_admin') == 'on'
+        password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, is_admin) VALUES (%s, %s, %s)",
+                (username, password_hash, is_admin)
+            )
+            conn.commit()
+            flash(f'Account created for {username}')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+        return redirect(url_for('create_user'))
+    return render_template('create_user.html')
 
 @app.route('/change-password', methods=['GET', 'POST'])
 @login_required

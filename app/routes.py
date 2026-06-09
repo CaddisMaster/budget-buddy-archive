@@ -671,49 +671,6 @@ def delete_transaction(transaction_id):
     conn.close()
     return render_template('delete_transaction.html', transaction=transaction)
 
-@app.route('/recurring/process')
-def process_recurring():
-    today = datetime.today().date()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, amount, description, category_id, account_id,
-               transaction_type, frequency, next_due
-        FROM transactions
-        WHERE is_recurring = true AND next_due <= %s
-    """, (today,))
-    due = cursor.fetchall()
-    count = 0
-    for t in due:
-        tid, amount, desc, cat_id, acc_id, ttype, freq, next_due = t
-        cursor.execute("""
-            INSERT INTO transactions
-                (amount, description, category_id, account_id,
-                 transaction_date, transaction_type,
-                 is_recurring, frequency, next_due)
-            VALUES (%s,%s,%s,%s,%s,%s,true,%s,%s)
-        """, (
-            amount, desc, cat_id, acc_id, next_due, ttype, freq,
-            (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
-            if freq == 'monthly' else
-            (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d')
-        ))
-        cursor.execute(
-            "UPDATE transactions SET next_due = %s WHERE id = %s",
-            (
-                (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
-                if freq == 'monthly' else
-                (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d'),
-                tid
-            )
-        )
-        count += 1
-    conn.commit()
-    cursor.close()
-    conn.close()
-    flash(f'{count} recurring transaction(s) processed')
-    return redirect('/transactions')
-
 @app.route('/transactions/export')
 def export_transactions():
   selected_month = request.args.get('month')

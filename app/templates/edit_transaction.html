@@ -3,6 +3,7 @@
 {% block content %}
 <h1>Edit transaction</h1>
 <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Type</label>
     <select name="transaction_type" required>
         <option value="expense" {% if transaction[6] == 'expense' %}selected{% endif %}>Expense</option>

@@ -3,6 +3,7 @@
 {% block content %}
 <h1>Edit budget</h1>
 <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Category</label>
     <select name="category_id" required>
         {% for cat in categories %}

@@ -4,6 +4,7 @@
 <h1>Budgets</h1>
 <h2>Add budget</h2>
 <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Category</label>
     <select name="category_id" required>
         <option value="">-- select category --</option>

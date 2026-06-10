@@ -13,6 +13,7 @@
     {% if messages %}<div class="flash">{{ messages[0] }}</div>{% endif %}
     {% endwith %}
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>Username</label>
       <input type="text" name="username" required autofocus>
       <label>Password</label>

@@ -16,3 +16,4 @@ Flask-Limiter
 python-dateutil
 Flask-Login
 Flask-Bcrypt
+Flask-WTF

@@ -44,6 +44,21 @@ def create_user():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         is_admin = request.form.get('is_admin') == 'on'
+        errors = []
+        if not username:
+            errors.append('Username is required')
+        elif len(username) < 3:
+            errors.append('Username must be at least 3 characters')
+        elif len(username) > 50:
+            errors.append('Username must be 50 characters or fewer')
+        if not password:
+            errors.append('Password is required')
+        elif len(password) < 8:
+            errors.append('Password must be at least 8 characters')
+        if errors:
+            for e in errors:
+                flash(e)
+            return redirect(url_for('create_user'))
         password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -71,6 +86,9 @@ def change_password():
         new_password = request.form.get('new_password', '')
         if not bcrypt.check_password_hash(current_user.password_hash, current_password):
             flash('Current password is incorrect')
+            return redirect(url_for('change_password'))
+        if len(new_password) < 8:
+            flash('New password must be at least 8 characters')
             return redirect(url_for('change_password'))
         new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
         conn = get_db_connection()
@@ -168,6 +186,14 @@ def categories():
     if request.method == 'POST':
         name = request.form['name'].strip()
         description = request.form.get('description', '').strip()
+        if not name:
+            cursor.close(); conn.close()
+            flash('Name is required')
+            return redirect(url_for('categories'))
+        if len(name) > 50:
+            cursor.close(); conn.close()
+            flash('Name must be 50 characters or fewer')
+            return redirect(url_for('categories'))
         try:
             cursor.execute(
                 "INSERT INTO categories (name, description, user_id) VALUES (%s, %s, %s)",
@@ -314,9 +340,22 @@ def cancel_recurring(id):
 def accounts():
     conn = get_db_connection()
     cursor = conn.cursor()
+    valid_account_types = ('Credit Card', 'Debit Card', 'Bank Account')
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
+        if not name:
+            cursor.close(); conn.close()
+            flash('Name is required')
+            return redirect(url_for('accounts'))
+        if len(name) > 50:
+            cursor.close(); conn.close()
+            flash('Name must be 50 characters or fewer')
+            return redirect(url_for('accounts'))
+        if account_type not in valid_account_types:
+            cursor.close(); conn.close()
+            flash('Invalid account type')
+            return redirect(url_for('accounts'))
         try:
             cursor.execute(
                 "INSERT INTO account (account_name, type, user_id) VALUES (%s, %s, %s)",
@@ -654,9 +693,33 @@ def budgets():
     cursor = conn.cursor()
     if request.method == 'POST':
         category_id = request.form.get('category_id')
-        amount = request.form.get('amount')
-        period_start = request.form.get('period_start')
-        period_end = request.form.get('period_end')
+        amount_str = request.form.get('amount', '').strip()
+        period_start = request.form.get('period_start', '').strip()
+        period_end = request.form.get('period_end', '').strip()
+        errors = []
+        if not category_id:
+            errors.append('Category is required')
+        if not amount_str:
+            errors.append('Amount is required')
+        else:
+            try:
+                amount = float(amount_str)
+                if amount <= 0:
+                    errors.append('Amount must be greater than zero')
+            except ValueError:
+                errors.append('Amount must be a valid number')
+        if not period_start:
+            errors.append('Period start is required')
+        if not period_end:
+            errors.append('Period end is required')
+        if period_start and period_end and period_end <= period_start:
+            errors.append('Period end must be after period start')
+        if errors:
+            cursor.close(); conn.close()
+            for e in errors:
+                flash(e)
+            return redirect(url_for('budgets'))
+        amount = float(amount_str)
         try:
             cursor.execute(
                 "INSERT INTO budgets (category_id, amount, period_start, period_end, user_id) VALUES (%s, %s, %s, %s, %s)",
@@ -691,9 +754,33 @@ def edit_budget(budget_id):
     cursor = conn.cursor()
     if request.method == 'POST':
         category_id = request.form.get('category_id')
-        amount = request.form.get('amount')
-        period_start = request.form.get('period_start')
-        period_end = request.form.get('period_end')
+        amount_str = request.form.get('amount', '').strip()
+        period_start = request.form.get('period_start', '').strip()
+        period_end = request.form.get('period_end', '').strip()
+        errors = []
+        if not category_id:
+            errors.append('Category is required')
+        if not amount_str:
+            errors.append('Amount is required')
+        else:
+            try:
+                amount = float(amount_str)
+                if amount <= 0:
+                    errors.append('Amount must be greater than zero')
+            except ValueError:
+                errors.append('Amount must be a valid number')
+        if not period_start:
+            errors.append('Period start is required')
+        if not period_end:
+            errors.append('Period end is required')
+        if period_start and period_end and period_end <= period_start:
+            errors.append('Period end must be after period start')
+        if errors:
+            cursor.close(); conn.close()
+            for e in errors:
+                flash(e)
+            return redirect(url_for('edit_budget', budget_id=budget_id))
+        amount = float(amount_str)
         try:
             cursor.execute(
                 "UPDATE budgets SET category_id=%s, amount=%s, period_start=%s, period_end=%s WHERE id=%s AND user_id=%s",
@@ -753,8 +840,27 @@ def edit_transaction(transaction_id):
         category_id = request.form.get('category_id') or None
         account_id = request.form.get('account_id') or None
         transaction_type = request.form.get('transaction_type', 'expense')
+        errors = []
+        if not amount_str:
+            errors.append('Amount is required')
+        else:
+            try:
+                amount = float(amount_str)
+                if amount <= 0:
+                    errors.append('Amount must be greater than zero')
+            except ValueError:
+                errors.append('Amount must be a valid number')
+        if not transaction_date:
+            errors.append('Date is required')
+        if transaction_type not in ('income', 'expense'):
+            errors.append('Transaction type must be income or expense')
+        if errors:
+            cursor.close(); conn.close()
+            for e in errors:
+                flash(e)
+            return redirect(url_for('edit_transaction', transaction_id=transaction_id))
+        amount = float(amount_str)
         try:
-            amount = float(amount_str)
             cursor.execute(
                 "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s WHERE id=%s AND user_id=%s",
                 (amount, description, transaction_date, category_id, account_id, transaction_type, transaction_id, current_user.id)
@@ -875,6 +981,14 @@ def edit_category(category_id):
     if request.method == 'POST':
         name = request.form['name'].strip()
         description = request.form.get('description', '').strip()
+        if not name:
+            cursor.close(); conn.close()
+            flash('Name is required')
+            return redirect(url_for('edit_category', category_id=category_id))
+        if len(name) > 50:
+            cursor.close(); conn.close()
+            flash('Name must be 50 characters or fewer')
+            return redirect(url_for('edit_category', category_id=category_id))
         try:
             cursor.execute(
                 "UPDATE categories SET name=%s, description=%s WHERE id=%s AND user_id=%s",
@@ -927,6 +1041,18 @@ def edit_account(account_id):
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
+        if not name:
+            cursor.close(); conn.close()
+            flash('Name is required')
+            return redirect(url_for('edit_account', account_id=account_id))
+        if len(name) > 50:
+            cursor.close(); conn.close()
+            flash('Name must be 50 characters or fewer')
+            return redirect(url_for('edit_account', account_id=account_id))
+        if account_type not in ('Credit Card', 'Debit Card', 'Bank Account'):
+            cursor.close(); conn.close()
+            flash('Invalid account type')
+            return redirect(url_for('edit_account', account_id=account_id))
         try:
             cursor.execute(
                 "UPDATE account SET account_name=%s, type=%s WHERE account_id=%s AND user_id=%s",

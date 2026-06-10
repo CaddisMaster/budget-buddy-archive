@@ -10,6 +10,26 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 
 🔗 [budget.seandesmet.com](https://budget.seandesmet.com) *(requires login — personal use only)*
 
+## Screenshots
+
+### Login
+![Login](screenshots/Login.png)
+
+### Transaction History
+![Transactions](screenshots/Transactions.png)
+
+### Analytics
+![Analytics 1](screenshots/Analytics%201.png)
+![Analytics 2](screenshots/Analytics%202.png)
+
+### Dashboard
+![Dashboard 1](screenshots/Dashboard%201.png)
+![Dashboard 2](screenshots/Dashboard%202.png)
+![Dashboard 3](screenshots/Dashboard%203.png)
+
+### Settings
+![Settings](screenshots/Settings.png)
+
 ## Features
 
 - **Transaction tracking** — log income and expenses with categories, accounts, and dates
@@ -58,7 +78,8 @@ DigitalOcean Droplet
 ```
 budget-buddy/
 ├── app/
-│   ├── __init__.py       # Flask app, Basic Auth, rate limiting
+│   ├── __init__.py       # Flask app, Flask-Login, rate limiting
+│   ├── models.py         # User model for Flask-Login
 │   ├── routes.py         # All routes and business logic
 │   ├── db.py             # Database connection
 │   ├── static/
@@ -68,6 +89,7 @@ budget-buddy/
 │   └── schema.sql        # Full database schema
 ├── landing/
 │   └── index.html        # Personal home page (seandesmet.com)
+├── screenshots/          # App screenshots for README
 ├── Dockerfile
 ├── docker-compose.yml
 ├── deploy.sh             # Multi-platform build and push to Docker Hub
@@ -91,8 +113,6 @@ DB_NAME=budget
 DB_USER=admin
 DB_PASSWORD=yourpassword
 SECRET_KEY=yoursecretkey
-APP_USERNAME=yourusername
-APP_PASSWORD=yourpassword
 ```
 
 Start the app:
@@ -102,7 +122,7 @@ docker-compose up
 
 Open [http://localhost:5001](http://localhost:5001) in your browser.
 
-The database schema initialises automatically on first startup. No manual SQL setup required.
+The database schema initialises automatically on first startup. No manual SQL setup required. Create an admin account via psql after first startup.
 
 ## Database Schema
 
@@ -110,11 +130,13 @@ The database schema initialises automatically on first startup. No manual SQL se
 - `categories` — id, name, description
 - `budgets` — id, category_id, amount, period_start, period_end
 - `account` — account_id, account_name, type
+- `users` — id, username, password_hash, is_admin, created_at
 
 ## Security
 
-- HTTP Basic Auth on all routes
-- `hmac.compare_digest` for timing-attack-safe credential comparison
+- Flask-Login session-based authentication — no public registration
+- Flask-Bcrypt password hashing — passwords never stored as plain text
+- Admin-only routes for settings, backup, and user management
 - Flask-Limiter — 60 requests per minute per IP
 - Gunicorn production WSGI server (no Flask dev server in production)
 - Nginx reverse proxy — Flask port never publicly exposed
@@ -124,6 +146,6 @@ The database schema initialises automatically on first startup. No manual SQL se
 
 ## Roadmap
 
-- [ ] Tags and tag-based filtering
-- [ ] Multi-user support with Flask-Login and per-user data isolation
-- [ ] Admin-only account creation (no public registration)
+- [ ] Multi-user data isolation — per-user transactions and budgets
+- [ ] CSRF protection via Flask-WTF
+- [ ] Empty states and default categories for new users

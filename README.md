@@ -4,7 +4,7 @@ A personal budget tracking and ledger system built with Python, Flask, and Postg
 
 ## Why I Built This
 
-I decided to build Budget Buddy because I was looking to expand my understanding of SQL, Python, and database systems. I was primarily targeting analyst positions and found that my lack of hands-on experience drove me to want to develop something new. Rather than focusing on courses I decided to build something real, that is where Budget Buddy came along!
+I decided to build Budget Buddy because I was looking to expand my understanding of SQL, Python, and database systems. My lack of hands-on experience with these tools drove me to want to develop something new. Rather than focusing on courses I decided to build something real, that is where Budget Buddy came along!
 
 ## Live Demo
 

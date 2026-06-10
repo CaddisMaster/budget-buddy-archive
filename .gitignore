@@ -7,3 +7,5 @@ __pycache__/
 data/*.csv
 .dockerignore
 backups/
+docker-compose.override.yml
+CLAUDE.md

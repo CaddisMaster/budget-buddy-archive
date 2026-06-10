@@ -31,8 +31,8 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
-  logout_user()
-  return redirect(url_for('login'))
+    logout_user()
+    return redirect(url_for('login'))
 
 @app.route('/admin/create-user', methods=['GET', 'POST'])
 @login_required
@@ -66,25 +66,25 @@ def create_user():
 @app.route('/change-password', methods=['GET', 'POST'])
 @login_required
 def change_password():
-  if request.method == 'POST':
-    current_password = request.form.get('current_password', '')
-    new_password = request.form.get('new_password', '')
-    if not bcrypt.check_password_hash(current_user.password_hash, current_password):
-      flash('Current password is incorrect')
-      return redirect(url_for('change_password'))
-    new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-      "UPDATE users SET password_hash = %s WHERE id = %s",
-      (new_hash, current_user.id)
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
-    flash('Password updated')
-    return redirect(url_for('settings'))
-  return render_template('change_password.html')
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '')
+        new_password = request.form.get('new_password', '')
+        if not bcrypt.check_password_hash(current_user.password_hash, current_password):
+            flash('Current password is incorrect')
+            return redirect(url_for('change_password'))
+        new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
+            (new_hash, current_user.id)
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+        flash('Password updated')
+        return redirect(url_for('settings'))
+    return render_template('change_password.html')
 
 @app.route('/')
 @login_required
@@ -126,7 +126,6 @@ def new_transaction():
         next_due = None
         if is_recurring and frequency:
             next_due_raw = datetime.strptime(transaction_date, '%Y-%m-%d')
-            from dateutil.relativedelta import relativedelta
             if frequency == 'monthly':
                 next_due = (next_due_raw + relativedelta(months=1)).strftime('%Y-%m-%d')
             else:
@@ -137,8 +136,8 @@ def new_transaction():
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due)
+                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, current_user.id)
             )
             conn.commit()
             flash('Transaction added successfully')
@@ -153,9 +152,9 @@ def new_transaction():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
     all_categories = cursor.fetchall()
-    cursor.execute("SELECT account_id, account_name FROM account ORDER BY account_name")
+    cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
     all_accounts = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -171,23 +170,24 @@ def categories():
         description = request.form.get('description', '').strip()
         try:
             cursor.execute(
-                "INSERT INTO categories (name, description) VALUES (%s, %s)",
-                (name, description)
+                "INSERT INTO categories (name, description, user_id) VALUES (%s, %s, %s)",
+                (name, description, current_user.id)
             )
             conn.commit()
             flash('Category added successfully')
         except Exception as e:
             flash(f'Error: {e}')
             conn.rollback()
+        cursor.close()
+        conn.close()
         return redirect(url_for('categories'))
-    cursor.execute("SELECT id, name, description FROM categories ORDER BY name")
+    cursor.execute("SELECT id, name, description FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
     all_categories = cursor.fetchall()
     cursor.close()
     conn.close()
     return render_template('categories.html', categories=all_categories)
 
-def run_process_recurring():
-    from dateutil.relativedelta import relativedelta
+def run_process_recurring(user_id):
     today = datetime.today().date()
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -195,31 +195,25 @@ def run_process_recurring():
         SELECT id, amount, description, category_id, account_id,
                transaction_type, frequency, next_due
         FROM transactions
-        WHERE is_recurring = true AND next_due <= %s
-    """, (today,))
+        WHERE is_recurring = true AND next_due <= %s AND user_id = %s
+    """, (today, user_id))
     due = cursor.fetchall()
     for t in due:
         tid, amount, desc, cat_id, acc_id, ttype, freq, next_due = t
+        if freq == 'monthly':
+            new_next_due = (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
+        else:
+            new_next_due = (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d')
         cursor.execute("""
             INSERT INTO transactions
                 (amount, description, category_id, account_id,
                  transaction_date, transaction_type,
-                 is_recurring, frequency, next_due)
-            VALUES (%s,%s,%s,%s,%s,%s,true,%s,%s)
-        """, (
-            amount, desc, cat_id, acc_id, next_due, ttype, freq,
-            (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
-            if freq == 'monthly' else
-            (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d')
-        ))
+                 is_recurring, frequency, next_due, user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, true, %s, %s, %s)
+        """, (amount, desc, cat_id, acc_id, next_due, ttype, freq, new_next_due, user_id))
         cursor.execute(
-            "UPDATE transactions SET next_due = %s WHERE id = %s",
-            (
-                (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
-                if freq == 'monthly' else
-                (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d'),
-                tid
-            )
+            "UPDATE transactions SET next_due = %s WHERE id = %s AND user_id = %s",
+            (new_next_due, tid, user_id)
         )
     conn.commit()
     cursor.close()
@@ -228,14 +222,14 @@ def run_process_recurring():
 @app.route('/recurring/process')
 @login_required
 def process_recurring():
-    run_process_recurring()
+    run_process_recurring(current_user.id)
     flash('Recurring transactions processed')
     return redirect('/transactions')
 
 @app.route('/transactions')
 @login_required
 def transactions():
-    run_process_recurring()
+    run_process_recurring(current_user.id)
     selected_month = request.args.get('month')
     search = request.args.get('search', '').strip()
     page = int(request.args.get('page', 1))
@@ -252,8 +246,8 @@ def transactions():
         months.append(f'{year}-{month:02d}')
     conn = get_db_connection()
     cursor = conn.cursor()
-    filters = []
-    params = []
+    filters = ["t.user_id = %s"]
+    params = [current_user.id]
     if selected_month:
         year, month = selected_month.split('-')
         filters.append("EXTRACT(YEAR FROM t.transaction_date) = %s AND EXTRACT(MONTH FROM t.transaction_date) = %s")
@@ -261,10 +255,8 @@ def transactions():
     if search:
         filters.append("t.description ILIKE %s")
         params.append(f'%{search}%')
-    where_clause = "WHERE " + " AND ".join(filters) if filters else ""
-    count_query = f"""
-        SELECT COUNT(*) FROM transactions t {where_clause}
-    """
+    where_clause = "WHERE " + " AND ".join(filters)
+    count_query = f"SELECT COUNT(*) FROM transactions t {where_clause}"
     cursor.execute(count_query, params)
     total = cursor.fetchone()[0]
     total_pages = math.ceil(total / per_page) if total > 0 else 1
@@ -308,8 +300,8 @@ def cancel_recurring(id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE transactions SET is_recurring=false, frequency=NULL, next_due=NULL WHERE id=%s",
-        (id,)
+        "UPDATE transactions SET is_recurring=false, frequency=NULL, next_due=NULL WHERE id=%s AND user_id=%s",
+        (id, current_user.id)
     )
     conn.commit()
     cursor.close()
@@ -327,14 +319,16 @@ def accounts():
         account_type = request.form.get('type', '').strip()
         try:
             cursor.execute(
-                "INSERT INTO account (account_name, type) VALUES (%s, %s)",
-                (name, account_type)
+                "INSERT INTO account (account_name, type, user_id) VALUES (%s, %s, %s)",
+                (name, account_type, current_user.id)
             )
             conn.commit()
             flash('Account added successfully')
         except Exception as e:
             flash(f'Error: {e}')
             conn.rollback()
+        cursor.close()
+        conn.close()
         return redirect(url_for('accounts'))
     cursor.execute("""
         SELECT
@@ -347,10 +341,11 @@ def accounts():
                 ELSE -t.amount END
             ), 0) AS balance
         FROM account a
-        LEFT JOIN transactions t ON a.account_id = t.account_id
+        LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
+        WHERE a.user_id = %s
         GROUP BY a.account_id, a.account_name, a.type
         ORDER BY a.account_name
-    """)
+    """, (current_user.id,))
     all_accounts = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -382,67 +377,69 @@ def analytics():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense'
             AND EXTRACT(YEAR FROM t.transaction_date) = %s
             AND EXTRACT(MONTH FROM t.transaction_date) = %s
             GROUP BY c.name
             ORDER BY total DESC
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense'
             GROUP BY c.name
             ORDER BY total DESC
-        """)
+        """, (current_user.id,))
     spending_by_category = cursor.fetchall()
 
     if selected_month:
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE transaction_type = 'income'
+            WHERE user_id = %s AND transaction_type = 'income'
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE transaction_type = 'income'
-        """)
+            WHERE user_id = %s AND transaction_type = 'income'
+        """, (current_user.id,))
     total_income = cursor.fetchone()[0]
 
     if selected_month:
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense'
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE transaction_type = 'expense'
-        """)
+            WHERE user_id = %s AND transaction_type = 'expense'
+        """, (current_user.id,))
     total_expenses = cursor.fetchone()[0]
 
     if selected_month:
         cursor.execute("""
             SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
             FROM transactions
-            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            WHERE user_id = %s
+            AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
             FROM transactions
-        """)
+            WHERE user_id = %s
+        """, (current_user.id,))
     net_balance = cursor.fetchone()[0]
 
     if selected_month:
@@ -452,11 +449,12 @@ def analytics():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            WHERE user_id = %s
+            AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT
@@ -464,9 +462,10 @@ def analytics():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
+            WHERE user_id = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
-        """)
+        """, (current_user.id,))
     cash_flow = cursor.fetchall()
 
     if selected_month:
@@ -481,11 +480,13 @@ def analytics():
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
-            WHERE EXTRACT(YEAR FROM b.period_start) = %s
+                AND t.user_id = b.user_id
+            WHERE b.user_id = %s
+            AND EXTRACT(YEAR FROM b.period_start) = %s
             AND EXTRACT(MONTH FROM b.period_start) = %s
             GROUP BY c.name, b.amount, b.period_start, b.period_end
             ORDER BY c.name
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT
@@ -498,9 +499,11 @@ def analytics():
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
+                AND t.user_id = b.user_id
+            WHERE b.user_id = %s
             GROUP BY c.name, b.amount, b.period_start, b.period_end
             ORDER BY c.name
-        """)
+        """, (current_user.id,))
     budget_vs_actual = cursor.fetchall()
 
     cursor.execute("""
@@ -509,7 +512,7 @@ def analytics():
                 DATE_TRUNC('week', transaction_date) AS week,
                 SUM(amount) AS weekly_total
             FROM transactions
-            WHERE transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense'
             GROUP BY DATE_TRUNC('week', transaction_date)
         )
         SELECT
@@ -521,7 +524,7 @@ def analytics():
             ) AS moving_avg
         FROM weekly_totals
         ORDER BY week
-    """)
+    """, (current_user.id,))
     moving_averages = cursor.fetchall()
 
     if selected_month:
@@ -530,33 +533,35 @@ def analytics():
                 SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            WHERE user_id = %s
+            AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT
                 SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-        """)
+            WHERE user_id = %s
+        """, (current_user.id,))
     row = cursor.fetchone()
     s_income, s_expenses = float(row[0] or 0), float(row[1] or 0)
     if s_income > 0:
         savings_rate = round((s_income - s_expenses) / s_income * 100, 1)
     else:
         savings_rate = None
-    
+
     yoy = None
     if selected_month:
         y, m = selected_month.split('-')
         cursor.execute("""
-            SELECT
-            SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
+            SELECT SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
             FROM transactions
-            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            WHERE user_id = %s
+            AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
-        """, (int(y) - 1, m))
+        """, (current_user.id, int(y) - 1, m))
         last_year_row = cursor.fetchone()
         last_year_expenses = float(last_year_row[0] or 0)
         if last_year_expenses > 0:
@@ -565,9 +570,7 @@ def analytics():
                 'this_year': float(total_expenses),
                 'change': round(((float(total_expenses) - last_year_expenses) / last_year_expenses) * 100, 1)
             }
-        else:
-            yoy = None
-            
+
     if selected_month:
         cursor.execute("""
             SELECT
@@ -575,12 +578,12 @@ def analytics():
                 TO_CHAR(transaction_date, 'Day') AS day_name,
                 SUM(amount) AS total
             FROM transactions
-            WHERE transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense'
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY dow, day_name
             ORDER BY dow
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT
@@ -588,39 +591,38 @@ def analytics():
                 TO_CHAR(transaction_date, 'Day') AS day_name,
                 SUM(amount) AS total
             FROM transactions
-            WHERE transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense'
             GROUP BY dow, day_name
             ORDER BY dow
-        """)
+        """, (current_user.id,))
     spending_by_day = cursor.fetchall()
 
     cursor.execute("""
-    SELECT
-        c.name AS category,
-        ROUND(AVG(monthly_total)::numeric, 2) AS suggested_budget
-    FROM (
         SELECT
-        category_id,
-        DATE_TRUNC('month', transaction_date) AS month,
-        SUM(amount) AS monthly_total
-        FROM transactions
-        WHERE transaction_type = 'expense'
-        AND transaction_date >= NOW() - INTERVAL '6 months'
-        AND category_id IS NOT NULL
-        GROUP BY category_id, DATE_TRUNC('month', transaction_date)
-    ) monthly
-    JOIN categories c ON c.id = monthly.category_id
-    GROUP BY c.name
-    HAVING COUNT(DISTINCT month) >= 1
-    ORDER BY suggested_budget DESC
-    """)
+            c.name AS category,
+            ROUND(AVG(monthly_total)::numeric, 2) AS suggested_budget
+        FROM (
+            SELECT
+                category_id,
+                DATE_TRUNC('month', transaction_date) AS month,
+                SUM(amount) AS monthly_total
+            FROM transactions
+            WHERE user_id = %s AND transaction_type = 'expense'
+            AND transaction_date >= NOW() - INTERVAL '6 months'
+            AND category_id IS NOT NULL
+            GROUP BY category_id, DATE_TRUNC('month', transaction_date)
+        ) monthly
+        JOIN categories c ON c.id = monthly.category_id
+        GROUP BY c.name
+        HAVING COUNT(DISTINCT month) >= 1
+        ORDER BY suggested_budget DESC
+    """, (current_user.id,))
     budget_suggestions = cursor.fetchall()
 
     cash_flow_json = json.dumps([
         {'month': row[0], 'income': float(row[1]), 'expenses': float(row[2])}
         for row in cash_flow
     ])
-
     moving_avg_json = json.dumps([
         {'week': row[0], 'total': float(row[1]), 'avg': float(row[2])}
         for row in moving_averages
@@ -657,28 +659,30 @@ def budgets():
         period_end = request.form.get('period_end')
         try:
             cursor.execute(
-                "INSERT INTO budgets (category_id, amount, period_start, period_end) VALUES (%s, %s, %s, %s)",
-                (category_id, amount, period_start, period_end)
+                "INSERT INTO budgets (category_id, amount, period_start, period_end, user_id) VALUES (%s, %s, %s, %s, %s)",
+                (category_id, amount, period_start, period_end, current_user.id)
             )
             conn.commit()
             flash('Budget added successfully')
         except Exception as e:
             flash(f'Error: {e}')
             conn.rollback()
+        cursor.close()
+        conn.close()
         return redirect(url_for('budgets'))
-    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
     all_categories = cursor.fetchall()
     cursor.execute("""
         SELECT b.id, c.name, b.amount, b.period_start, b.period_end
         FROM budgets b
         JOIN categories c ON b.category_id = c.id
+        WHERE b.user_id = %s
         ORDER BY b.period_start DESC
-    """)
+    """, (current_user.id,))
     all_budgets = cursor.fetchall()
     cursor.close()
     conn.close()
     return render_template('budgets.html', categories=all_categories, budgets=all_budgets)
-
 
 @app.route('/budgets/edit/<int:budget_id>', methods=['GET', 'POST'])
 @login_required
@@ -692,8 +696,8 @@ def edit_budget(budget_id):
         period_end = request.form.get('period_end')
         try:
             cursor.execute(
-                "UPDATE budgets SET category_id=%s, amount=%s, period_start=%s, period_end=%s WHERE id=%s",
-                (category_id, amount, period_start, period_end, budget_id)
+                "UPDATE budgets SET category_id=%s, amount=%s, period_start=%s, period_end=%s WHERE id=%s AND user_id=%s",
+                (category_id, amount, period_start, period_end, budget_id, current_user.id)
             )
             conn.commit()
             flash('Budget updated successfully')
@@ -703,9 +707,9 @@ def edit_budget(budget_id):
         cursor.close()
         conn.close()
         return redirect(url_for('budgets'))
-    cursor.execute("SELECT id, category_id, amount, period_start, period_end FROM budgets WHERE id = %s", (budget_id,))
+    cursor.execute("SELECT id, category_id, amount, period_start, period_end FROM budgets WHERE id = %s AND user_id = %s", (budget_id, current_user.id))
     budget = cursor.fetchone()
-    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
     all_categories = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -718,7 +722,7 @@ def delete_budget(budget_id):
     cursor = conn.cursor()
     if request.method == 'POST':
         try:
-            cursor.execute("DELETE FROM budgets WHERE id = %s", (budget_id,))
+            cursor.execute("DELETE FROM budgets WHERE id = %s AND user_id = %s", (budget_id, current_user.id))
             conn.commit()
             flash('Budget deleted')
         except Exception as e:
@@ -730,8 +734,8 @@ def delete_budget(budget_id):
     cursor.execute("""
         SELECT b.id, c.name, b.amount, b.period_start, b.period_end
         FROM budgets b JOIN categories c ON b.category_id = c.id
-        WHERE b.id = %s
-    """, (budget_id,))
+        WHERE b.id = %s AND b.user_id = %s
+    """, (budget_id, current_user.id))
     budget = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -752,8 +756,8 @@ def edit_transaction(transaction_id):
         try:
             amount = float(amount_str)
             cursor.execute(
-                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s WHERE id=%s",
-                (amount, description, transaction_date, category_id, account_id, transaction_type, transaction_id)
+                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s WHERE id=%s AND user_id=%s",
+                (amount, description, transaction_date, category_id, account_id, transaction_type, transaction_id, current_user.id)
             )
             conn.commit()
             flash('Transaction updated successfully')
@@ -763,16 +767,15 @@ def edit_transaction(transaction_id):
         cursor.close()
         conn.close()
         return redirect(url_for('transactions'))
-    cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type FROM transactions WHERE id = %s", (transaction_id,))
+    cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
     transaction = cursor.fetchone()
-    cursor.execute("SELECT id, name FROM categories ORDER BY name")
+    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
     all_categories = cursor.fetchall()
-    cursor.execute("SELECT account_id, account_name FROM account ORDER BY account_name")
+    cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
     all_accounts = cursor.fetchall()
     cursor.close()
     conn.close()
     return render_template('edit_transaction.html', transaction=transaction, categories=all_categories, accounts=all_accounts)
-
 
 @app.route('/transactions/delete/<int:transaction_id>', methods=['GET', 'POST'])
 @login_required
@@ -781,7 +784,7 @@ def delete_transaction(transaction_id):
     cursor = conn.cursor()
     if request.method == 'POST':
         try:
-            cursor.execute("DELETE FROM transactions WHERE id = %s", (transaction_id,))
+            cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
             conn.commit()
             flash('Transaction deleted')
         except Exception as e:
@@ -792,8 +795,8 @@ def delete_transaction(transaction_id):
         return redirect(url_for('transactions'))
     cursor.execute("""
         SELECT t.id, t.amount, t.description, t.transaction_date, t.transaction_type
-        FROM transactions t WHERE t.id = %s
-    """, (transaction_id,))
+        FROM transactions t WHERE t.id = %s AND t.user_id = %s
+    """, (transaction_id, current_user.id))
     transaction = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -802,41 +805,41 @@ def delete_transaction(transaction_id):
 @app.route('/transactions/export')
 @login_required
 def export_transactions():
-  selected_month = request.args.get('month')
-  search = request.args.get('search', '').strip()
-  conn = get_db_connection()
-  cursor = conn.cursor()
-  filters = []
-  params = []
-  if selected_month:
-    year, month = selected_month.split('-')
-    filters.append("EXTRACT(YEAR FROM t.transaction_date) = %s AND EXTRACT(MONTH FROM t.transaction_date) = %s")
-    params.extend([year, month])
-  if search:
-    filters.append("t.description ILIKE %s")
-    params.append(f'%{search}%')
-  where_clause = "WHERE " + " AND ".join(filters) if filters else ""
-  cursor.execute(f"""
-    SELECT t.transaction_date, t.transaction_type, t.amount,
-           t.description, c.name, a.account_name
-    FROM transactions t
-    LEFT JOIN categories c ON t.category_id = c.id
-    LEFT JOIN account a ON t.account_id = a.account_id
-    {where_clause}
-    ORDER BY t.transaction_date DESC, t.id DESC
-  """, params)
-  rows = cursor.fetchall()
-  cursor.close()
-  conn.close()
-  output = io.StringIO()
-  writer = csv.writer(output)
-  writer.writerow(['Date', 'Type', 'Amount', 'Description', 'Category', 'Account'])
-  writer.writerows(rows)
-  output.seek(0)
-  response = make_response(output.getvalue())
-  response.headers['Content-Disposition'] = 'attachment; filename=transactions.csv'
-  response.headers['Content-Type'] = 'text/csv'
-  return response
+    selected_month = request.args.get('month')
+    search = request.args.get('search', '').strip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    filters = ["t.user_id = %s"]
+    params = [current_user.id]
+    if selected_month:
+        year, month = selected_month.split('-')
+        filters.append("EXTRACT(YEAR FROM t.transaction_date) = %s AND EXTRACT(MONTH FROM t.transaction_date) = %s")
+        params.extend([year, month])
+    if search:
+        filters.append("t.description ILIKE %s")
+        params.append(f'%{search}%')
+    where_clause = "WHERE " + " AND ".join(filters)
+    cursor.execute(f"""
+        SELECT t.transaction_date, t.transaction_type, t.amount,
+               t.description, c.name, a.account_name
+        FROM transactions t
+        LEFT JOIN categories c ON t.category_id = c.id
+        LEFT JOIN account a ON t.account_id = a.account_id
+        {where_clause}
+        ORDER BY t.transaction_date DESC, t.id DESC
+    """, params)
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Date', 'Type', 'Amount', 'Description', 'Category', 'Account'])
+    writer.writerows(rows)
+    output.seek(0)
+    response = make_response(output.getvalue())
+    response.headers['Content-Disposition'] = 'attachment; filename=transactions.csv'
+    response.headers['Content-Type'] = 'text/csv'
+    return response
 
 @app.route('/admin/backup')
 @login_required
@@ -858,7 +861,6 @@ def backup_database():
     if result.returncode != 0:
         flash('Backup failed')
         return redirect('/')
-    from datetime import date
     filename = f'budget_backup_{date.today()}.sql'
     response = make_response(result.stdout)
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
@@ -875,8 +877,8 @@ def edit_category(category_id):
         description = request.form.get('description', '').strip()
         try:
             cursor.execute(
-                "UPDATE categories SET name=%s, description=%s WHERE id=%s",
-                (name, description, category_id)
+                "UPDATE categories SET name=%s, description=%s WHERE id=%s AND user_id=%s",
+                (name, description, category_id, current_user.id)
             )
             conn.commit()
             flash('Category updated successfully')
@@ -886,12 +888,11 @@ def edit_category(category_id):
         cursor.close()
         conn.close()
         return redirect(url_for('categories'))
-    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s", (category_id,))
+    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
     category = cursor.fetchone()
     cursor.close()
     conn.close()
     return render_template('edit_category.html', category=category)
-
 
 @app.route('/categories/delete/<int:category_id>', methods=['GET', 'POST'])
 @login_required
@@ -900,7 +901,7 @@ def delete_category(category_id):
     cursor = conn.cursor()
     if request.method == 'POST':
         try:
-            cursor.execute("DELETE FROM categories WHERE id = %s", (category_id,))
+            cursor.execute("DELETE FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
             conn.commit()
             flash('Category deleted')
         except Exception as e:
@@ -912,12 +913,11 @@ def delete_category(category_id):
         cursor.close()
         conn.close()
         return redirect(url_for('categories'))
-    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s", (category_id,))
+    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
     category = cursor.fetchone()
     cursor.close()
     conn.close()
     return render_template('delete_category.html', category=category)
-
 
 @app.route('/accounts/edit/<int:account_id>', methods=['GET', 'POST'])
 @login_required
@@ -929,8 +929,8 @@ def edit_account(account_id):
         account_type = request.form.get('type', '').strip()
         try:
             cursor.execute(
-                "UPDATE account SET account_name=%s, type=%s WHERE account_id=%s",
-                (name, account_type, account_id)
+                "UPDATE account SET account_name=%s, type=%s WHERE account_id=%s AND user_id=%s",
+                (name, account_type, account_id, current_user.id)
             )
             conn.commit()
             flash('Account updated successfully')
@@ -940,12 +940,11 @@ def edit_account(account_id):
         cursor.close()
         conn.close()
         return redirect(url_for('accounts'))
-    cursor.execute("SELECT account_id, account_name, type FROM account WHERE account_id = %s", (account_id,))
+    cursor.execute("SELECT account_id, account_name, type FROM account WHERE account_id = %s AND user_id = %s", (account_id, current_user.id))
     account = cursor.fetchone()
     cursor.close()
     conn.close()
     return render_template('edit_account.html', account=account)
-
 
 @app.route('/accounts/delete/<int:account_id>', methods=['GET', 'POST'])
 @login_required
@@ -954,7 +953,7 @@ def delete_account(account_id):
     cursor = conn.cursor()
     if request.method == 'POST':
         try:
-            cursor.execute("DELETE FROM account WHERE account_id = %s", (account_id,))
+            cursor.execute("DELETE FROM account WHERE account_id = %s AND user_id = %s", (account_id, current_user.id))
             conn.commit()
             flash('Account deleted')
         except Exception as e:
@@ -966,7 +965,7 @@ def delete_account(account_id):
         cursor.close()
         conn.close()
         return redirect(url_for('accounts'))
-    cursor.execute("SELECT account_id, account_name, type FROM account WHERE account_id = %s", (account_id,))
+    cursor.execute("SELECT account_id, account_name, type FROM account WHERE account_id = %s AND user_id = %s", (account_id, current_user.id))
     account = cursor.fetchone()
     cursor.close()
     conn.close()
@@ -998,21 +997,21 @@ def dashboard():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense'
             AND EXTRACT(YEAR FROM t.transaction_date) = %s
             AND EXTRACT(MONTH FROM t.transaction_date) = %s
             GROUP BY c.name
             ORDER BY total DESC
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense'
             GROUP BY c.name
             ORDER BY total DESC
-        """)
+        """, (current_user.id,))
     spending = cursor.fetchall()
 
     if selected_month:
@@ -1022,11 +1021,12 @@ def dashboard():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE EXTRACT(YEAR FROM transaction_date) = %s
+            WHERE user_id = %s
+            AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT
@@ -1034,9 +1034,10 @@ def dashboard():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
+            WHERE user_id = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
-        """)
+        """, (current_user.id,))
     cash_flow = cursor.fetchall()
 
     cursor.execute("""
@@ -1045,9 +1046,10 @@ def dashboard():
             SUM(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END))
             OVER (ORDER BY DATE_TRUNC('month', transaction_date)) AS running_balance
         FROM transactions
+        WHERE user_id = %s
         GROUP BY DATE_TRUNC('month', transaction_date)
         ORDER BY DATE_TRUNC('month', transaction_date)
-    """)
+    """, (current_user.id,))
     net_balance_trend = cursor.fetchall()
 
     cursor.execute("""
@@ -1055,10 +1057,11 @@ def dashboard():
             a.account_name,
             COALESCE(SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE -t.amount END), 0) AS balance
         FROM account a
-        LEFT JOIN transactions t ON a.account_id = t.account_id
+        LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
+        WHERE a.user_id = %s
         GROUP BY a.account_id, a.account_name
         ORDER BY balance DESC
-    """)
+    """, (current_user.id,))
     account_balances = cursor.fetchall()
 
     if selected_month:
@@ -1072,11 +1075,13 @@ def dashboard():
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
-            WHERE EXTRACT(YEAR FROM b.period_start) = %s
+                AND t.user_id = b.user_id
+            WHERE b.user_id = %s
+            AND EXTRACT(YEAR FROM b.period_start) = %s
             AND EXTRACT(MONTH FROM b.period_start) = %s
             GROUP BY c.name, b.amount, b.period_start, b.period_end
             ORDER BY c.name
-        """, (filter_year, filter_month))
+        """, (current_user.id, filter_year, filter_month))
     else:
         cursor.execute("""
             SELECT
@@ -1088,9 +1093,11 @@ def dashboard():
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
+                AND t.user_id = b.user_id
+            WHERE b.user_id = %s
             GROUP BY c.name, b.amount, b.period_start, b.period_end
             ORDER BY c.name
-        """)
+        """, (current_user.id,))
     budget_data = cursor.fetchall()
 
     cursor.close()
@@ -1111,6 +1118,7 @@ def dashboard():
         months=months,
         selected_month=selected_month
     )
+
 @app.route('/settings')
 @login_required
 def settings():

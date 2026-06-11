@@ -56,6 +56,7 @@
       <a href="/transactions/delete/{{ t[0] }}">Delete</a>
       {% if t[7] %}
       | <form method="post" action="/transactions/cancel-recurring/{{ t[0] }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-danger" style="font-size:12px;padding:2px 8px">Cancel recurring</button>
         </form>
       {% endif %}

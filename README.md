@@ -32,6 +32,7 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 
 ## Features
 
+- **Multi-user** — session-based authentication, admin-only user creation, per-user data isolation
 - **Transaction tracking** — log income and expenses with categories, accounts, and dates
 - **Recurring transactions** — set transactions to repeat monthly or weekly, auto-processed on page load
 - **Transaction history** — search, filter by month, pagination, and running balance column
@@ -39,7 +40,7 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 - **Analytics** — savings rate, year over year comparison, spending by day of week, and predictive budget suggestions based on the last 6 months of spending
 - **Dashboard** — Chart.js visualisations including spending by category, cash flow, net balance over time, and budget performance
 - **Budget management** — set budgets per category and track actual vs budgeted spending
-- **Database backup** — download a full pg_dump backup directly from the browser
+- **Admin tools** — user management UI, database backup download via pg_dump
 - **Dark mode** — automatic system-based dark mode support
 - **Mobile responsive** — collapsible sidebar, horizontal table scroll, tested on iPhone
 
@@ -122,7 +123,23 @@ docker-compose up
 
 Open [http://localhost:5001](http://localhost:5001) in your browser.
 
-The database schema initialises automatically on first startup. No manual SQL setup required. Create an admin account via psql after first startup.
+The database schema initialises automatically on first startup. No manual SQL setup required. Create an initial admin user via psql after first startup:
+
+```bash
+docker exec -it budget-buddy-db-1 psql -U admin -d budget
+```
+
+```sql
+INSERT INTO users (username, password_hash, is_admin)
+VALUES ('admin', '<bcrypt hash>', true);
+```
+
+Generate a bcrypt hash inside the web container:
+```bash
+docker exec budget-buddy-web-1 python3 -c "from flask_bcrypt import Bcrypt; print(Bcrypt().generate_password_hash('yourpassword').decode())"
+```
+
+Once logged in, create additional users via Settings → Manage users.
 
 ## Database Schema
 
@@ -146,6 +163,5 @@ The database schema initialises automatically on first startup. No manual SQL se
 
 ## Roadmap
 
-- [ ] Multi-user data isolation — per-user transactions and budgets
-- [ ] CSRF protection via Flask-WTF
-- [ ] Empty states and default categories for new users
+- [ ] Upgrade Droplet to 2GB RAM for multi-user load
+- [ ] User profile page

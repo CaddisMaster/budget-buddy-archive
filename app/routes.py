@@ -118,7 +118,7 @@ def change_password():
         cursor.close()
         conn.close()
         flash('Password updated')
-        return redirect(url_for('settings'))
+        return redirect(url_for('index'))
     return render_template('change_password.html')
 
 @app.route('/')

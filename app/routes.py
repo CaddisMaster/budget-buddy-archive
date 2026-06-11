@@ -64,9 +64,26 @@ def create_user():
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "INSERT INTO users (username, password_hash, is_admin) VALUES (%s, %s, %s)",
+                "INSERT INTO users (username, password_hash, is_admin) VALUES (%s, %s, %s) RETURNING id",
                 (username, password_hash, is_admin)
             )
+            new_user_id = cursor.fetchone()[0]
+            default_categories = [
+                ('Housing', 'Rent, mortgage, utilities'),
+                ('Food & Dining', 'Groceries, restaurants'),
+                ('Transportation', 'Gas, public transit, car maintenance'),
+                ('Healthcare', 'Doctor, pharmacy, insurance'),
+                ('Entertainment', 'Movies, subscriptions, hobbies'),
+                ('Shopping', 'Clothing, electronics, household'),
+                ('Personal Care', 'Haircuts, gym, personal products'),
+                ('Income', 'Salary, freelance, other income'),
+                ('Other', 'Miscellaneous expenses'),
+            ]
+            for cat_name, cat_desc in default_categories:
+                cursor.execute(
+                    "INSERT INTO categories (name, description, user_id) VALUES (%s, %s, %s)",
+                    (cat_name, cat_desc, new_user_id)
+                )
             conn.commit()
             flash(f'Account created for {username}')
         except Exception as e:
@@ -1235,6 +1252,7 @@ def dashboard():
     account_json = json.dumps([{'account': r[0], 'balance': float(r[1])} for r in account_balances])
     budget_json = json.dumps([{'category': r[0], 'budget': float(r[1]), 'actual': float(r[2])} for r in budget_data])
 
+    has_transactions = bool(cash_flow) or bool(spending)
     return render_template('dashboard.html',
         spending_json=spending_json,
         cash_flow_json=cash_flow_json,
@@ -1242,7 +1260,8 @@ def dashboard():
         account_json=account_json,
         budget_json=budget_json,
         months=months,
-        selected_month=selected_month
+        selected_month=selected_month,
+        has_transactions=has_transactions
     )
 
 @app.route('/settings')
@@ -1252,3 +1271,69 @@ def settings():
         flash('Access denied')
         return redirect(url_for('index'))
     return render_template('settings.html')
+
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('index'))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, is_admin, created_at FROM users ORDER BY created_at")
+    users = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('admin_users.html', users=users)
+
+@app.route('/admin/users/delete/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('index'))
+    if user_id == current_user.id:
+        flash('You cannot delete your own account')
+        return redirect(url_for('admin_users'))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.close()
+        conn.close()
+        flash('User not found')
+        return redirect(url_for('admin_users'))
+    if request.method == 'POST':
+        try:
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            conn.commit()
+            flash(f'User {user[1]} deleted')
+        except Exception as e:
+            flash(f'Error: {e}')
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+        return redirect(url_for('admin_users'))
+    cursor.close()
+    conn.close()
+    return render_template('delete_user.html', user=user)
+
+@app.route('/admin/users/toggle-admin/<int:user_id>', methods=['POST'])
+@login_required
+def toggle_admin(user_id):
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('index'))
+    if user_id == current_user.id:
+        flash('You cannot change your own admin status')
+        return redirect(url_for('admin_users'))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET is_admin = NOT is_admin WHERE id = %s", (user_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Admin status updated')
+    return redirect(url_for('admin_users'))

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Delete User — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Delete user</h1>
+<div class="card">
+    <p>Are you sure you want to delete <strong>{{ user[1] }}</strong>? This will permanently delete their account and all associated data.</p>
+    <div style="display:flex;gap:0.75rem;margin-top:1rem">
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger">Yes, delete</button>
+        </form>
+        <a href="/admin/users" class="btn">Cancel</a>
+    </div>
+</div>
+{% endblock %}

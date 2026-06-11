@@ -3,6 +3,7 @@
 {% block content %}
 <h1>Budgets</h1>
 <h2>Add budget</h2>
+{% if categories %}
 <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Category</label>
@@ -20,7 +21,11 @@
     <input type="date" name="period_end" required>
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add budget</button>
 </form>
+{% else %}
+<p style="color:var(--text-muted)">You need at least one <a href="/categories">category</a> before you can create a budget.</p>
+{% endif %}
 <h2>Existing budgets</h2>
+{% if budgets %}
 <div class="table-wrapper">
     <table>
         <tr><th>Category</th><th>Amount</th><th>From</th><th>To</th><th>Actions</th></tr>
@@ -35,4 +40,7 @@
         {% endfor %}
     </table>
 </div>
+{% else %}
+<p style="color:var(--text-muted)">No budgets yet.{% if categories %} Add one above.{% endif %}</p>
+{% endif %}
 {% endblock %}

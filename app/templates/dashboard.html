@@ -11,6 +11,7 @@
         {% endfor %}
     </select>
 </form>
+{% if has_transactions %}
 <h2>Spending by category</h2>
 <div style="max-width: 400px;">
     <canvas id="spendingPie"></canvas>
@@ -98,4 +99,7 @@ new Chart(document.getElementById('budgetBar'), {
     options: { scales: { y: { beginAtZero: true } } }
 });
 </script>
+{% else %}
+<p style="color:var(--text-muted)">No transactions yet. <a href="/transactions/new">Add your first transaction</a> to see your dashboard.</p>
+{% endif %}
 {% endblock %}

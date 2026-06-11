@@ -17,6 +17,7 @@
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add account</button>
 </form>
 <h2>Existing accounts</h2>
+{% if accounts %}
 <div class="table-wrapper">
     <table>
         <tr><th>Name</th><th>Type</th><th>Balance</th><th>Actions</th></tr>
@@ -32,4 +33,7 @@
         {% endfor %}
     </table>
 </div>
+{% else %}
+<p style="color:var(--text-muted)">No accounts yet. Add one above.</p>
+{% endif %}
 {% endblock %}

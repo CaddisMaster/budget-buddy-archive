@@ -12,6 +12,7 @@
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add category</button>
 </form>
 <h2>Existing categories</h2>
+{% if categories %}
 <div class="table-wrapper">
     <table>
         <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
@@ -24,4 +25,7 @@
         {% endfor %}
     </table>
 </div>
+{% else %}
+<p style="color:var(--text-muted)">No categories yet. Add one above.</p>
+{% endif %}
 {% endblock %}

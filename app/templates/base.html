@@ -26,6 +26,7 @@
       {% if current_user.is_admin %}
       <a href="/settings" {% if '/settings' in request.path %}class="active"{% endif %}>Settings</a>
       {% endif %}
+      <a href="/change-password" {% if '/change-password' in request.path %}class="active"{% endif %}>Change password</a>
       <a href="/logout">Logout</a>
     </nav>
   </aside>

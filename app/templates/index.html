@@ -2,5 +2,24 @@
 {% block title %}Home — Budget Buddy{% endblock %}
 {% block content %}
 <h1>Budget Buddy</h1>
-<p style="color: var(--text-muted);">Use the sidebar to navigate.</p>
+<p style="color: var(--text-muted);">Welcome back. Use the sidebar to navigate, or see what's new below.</p>
+
+<h2 style="margin-top:1.5rem;font-size:1.1rem">What's new</h2>
+
+{# Add the newest entry at the top. Each entry is one release/update. #}
+<div class="card">
+  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+    <strong>More flexible recurring transactions &amp; cleaner analytics</strong>
+    <span class="recurring-badge">Jun 2026</span>
+  </div>
+  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
+    <li><strong>New recurring schedules:</strong> weekly, bi-weekly, semi-monthly
+        (two pay days a month), monthly, quarterly, and annually — so things like
+        bi-monthly paychecks fit properly.</li>
+    <li><strong>"Exclude from analytics" toggle:</strong> mark opening balances or
+        corrections so they still count toward your account balance but don't distort
+        your spending and income charts.</li>
+    <li><strong>Fix:</strong> recurring transactions no longer duplicate over time.</li>
+  </ul>
+</div>
 {% endblock %}

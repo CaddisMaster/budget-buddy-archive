@@ -2,6 +2,7 @@ from app import app
 from app.db import get_db_connection
 from flask import render_template, request, redirect, url_for, flash
 import json
+import calendar
 from datetime import datetime, date, timedelta
 import math
 from dateutil.relativedelta import relativedelta
@@ -152,27 +153,40 @@ def new_transaction():
             errors.append('Account is required')
         if transaction_type not in ('income', 'expense'):
             errors.append('Transaction type must be income or expense')
+        is_recurring = request.form.get('is_recurring') == 'true'
+        is_adjustment = request.form.get('is_adjustment') == 'true'
+        frequency = request.form.get('frequency') if is_recurring else None
+        second_day = None
+        if is_recurring:
+            if frequency not in VALID_FREQUENCIES:
+                errors.append('Please choose a valid recurring frequency')
+            elif frequency == 'semimonthly':
+                second_day_raw = request.form.get('recur_second_day', '').strip()
+                try:
+                    second_day = int(second_day_raw)
+                    if not 1 <= second_day <= 31:
+                        errors.append('Second pay day must be between 1 and 31')
+                        second_day = None
+                except ValueError:
+                    errors.append('Second pay day is required for a semi-monthly schedule')
         if errors:
             for error in errors:
                 flash(error)
             return redirect(url_for('new_transaction'))
-        is_recurring = request.form.get('is_recurring') == 'true'
-        frequency = request.form.get('frequency') if is_recurring else None
         next_due = None
         if is_recurring and frequency:
-            next_due_raw = datetime.strptime(transaction_date, '%Y-%m-%d')
-            if frequency == 'monthly':
-                next_due = (next_due_raw + relativedelta(months=1)).strftime('%Y-%m-%d')
-            else:
-                next_due = (next_due_raw + timedelta(weeks=1)).strftime('%Y-%m-%d')
+            start = datetime.strptime(transaction_date, '%Y-%m-%d').date()
+            next_due = compute_next_due(
+                start, frequency, anchor_day=start.day, second_day=second_day
+            )
         conn = None
         cursor = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, current_user.id)
+                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, recur_second_day, is_adjustment, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, second_day, is_adjustment, current_user.id)
             )
             conn.commit()
             flash('Transaction added successfully')
@@ -230,30 +244,82 @@ def categories():
     conn.close()
     return render_template('categories.html', categories=all_categories)
 
+# Recurring frequencies the app accepts. 'semimonthly' is the only one that
+# needs a second pay day (recur_second_day); the rest are fixed intervals.
+VALID_FREQUENCIES = ('weekly', 'biweekly', 'semimonthly', 'monthly', 'quarterly', 'annually')
+
+# Human-friendly labels for the recurring badge in the history table.
+FREQUENCY_LABELS = {
+    'weekly': 'Weekly',
+    'biweekly': 'Bi-weekly',
+    'semimonthly': 'Semi-monthly',
+    'monthly': 'Monthly',
+    'quarterly': 'Quarterly',
+    'annually': 'Annually',
+}
+
+
+def _clamp_to_month(year, month, day):
+    """Build a date, clamping the day to the last valid day of that month
+    (so a '31st' pay day lands on the 28th/30th in shorter months)."""
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(day, last_day))
+
+
+def compute_next_due(current, frequency, anchor_day=None, second_day=None):
+    """Return the next due date (a date) strictly after `current` for the given
+    frequency. For 'semimonthly', anchor_day and second_day are the two pay days
+    of the month (e.g. 15 and 31); the function alternates between them."""
+    if frequency == 'weekly':
+        return current + timedelta(weeks=1)
+    if frequency == 'biweekly':
+        return current + timedelta(weeks=2)
+    if frequency == 'monthly':
+        return current + relativedelta(months=1)
+    if frequency == 'quarterly':
+        return current + relativedelta(months=3)
+    if frequency == 'annually':
+        return current + relativedelta(years=1)
+    if frequency == 'semimonthly' and anchor_day and second_day:
+        lo, hi = sorted((anchor_day, second_day))
+        # Compare against the clamped date, so a "31 = last day" pay day that
+        # lands on the 28th/30th doesn't keep re-targeting the same month.
+        hi_this_month = _clamp_to_month(current.year, current.month, hi)
+        if current < hi_this_month:
+            return hi_this_month
+        nxt = current + relativedelta(months=1)
+        return _clamp_to_month(nxt.year, nxt.month, lo)
+    # Fallback keeps a recurring row moving forward even on unexpected data.
+    return current + relativedelta(months=1)
+
+
 def run_process_recurring(user_id):
     today = datetime.today().date()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT id, amount, description, category_id, account_id,
-               transaction_type, frequency, next_due
+               transaction_type, frequency, next_due, transaction_date,
+               recur_second_day, is_adjustment
         FROM transactions
         WHERE is_recurring = true AND next_due <= %s AND user_id = %s
     """, (today, user_id))
     due = cursor.fetchall()
     for t in due:
-        tid, amount, desc, cat_id, acc_id, ttype, freq, next_due = t
-        if freq == 'monthly':
-            new_next_due = (next_due + relativedelta(months=1)).strftime('%Y-%m-%d')
-        else:
-            new_next_due = (next_due + timedelta(weeks=1)).strftime('%Y-%m-%d')
+        (tid, amount, desc, cat_id, acc_id, ttype, freq, next_due,
+         anchor_date, second_day, is_adjustment) = t
+        new_next_due = compute_next_due(
+            next_due, freq, anchor_day=anchor_date.day, second_day=second_day
+        )
+        # The generated occurrence is a plain transaction, not a recurring
+        # template — only the original row carries the recurrence.
         cursor.execute("""
             INSERT INTO transactions
                 (amount, description, category_id, account_id,
                  transaction_date, transaction_type,
-                 is_recurring, frequency, next_due, user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, true, %s, %s, %s)
-        """, (amount, desc, cat_id, acc_id, next_due, ttype, freq, new_next_due, user_id))
+                 is_recurring, is_adjustment, user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, false, %s, %s)
+        """, (amount, desc, cat_id, acc_id, next_due, ttype, is_adjustment, user_id))
         cursor.execute(
             "UPDATE transactions SET next_due = %s WHERE id = %s AND user_id = %s",
             (new_next_due, tid, user_id)
@@ -306,7 +372,7 @@ def transactions():
     main_query = f"""
         SELECT t.id, t.amount, t.description, c.name, a.account_name,
             t.transaction_date, t.transaction_type,
-            t.is_recurring, t.frequency
+            t.is_recurring, t.frequency, t.is_adjustment
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id
         LEFT JOIN account a ON t.account_id = a.account_id
@@ -334,7 +400,8 @@ def transactions():
         search=search,
         page=page,
         total_pages=total_pages,
-        total=total
+        total=total,
+        frequency_labels=FREQUENCY_LABELS
     )
 
 @app.route('/transactions/cancel-recurring/<int:id>', methods=['POST'])
@@ -433,7 +500,7 @@ def analytics():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_adjustment = false
             AND EXTRACT(YEAR FROM t.transaction_date) = %s
             AND EXTRACT(MONTH FROM t.transaction_date) = %s
             GROUP BY c.name
@@ -444,7 +511,7 @@ def analytics():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_adjustment = false
             GROUP BY c.name
             ORDER BY total DESC
         """, (current_user.id,))
@@ -454,7 +521,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'income'
+            WHERE user_id = %s AND transaction_type = 'income' AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -462,7 +529,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'income'
+            WHERE user_id = %s AND transaction_type = 'income' AND is_adjustment = false
         """, (current_user.id,))
     total_income = cursor.fetchone()[0]
 
@@ -470,7 +537,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -478,7 +545,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
         """, (current_user.id,))
     total_expenses = cursor.fetchone()[0]
 
@@ -486,7 +553,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -494,7 +561,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_adjustment = false
         """, (current_user.id,))
     net_balance = cursor.fetchone()[0]
 
@@ -505,7 +572,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
@@ -518,7 +585,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_adjustment = false
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
         """, (current_user.id,))
@@ -535,6 +602,7 @@ def analytics():
             JOIN categories c ON b.category_id = c.id
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
+                AND t.is_adjustment = false
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
                 AND t.user_id = b.user_id
             WHERE b.user_id = %s
@@ -554,6 +622,7 @@ def analytics():
             JOIN categories c ON b.category_id = c.id
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
+                AND t.is_adjustment = false
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
                 AND t.user_id = b.user_id
             WHERE b.user_id = %s
@@ -568,7 +637,7 @@ def analytics():
                 DATE_TRUNC('week', transaction_date) AS week,
                 SUM(amount) AS weekly_total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
             GROUP BY DATE_TRUNC('week', transaction_date)
         )
         SELECT
@@ -589,7 +658,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -599,7 +668,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_adjustment = false
         """, (current_user.id,))
     row = cursor.fetchone()
     s_income, s_expenses = float(row[0] or 0), float(row[1] or 0)
@@ -614,7 +683,7 @@ def analytics():
         cursor.execute("""
             SELECT SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, int(y) - 1, m))
@@ -634,7 +703,7 @@ def analytics():
                 TO_CHAR(transaction_date, 'Day') AS day_name,
                 SUM(amount) AS total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY dow, day_name
@@ -647,7 +716,7 @@ def analytics():
                 TO_CHAR(transaction_date, 'Day') AS day_name,
                 SUM(amount) AS total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
             GROUP BY dow, day_name
             ORDER BY dow
         """, (current_user.id,))
@@ -663,7 +732,7 @@ def analytics():
                 DATE_TRUNC('month', transaction_date) AS month,
                 SUM(amount) AS monthly_total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense'
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
             AND transaction_date >= NOW() - INTERVAL '6 months'
             AND category_id IS NOT NULL
             GROUP BY category_id, DATE_TRUNC('month', transaction_date)
@@ -857,6 +926,7 @@ def edit_transaction(transaction_id):
         category_id = request.form.get('category_id') or None
         account_id = request.form.get('account_id') or None
         transaction_type = request.form.get('transaction_type', 'expense')
+        is_adjustment = request.form.get('is_adjustment') == 'true'
         errors = []
         if not amount_str:
             errors.append('Amount is required')
@@ -879,8 +949,8 @@ def edit_transaction(transaction_id):
         amount = float(amount_str)
         try:
             cursor.execute(
-                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s WHERE id=%s AND user_id=%s",
-                (amount, description, transaction_date, category_id, account_id, transaction_type, transaction_id, current_user.id)
+                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s, is_adjustment=%s WHERE id=%s AND user_id=%s",
+                (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, transaction_id, current_user.id)
             )
             conn.commit()
             flash('Transaction updated successfully')
@@ -890,7 +960,7 @@ def edit_transaction(transaction_id):
         cursor.close()
         conn.close()
         return redirect(url_for('transactions'))
-    cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
+    cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
     transaction = cursor.fetchone()
     cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
     all_categories = cursor.fetchall()

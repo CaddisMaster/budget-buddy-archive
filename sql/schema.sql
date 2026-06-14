@@ -49,8 +49,10 @@ CREATE TABLE public.transactions (
     transaction_type character varying(10) NOT NULL DEFAULT 'expense',
     created_at timestamp without time zone DEFAULT now(),
     is_recurring BOOLEAN NOT NULL DEFAULT false,
-    frequency VARCHAR(10) DEFAULT NULL,
+    frequency VARCHAR(20) DEFAULT NULL,
     next_due DATE DEFAULT NULL,
+    recur_second_day SMALLINT DEFAULT NULL,
+    is_adjustment BOOLEAN NOT NULL DEFAULT false,
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT valid_transaction_type CHECK (transaction_type IN ('expense', 'income'))
 );

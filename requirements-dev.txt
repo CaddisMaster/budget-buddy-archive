@@ -1,0 +1,9 @@
+# Dev / test dependencies — layered on top of the app image, which already
+# has the full requirements.txt installed (Python 3.11). Run the suite in a
+# throwaway container so nothing persists and you test on the same Python as
+# production:
+#
+#   docker compose run --rm --no-deps --build web \
+#     sh -c "pip install -q -r requirements-dev.txt && pytest"
+#
+pytest==8.3.4

@@ -1,0 +1,175 @@
+"""Shared pytest fixtures for the route and data-isolation tests.
+
+These tests run against the *dev* Postgres container (the same DB the local app
+uses). To avoid touching real data, every fixture creates dedicated test users
+behind a recognizable prefix and tears them — and only them — down afterwards.
+
+Teardown deletes child rows explicitly before the user row: the user_id FKs
+cascade, but transactions->categories / transactions->account use ON DELETE
+RESTRICT, so letting the user-cascade fire first can hit a RESTRICT violation.
+"""
+import time
+
+import psycopg2
+import pytest
+
+from app import app as flask_app, bcrypt, limiter
+from app.db import get_db_connection
+
+# Prefix keeps test rows obvious and easy to sweep if a run aborts mid-way.
+TEST_PREFIX = "__pytest__"
+USER_A = TEST_PREFIX + "user_a"
+USER_B = TEST_PREFIX + "user_b"
+PASSWORD = "test-password-123"
+
+
+def _wait_for_db(attempts=10, delay=1.0):
+    """The db container may still be starting when `docker compose run` fires;
+    retry a trivial connection until it answers (or give up and let the test
+    error loudly)."""
+    last_err = None
+    for _ in range(attempts):
+        try:
+            conn = get_db_connection()
+            conn.close()
+            return
+        except psycopg2.OperationalError as err:
+            last_err = err
+            time.sleep(delay)
+    raise RuntimeError(f"Database not reachable for tests: {last_err}")
+
+
+def _create_user(username, password, is_admin=False):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    pw_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+    cur.execute(
+        "INSERT INTO users (username, password_hash, is_admin) "
+        "VALUES (%s, %s, %s) RETURNING id",
+        (username, pw_hash, is_admin),
+    )
+    user_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return user_id
+
+
+def _seed_basic_data(user_id, label):
+    """Give a user one category, one account, and one transaction, all tagged
+    with `label` so a listing can be checked for the right owner's rows."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO categories (name, user_id) VALUES (%s, %s) RETURNING id",
+        (f"cat-{label}", user_id),
+    )
+    category_id = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO account (account_name, type, user_id) "
+        "VALUES (%s, %s, %s) RETURNING account_id",
+        (f"acct-{label}", "bank", user_id),
+    )
+    account_id = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO transactions "
+        "(amount, description, category_id, account_id, transaction_type, user_id) "
+        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        (42.50, f"txn-{label}", category_id, account_id, "expense", user_id),
+    )
+    transaction_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {
+        "category_id": category_id,
+        "account_id": account_id,
+        "transaction_id": transaction_id,
+    }
+
+
+def _delete_user(username):
+    """Remove a test user and all of its data in FK-safe order."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+    row = cur.fetchone()
+    if row:
+        user_id = row[0]
+        cur.execute("DELETE FROM transactions WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM budgets WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM categories WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM account WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+    cur.close()
+    conn.close()
+
+
+@pytest.fixture(scope="session")
+def app():
+    _wait_for_db()
+    flask_app.config["TESTING"] = True
+    flask_app.config["WTF_CSRF_ENABLED"] = False  # no token plumbing in tests
+    if not flask_app.secret_key:
+        flask_app.secret_key = "pytest-secret"
+    limiter.enabled = False  # the 60/min cap would trip a fast test run
+    return flask_app
+
+
+@pytest.fixture
+def users(app):
+    # Sweep any leftovers from a previously aborted run, then build fresh.
+    _delete_user(USER_A)
+    _delete_user(USER_B)
+    a_id = _create_user(USER_A, PASSWORD)
+    b_id = _create_user(USER_B, PASSWORD)
+    data = {
+        "a": {"id": a_id, "username": USER_A, **_seed_basic_data(a_id, "A")},
+        "b": {"id": b_id, "username": USER_B, **_seed_basic_data(b_id, "B")},
+    }
+    yield data
+    _delete_user(USER_A)
+    _delete_user(USER_B)
+
+
+def _login(client, username, password=PASSWORD):
+    return client.post(
+        "/login",
+        data={"username": username, "password": password},
+        follow_redirects=False,
+    )
+
+
+@pytest.fixture
+def anon_client(app):
+    return app.test_client()
+
+
+@pytest.fixture
+def client_a(app, users):
+    client = app.test_client()
+    _login(client, USER_A)
+    return client
+
+
+@pytest.fixture
+def client_b(app, users):
+    client = app.test_client()
+    _login(client, USER_B)
+    return client
+
+
+def fetch_transaction(transaction_id):
+    """Read a transaction straight from the DB (bypassing the app) so isolation
+    tests can confirm what actually changed."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT amount, description, user_id FROM transactions WHERE id = %s",
+        (transaction_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row

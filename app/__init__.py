@@ -24,7 +24,7 @@ limiter = Limiter(
 
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'auth.login'
 
 bcrypt = Bcrypt(app)
 
@@ -34,4 +34,15 @@ from app.models import User
 def load_user(user_id):
   return User.get_by_id(int(user_id))
 
-from app import routes
+from app.blueprints import (
+  auth, main, transactions, categories, accounts, budgets, analytics, admin
+)
+
+app.register_blueprint(auth.bp)
+app.register_blueprint(main.bp)
+app.register_blueprint(transactions.bp)
+app.register_blueprint(categories.bp)
+app.register_blueprint(accounts.bp)
+app.register_blueprint(budgets.bp)
+app.register_blueprint(analytics.bp)
+app.register_blueprint(admin.bp)

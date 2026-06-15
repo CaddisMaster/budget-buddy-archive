@@ -252,6 +252,53 @@
       </div>
     </div>
 
+    <div class="project">
+      <div class="card-top">
+        <a href="https://status.seandesmet.com" class="card-link">
+          <p class="card-title">Status Monitor</p>
+          <p class="card-desc">Self-hosted uptime monitoring for my services, with live status dashboard, response-time history, and alert notifications.</p>
+          <div class="tags">
+            <span class="tag">Uptime Kuma</span>
+            <span class="tag">Docker</span>
+            <span class="tag">Nginx</span>
+          </div>
+        </a>
+        <div class="btn-wrap">
+          <button class="btn-details" onclick="toggle('uk', this)">Details ↓</button>
+        </div>
+      </div>
+      <div class="detail" id="detail-uk">
+        <p class="about-intro">After deploying Budget Buddy to production I wanted real visibility into whether my services were actually up. Rather than relying on a third-party SaaS, I self-hosted Uptime Kuma on the same DigitalOcean Droplet — adding a public status page, per-service response-time graphs, and push notifications when something goes down.</p>
+        <div class="two-col">
+          <div>
+            <div class="feat-label">Features</div>
+            <div class="feat-item">HTTP / ping monitors</div>
+            <div class="feat-item">Response-time history</div>
+            <div class="feat-item">Public status page</div>
+            <div class="feat-item">Push alert notifications</div>
+            <div class="feat-item">SSL-expiry monitoring</div>
+          </div>
+          <div>
+            <div class="feat-label">Infrastructure</div>
+            <div class="feat-item">DigitalOcean Droplet</div>
+            <div class="feat-item">Nginx reverse proxy</div>
+            <div class="feat-item">Let's Encrypt SSL</div>
+            <div class="feat-item">Docker Compose</div>
+            <div class="feat-item">External backstop pinger</div>
+          </div>
+        </div>
+        <div class="stack-label">Tech stack</div>
+        <div class="stack-row">
+          <span class="stack-tag">Uptime Kuma</span>
+          <span class="stack-tag">Node.js</span>
+          <span class="stack-tag">Docker</span>
+          <span class="stack-tag">Nginx</span>
+          <span class="stack-tag">DigitalOcean</span>
+          <span class="stack-tag">Let's Encrypt</span>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script>

@@ -34,7 +34,7 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 
 - **Multi-user** — session-based authentication, admin-only user creation, per-user data isolation
 - **Transaction tracking** — log income and expenses with categories, accounts, and dates
-- **Recurring transactions** — set transactions to repeat monthly or weekly, auto-processed on page load
+- **Recurring transactions** — repeat on six frequencies (weekly, bi-weekly, semi-monthly, monthly, quarterly, annually), auto-processed on page load
 - **Transaction history** — search, filter by month, pagination, and running balance column
 - **CSV export** — download filtered transactions as a CSV file
 - **Analytics** — savings rate, year over year comparison, spending by day of week, and predictive budget suggestions based on the last 6 months of spending
@@ -79,22 +79,27 @@ DigitalOcean Droplet
 ```
 budget-buddy/
 ├── app/
-│   ├── __init__.py       # Flask app, Flask-Login, rate limiting
+│   ├── __init__.py       # Flask app + extensions; registers blueprints
 │   ├── models.py         # User model for Flask-Login
-│   ├── routes.py         # All routes and business logic
-│   ├── db.py             # Database connection
+│   ├── db.py             # Database connection helper
+│   ├── blueprints/       # Routes, one module per area (auth, main,
+│   │                     #   transactions, categories, accounts,
+│   │                     #   budgets, analytics, admin)
 │   ├── static/
 │   │   └── style.css     # Full stylesheet with dark mode
 │   └── templates/        # Jinja2 HTML templates
-├── sql/
-│   └── schema.sql        # Full database schema
+├── tests/                # pytest suite (date math, routes, data isolation)
+├── sql/                  # Numbered migrations + schema.sql
+├── scripts/              # Data pipeline (ingest, clean, insert)
 ├── landing/
 │   └── index.html        # Personal home page (seandesmet.com)
 ├── screenshots/          # App screenshots for README
 ├── Dockerfile
 ├── docker-compose.yml
 ├── deploy.sh             # Multi-platform build and push to Docker Hub
-└── requirements.txt
+├── test.sh               # Run the test suite in a throwaway container
+├── requirements.txt
+└── requirements-dev.txt  # Test dependencies (pytest)
 ```
 
 ## Local Setup
@@ -143,11 +148,13 @@ Once logged in, create additional users via Settings → Manage users.
 
 ## Database Schema
 
-- `transactions` — id, amount, description, category_id, account_id, transaction_date, transaction_type, is_recurring, frequency, next_due
-- `categories` — id, name, description
-- `budgets` — id, category_id, amount, period_start, period_end
-- `account` — account_id, account_name, type
+- `transactions` — id, amount, description, category_id, account_id, transaction_date, transaction_type, is_recurring, frequency, next_due, recur_second_day, is_adjustment, user_id, created_at
+- `categories` — id, name, description, user_id, created_at
+- `budgets` — id, category_id, amount, period_start, period_end, user_id
+- `account` — account_id, account_name, type, user_id
 - `users` — id, username, password_hash, is_admin, created_at
+
+All data tables carry a `user_id` foreign key — every query is scoped to the logged-in user for full data isolation.
 
 ## Security
 
@@ -161,7 +168,10 @@ Once logged in, create additional users via Settings → Manage users.
 - HTTPS via Let's Encrypt with auto-renewal
 - debug=False in production
 
-## Roadmap
+## Testing
 
-- [ ] Upgrade Droplet to 2GB RAM for multi-user load
-- [ ] User profile page
+A pytest suite covers the recurring-transaction date math, route/auth behaviour, and per-user data isolation. Tests run in a throwaway Docker container on the same Python as production — no local install needed:
+
+```bash
+./test.sh
+```

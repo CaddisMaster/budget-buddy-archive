@@ -254,6 +254,55 @@
 
     <div class="project">
       <div class="card-top">
+        <a href="https://mealie.seandesmet.com" class="card-link">
+          <p class="card-title">Mealie</p>
+          <p class="card-desc">Self-hosted recipe manager and meal planner with URL recipe import, a meal-planning calendar, and auto-generated shopping lists.</p>
+          <div class="tags">
+            <span class="tag">Mealie</span>
+            <span class="tag">PostgreSQL</span>
+            <span class="tag">Docker</span>
+          </div>
+        </a>
+        <div class="btn-wrap">
+          <button class="btn-details" onclick="toggle('ml', this)">Details ↓</button>
+        </div>
+      </div>
+      <div class="detail" id="detail-ml">
+        <p class="about-intro">With Budget Buddy and the status monitor already running on my Droplet, I wanted to get more reps deploying and operating self-hosted services. Mealie scratched a real itch — a single place for our recipes, weekly meal plans, and shopping lists — so I deployed it on the same box behind Nginx and SSL, backed by its own PostgreSQL database rather than the default SQLite.</p>
+        <div class="two-col">
+          <div>
+            <div class="feat-label">Features</div>
+            <div class="feat-item">Recipe import from URL</div>
+            <div class="feat-item">Meal-planning calendar</div>
+            <div class="feat-item">Auto shopping lists</div>
+            <div class="feat-item">Recipe organization</div>
+            <div class="feat-item">Multi-user households</div>
+          </div>
+          <div>
+            <div class="feat-label">Infrastructure</div>
+            <div class="feat-item">DigitalOcean Droplet</div>
+            <div class="feat-item">Nginx reverse proxy</div>
+            <div class="feat-item">Let's Encrypt SSL</div>
+            <div class="feat-item">Docker Compose</div>
+            <div class="feat-item">PostgreSQL database</div>
+          </div>
+        </div>
+        <div class="stack-label">Tech stack</div>
+        <div class="stack-row">
+          <span class="stack-tag">Mealie</span>
+          <span class="stack-tag">FastAPI</span>
+          <span class="stack-tag">Vue</span>
+          <span class="stack-tag">PostgreSQL</span>
+          <span class="stack-tag">Docker</span>
+          <span class="stack-tag">Nginx</span>
+          <span class="stack-tag">DigitalOcean</span>
+          <span class="stack-tag">Let's Encrypt</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="project">
+      <div class="card-top">
         <a href="https://status.seandesmet.com" class="card-link">
           <p class="card-title">Status Monitor</p>
           <p class="card-desc">Self-hosted uptime monitoring for my services, with live status dashboard, response-time history, and alert notifications.</p>

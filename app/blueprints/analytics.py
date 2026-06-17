@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection
+from app.blueprints.budgets import compute_budget_vs_actual
 
 bp = Blueprint('analytics', __name__)
 
@@ -124,45 +125,9 @@ def analytics():
         """, (current_user.id,))
     cash_flow = cursor.fetchall()
 
-    if selected_month:
-        cursor.execute("""
-            SELECT
-                c.name AS category,
-                b.amount AS budget,
-                COALESCE(SUM(t.amount), 0) AS actual,
-                b.amount - COALESCE(SUM(t.amount), 0) AS remaining
-            FROM budgets b
-            JOIN categories c ON b.category_id = c.id
-            LEFT JOIN transactions t ON t.category_id = b.category_id
-                AND t.transaction_type = 'expense'
-                AND t.is_adjustment = false
-                AND t.transaction_date BETWEEN b.period_start AND b.period_end
-                AND t.user_id = b.user_id
-            WHERE b.user_id = %s
-            AND EXTRACT(YEAR FROM b.period_start) = %s
-            AND EXTRACT(MONTH FROM b.period_start) = %s
-            GROUP BY c.name, b.amount, b.period_start, b.period_end
-            ORDER BY c.name
-        """, (current_user.id, filter_year, filter_month))
-    else:
-        cursor.execute("""
-            SELECT
-                c.name AS category,
-                b.amount AS budget,
-                COALESCE(SUM(t.amount), 0) AS actual,
-                b.amount - COALESCE(SUM(t.amount), 0) AS remaining
-            FROM budgets b
-            JOIN categories c ON b.category_id = c.id
-            LEFT JOIN transactions t ON t.category_id = b.category_id
-                AND t.transaction_type = 'expense'
-                AND t.is_adjustment = false
-                AND t.transaction_date BETWEEN b.period_start AND b.period_end
-                AND t.user_id = b.user_id
-            WHERE b.user_id = %s
-            GROUP BY c.name, b.amount, b.period_start, b.period_end
-            ORDER BY c.name
-        """, (current_user.id,))
-    budget_vs_actual = cursor.fetchall()
+    budget_vs_actual = compute_budget_vs_actual(
+        current_user.id, filter_year, filter_month
+    )
 
     cursor.execute("""
         WITH weekly_totals AS (

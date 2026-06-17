@@ -5,7 +5,7 @@ import math
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, make_response
+    Blueprint, render_template, request, redirect, url_for, flash, make_response, abort
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection
@@ -263,6 +263,10 @@ def transactions():
 def cancel_recurring(id):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (id, current_user.id))
+    if cursor.fetchone() is None:
+        cursor.close(); conn.close()
+        abort(404)
     cursor.execute(
         "UPDATE transactions SET is_recurring=false, frequency=NULL, next_due=NULL WHERE id=%s AND user_id=%s",
         (id, current_user.id)
@@ -279,6 +283,10 @@ def cancel_recurring(id):
 def edit_transaction(transaction_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
+    if cursor.fetchone() is None:
+        cursor.close(); conn.close()
+        abort(404)
     if request.method == 'POST':
         amount_str = request.form['amount'].strip()
         description = request.form['description'].strip()
@@ -336,6 +344,10 @@ def edit_transaction(transaction_id):
 def delete_transaction(transaction_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
+    if cursor.fetchone() is None:
+        cursor.close(); conn.close()
+        abort(404)
     if request.method == 'POST':
         try:
             cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))

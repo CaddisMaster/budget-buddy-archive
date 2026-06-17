@@ -173,3 +173,109 @@ def fetch_transaction(transaction_id):
     cur.close()
     conn.close()
     return row
+
+
+def fetch_category(category_id):
+    """Return (name, description, user_id) for a category, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name, description, user_id FROM categories WHERE id = %s",
+        (category_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def fetch_account(account_id):
+    """Return (account_name, type, user_id) for an account, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT account_name, type, user_id FROM account WHERE account_id = %s",
+        (account_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def fetch_budget(budget_id):
+    """Return (category_id, amount, user_id) for a budget, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT category_id, amount, user_id FROM budgets WHERE id = %s",
+        (budget_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def find_category_id(user_id, name):
+    """Look up a user's category id by name (CRUD tests create via the app,
+    then need the generated id to verify/clean up)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM categories WHERE user_id = %s AND name = %s",
+        (user_id, name),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else None
+
+
+def create_category(user_id, name):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO categories (name, user_id) VALUES (%s, %s) RETURNING id",
+        (name, user_id),
+    )
+    cid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return cid
+
+
+def create_budget(user_id, category_id, amount, period_start, period_end):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO budgets (category_id, amount, period_start, period_end, user_id) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (category_id, amount, period_start, period_end, user_id),
+    )
+    bid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return bid
+
+
+def create_transaction(user_id, account_id, amount, transaction_date,
+                       transaction_type="expense", category_id=None,
+                       is_adjustment=False):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO transactions "
+        "(amount, description, category_id, account_id, transaction_date, "
+        " transaction_type, is_adjustment, user_id) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        (amount, "seed", category_id, account_id, transaction_date,
+         transaction_type, is_adjustment, user_id),
+    )
+    tid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return tid

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 from app.db import get_db_connection
 
@@ -66,6 +66,10 @@ def accounts():
 def edit_account(account_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM account WHERE account_id = %s AND user_id = %s", (account_id, current_user.id))
+    if cursor.fetchone() is None:
+        cursor.close(); conn.close()
+        abort(404)
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
@@ -106,6 +110,10 @@ def edit_account(account_id):
 def delete_account(account_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM account WHERE account_id = %s AND user_id = %s", (account_id, current_user.id))
+    if cursor.fetchone() is None:
+        cursor.close(); conn.close()
+        abort(404)
     if request.method == 'POST':
         try:
             cursor.execute("DELETE FROM account WHERE account_id = %s AND user_id = %s", (account_id, current_user.id))

@@ -18,6 +18,8 @@ PROTECTED_PAGES = [
     "/accounts",
     "/budgets",
     "/analytics",
+    "/transfers",
+    "/goals",
 ]
 
 

@@ -124,6 +124,18 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
   margin-left: 6px;
 }
 
+.transfer-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  background: #eaf2fb;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  margin-left: 6px;
+}
+
+tr.transfer td { background: #f6f9fd; }
+
 /* Mobile */
 @media (max-width: 768px) {
   .sidebar {

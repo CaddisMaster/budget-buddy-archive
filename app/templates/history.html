@@ -38,12 +38,15 @@
 <table>
   <tr><th>Date</th><th>Type</th><th>Amount</th><th>Description</th><th>Category</th><th>Account</th><th>Balance</th><th>Actions</th></tr>
   {% for t in transactions %}
-  <tr class="{% if t[6] == 'income' %}income{% else %}expense{% endif %}">
+  <tr class="{% if t[10] %}transfer {% endif %}{% if t[6] == 'income' %}income{% else %}expense{% endif %}">
     <td>{{ t[5] }}</td>
     <td>{{ t[6] | capitalize }}</td>
     <td>{{ t[1] }}</td>
     <td>
       {{ t[2] }}
+      {% if t[10] %}
+      <span class="transfer-badge">⇄ Transfer</span>
+      {% endif %}
       {% if t[7] %}
       <span class="recurring-badge">↻ {{ frequency_labels.get(t[8], t[8]) }}</span>
       {% endif %}
@@ -53,8 +56,12 @@
     </td>
     <td>{{ t[3] or 'Uncategorised' }}</td>
     <td>{{ t[4] or 'No account' }}</td>
-    <td class="{% if t[10] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(t[10]) }}</td>
+    <td class="{% if t[12] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(t[12]) }}</td>
     <td>
+      {% if t[10] %}
+      <a href="/transfers/edit/{{ t[11] }}">Edit</a> |
+      <a href="/transfers/delete/{{ t[11] }}">Delete</a>
+      {% else %}
       <a href="/transactions/edit/{{ t[0] }}">Edit</a> |
       <a href="/transactions/delete/{{ t[0] }}">Delete</a>
       {% if t[7] %}
@@ -62,6 +69,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-danger" style="font-size:12px;padding:2px 8px">Cancel recurring</button>
         </form>
+      {% endif %}
       {% endif %}
     </td>
   </tr>

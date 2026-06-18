@@ -98,6 +98,7 @@ def _delete_user(username):
         user_id = row[0]
         cur.execute("DELETE FROM transactions WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM budgets WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM goals WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM categories WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM account WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
@@ -279,3 +280,101 @@ def create_transaction(user_id, account_id, amount, transaction_date,
     cur.close()
     conn.close()
     return tid
+
+
+def create_account(user_id, name, account_type="Bank Account"):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO account (account_name, type, user_id) "
+        "VALUES (%s, %s, %s) RETURNING account_id",
+        (name, account_type, user_id),
+    )
+    aid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return aid
+
+
+def create_transfer(user_id, from_account, to_account, amount, transfer_date):
+    """Insert a transfer the same way the app does: a linked expense/income pair
+    sharing a transfer_group_id. Returns the group id."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT nextval('transfer_group_seq')")
+    gid = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO transactions (amount, description, transaction_date, "
+        "account_id, transaction_type, is_transfer, transfer_group_id, user_id) "
+        "VALUES (%s, 'seed-transfer', %s, %s, 'expense', true, %s, %s)",
+        (amount, transfer_date, from_account, gid, user_id),
+    )
+    cur.execute(
+        "INSERT INTO transactions (amount, description, transaction_date, "
+        "account_id, transaction_type, is_transfer, transfer_group_id, user_id) "
+        "VALUES (%s, 'seed-transfer', %s, %s, 'income', true, %s, %s)",
+        (amount, transfer_date, to_account, gid, user_id),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return gid
+
+
+def create_goal(user_id, account_id, target_amount, target_date=None, baseline=0):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO goals (name, target_amount, target_date, account_id, "
+        "baseline_amount, user_id) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        ("seed-goal", target_amount, target_date, account_id, baseline, user_id),
+    )
+    gid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return gid
+
+
+def account_balance(account_id):
+    """Net income − expense for an account, straight from the DB (for asserts)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' "
+        "THEN amount ELSE -amount END), 0) "
+        "FROM transactions WHERE account_id = %s",
+        (account_id,),
+    )
+    bal = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return float(bal)
+
+
+def count_transfer_legs(group_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM transactions WHERE transfer_group_id = %s",
+        (group_id,),
+    )
+    n = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return n
+
+
+def fetch_goal(goal_id):
+    """Return (name, target_amount, account_id, user_id) for a goal, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT name, target_amount, account_id, user_id FROM goals WHERE id = %s",
+        (goal_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row

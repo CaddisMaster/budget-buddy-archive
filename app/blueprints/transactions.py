@@ -225,7 +225,8 @@ def transactions():
     main_query = f"""
         SELECT t.id, t.amount, t.description, c.name, a.account_name,
             t.transaction_date, t.transaction_type,
-            t.is_recurring, t.frequency, t.is_adjustment
+            t.is_recurring, t.frequency, t.is_adjustment,
+            t.is_transfer, t.transfer_group_id
         FROM transactions t
         LEFT JOIN categories c ON t.category_id = c.id
         LEFT JOIN account a ON t.account_id = a.account_id

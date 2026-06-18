@@ -53,9 +53,14 @@ CREATE TABLE public.transactions (
     next_due DATE DEFAULT NULL,
     recur_second_day SMALLINT DEFAULT NULL,
     is_adjustment BOOLEAN NOT NULL DEFAULT false,
+    is_transfer BOOLEAN NOT NULL DEFAULT false,
+    transfer_group_id integer,
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT valid_transaction_type CHECK (transaction_type IN ('expense', 'income'))
 );
+
+-- Ties the two legs of a transfer together (one nextval per transfer).
+CREATE SEQUENCE public.transfer_group_seq;
 
 -- ------------------------------------------------------------
 -- Budgets
@@ -69,6 +74,20 @@ CREATE TABLE public.budgets (
     created_at timestamp without time zone DEFAULT now(),
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT valid_period CHECK (period_end > period_start)
+);
+
+-- ------------------------------------------------------------
+-- Goals (account-linked savings goals)
+-- ------------------------------------------------------------
+CREATE TABLE public.goals (
+    id SERIAL PRIMARY KEY,
+    name character varying(80) NOT NULL,
+    target_amount numeric(10,2) NOT NULL,
+    target_date date,
+    account_id integer NOT NULL REFERENCES account(account_id) ON DELETE CASCADE,
+    baseline_amount numeric(10,2) NOT NULL DEFAULT 0,
+    created_at timestamp without time zone DEFAULT now(),
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- ------------------------------------------------------------

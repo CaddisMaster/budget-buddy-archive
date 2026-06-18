@@ -11,6 +11,28 @@
         {% endfor %}
     </select>
 </form>
+{% if goals %}
+<h2>Savings goals</h2>
+<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+    {% for g in goals %}
+    <div class="card" style="flex:1 1 260px;margin-bottom:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem">
+            <strong>{{ g.name }}</strong>
+            {% if g.complete %}<span class="transfer-badge">✓ Reached</span>
+            {% elif g.on_track is true %}<span class="transfer-badge">On track</span>
+            {% elif g.on_track is false %}<span class="recurring-badge">Behind</span>{% endif %}
+        </div>
+        <div style="background:#e5e7eb;border-radius:6px;height:14px;margin:0.5rem 0;overflow:hidden">
+            <div style="background:var(--accent);height:100%;width:{{ g.percent }}%"></div>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted)">
+            ${{ "%.2f"|format(g.saved) }} / ${{ "%.2f"|format(g.target_amount) }} ({{ g.percent }}%)
+        </p>
+    </div>
+    {% endfor %}
+</div>
+<p style="margin-bottom:1.5rem"><a href="/goals">Manage goals →</a></p>
+{% endif %}
 {% if has_transactions %}
 <h2>Spending by category</h2>
 <div style="max-width: 400px;">

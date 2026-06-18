@@ -35,7 +35,8 @@ def load_user(user_id):
   return User.get_by_id(int(user_id))
 
 from app.blueprints import (
-  auth, main, transactions, categories, accounts, budgets, analytics, admin
+  auth, main, transactions, categories, accounts, budgets, analytics, admin,
+  transfers, goals
 )
 
 app.register_blueprint(auth.bp)
@@ -46,3 +47,5 @@ app.register_blueprint(accounts.bp)
 app.register_blueprint(budgets.bp)
 app.register_blueprint(analytics.bp)
 app.register_blueprint(admin.bp)
+app.register_blueprint(transfers.bp)
+app.register_blueprint(goals.bp)

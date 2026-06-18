@@ -34,7 +34,7 @@ def analytics():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_adjustment = false
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM t.transaction_date) = %s
             AND EXTRACT(MONTH FROM t.transaction_date) = %s
             GROUP BY c.name
@@ -45,7 +45,7 @@ def analytics():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_adjustment = false
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_adjustment = false AND is_transfer = false
             GROUP BY c.name
             ORDER BY total DESC
         """, (current_user.id,))
@@ -55,7 +55,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'income' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'income' AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -63,7 +63,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'income' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'income' AND is_adjustment = false AND is_transfer = false
         """, (current_user.id,))
     total_income = cursor.fetchone()[0]
 
@@ -71,7 +71,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -79,7 +79,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0)
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
         """, (current_user.id,))
     total_expenses = cursor.fetchone()[0]
 
@@ -87,7 +87,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
             FROM transactions
-            WHERE user_id = %s AND is_adjustment = false
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -95,7 +95,7 @@ def analytics():
         cursor.execute("""
             SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END), 0)
             FROM transactions
-            WHERE user_id = %s AND is_adjustment = false
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
         """, (current_user.id,))
     net_balance = cursor.fetchone()[0]
 
@@ -106,7 +106,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s AND is_adjustment = false
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
@@ -119,7 +119,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s AND is_adjustment = false
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
         """, (current_user.id,))
@@ -135,7 +135,7 @@ def analytics():
                 DATE_TRUNC('week', transaction_date) AS week,
                 SUM(amount) AS weekly_total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
             GROUP BY DATE_TRUNC('week', transaction_date)
         )
         SELECT
@@ -156,7 +156,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s AND is_adjustment = false
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, filter_year, filter_month))
@@ -166,7 +166,7 @@ def analytics():
                 SUM(CASE WHEN transaction_type='income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s AND is_adjustment = false
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
         """, (current_user.id,))
     row = cursor.fetchone()
     s_income, s_expenses = float(row[0] or 0), float(row[1] or 0)
@@ -181,7 +181,7 @@ def analytics():
         cursor.execute("""
             SELECT SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
             FROM transactions
-            WHERE user_id = %s AND is_adjustment = false
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
         """, (current_user.id, int(y) - 1, m))
@@ -201,7 +201,7 @@ def analytics():
                 TO_CHAR(transaction_date, 'Day') AS day_name,
                 SUM(amount) AS total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY dow, day_name
@@ -214,7 +214,7 @@ def analytics():
                 TO_CHAR(transaction_date, 'Day') AS day_name,
                 SUM(amount) AS total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
             GROUP BY dow, day_name
             ORDER BY dow
         """, (current_user.id,))
@@ -230,7 +230,7 @@ def analytics():
                 DATE_TRUNC('month', transaction_date) AS month,
                 SUM(amount) AS monthly_total
             FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
             AND transaction_date >= NOW() - INTERVAL '6 months'
             AND category_id IS NOT NULL
             GROUP BY category_id, DATE_TRUNC('month', transaction_date)

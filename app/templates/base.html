@@ -17,9 +17,11 @@
     <nav>
       <a href="/" {% if request.path == '/' %}class="active"{% endif %}>Home</a>
       <a href="/transactions/new" {% if '/transactions/new' in request.path %}class="active"{% endif %}>Add transaction</a>
+      <a href="/transfers" {% if '/transfers' in request.path %}class="active"{% endif %}>Transfer money</a>
       <a href="/transactions" {% if request.path == '/transactions' %}class="active"{% endif %}>History</a>
       <a href="/analytics" {% if '/analytics' in request.path %}class="active"{% endif %}>Analytics</a>
       <a href="/dashboard" {% if '/dashboard' in request.path %}class="active"{% endif %}>Dashboard</a>
+      <a href="/goals" {% if '/goals' in request.path %}class="active"{% endif %}>Goals</a>
       <a href="/budgets" {% if '/budgets' in request.path %}class="active"{% endif %}>Budgets</a>
       <a href="/categories" {% if '/categories' in request.path %}class="active"{% endif %}>Categories</a>
       <a href="/accounts" {% if '/accounts' in request.path %}class="active"{% endif %}>Accounts</a>

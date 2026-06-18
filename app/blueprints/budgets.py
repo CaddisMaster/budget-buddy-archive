@@ -35,6 +35,7 @@ def compute_budget_vs_actual(user_id, year=None, month=None):
         LEFT JOIN transactions t ON t.category_id = b.category_id
             AND t.transaction_type = 'expense'
             AND t.is_adjustment = false
+            AND t.is_transfer = false
             AND t.transaction_date BETWEEN b.period_start AND b.period_end
             AND t.user_id = b.user_id
         WHERE b.user_id = %s

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Delete Transfer — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Delete transfer</h1>
+<div class="card">
+    <p>Delete the transfer of <strong>${{ "%.2f"|format(transfer.amount) }}</strong>
+       from <strong>{{ transfer.from_name }}</strong> to <strong>{{ transfer.to_name }}</strong>
+       on {{ transfer.transfer_date }}?</p>
+    <p style="margin-top:0.5rem;color:var(--text-muted)">Both legs of the transfer will be removed.</p>
+</div>
+<div style="display:flex;gap:1rem;margin-top:1rem">
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger">Yes, delete</button>
+    </form>
+    <a href="/transactions" class="btn">Cancel</a>
+</div>
+{% endblock %}

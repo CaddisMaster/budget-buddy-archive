@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection
+from app.blueprints.goals import build_goals_view
 
 bp = Blueprint('main', __name__)
 
@@ -39,7 +40,7 @@ def dashboard():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false
             AND EXTRACT(YEAR FROM t.transaction_date) = %s
             AND EXTRACT(MONTH FROM t.transaction_date) = %s
             GROUP BY c.name
@@ -50,7 +51,7 @@ def dashboard():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense'
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false
             GROUP BY c.name
             ORDER BY total DESC
         """, (current_user.id,))
@@ -63,7 +64,7 @@ def dashboard():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
@@ -76,7 +77,7 @@ def dashboard():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s
+            WHERE user_id = %s AND is_transfer = false
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
         """, (current_user.id,))
@@ -116,6 +117,7 @@ def dashboard():
             JOIN categories c ON b.category_id = c.id
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
+                AND t.is_transfer = false
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
                 AND t.user_id = b.user_id
             WHERE b.user_id = %s
@@ -134,6 +136,7 @@ def dashboard():
             JOIN categories c ON b.category_id = c.id
             LEFT JOIN transactions t ON t.category_id = b.category_id
                 AND t.transaction_type = 'expense'
+                AND t.is_transfer = false
                 AND t.transaction_date BETWEEN b.period_start AND b.period_end
                 AND t.user_id = b.user_id
             WHERE b.user_id = %s
@@ -141,6 +144,8 @@ def dashboard():
             ORDER BY c.name
         """, (current_user.id,))
     budget_data = cursor.fetchall()
+
+    goals_view = build_goals_view(cursor, current_user.id)
 
     cursor.close()
     conn.close()
@@ -160,5 +165,6 @@ def dashboard():
         budget_json=budget_json,
         months=months,
         selected_month=selected_month,
-        has_transactions=has_transactions
+        has_transactions=has_transactions,
+        goals=goals_view
     )

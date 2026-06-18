@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Delete Goal — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Delete goal</h1>
+<div class="card">
+    <p>Are you sure you want to delete <strong>{{ goal[1] }}</strong>
+       (target ${{ "%.2f"|format(goal[2]) }})?</p>
+    <p style="margin-top:0.5rem;color:var(--text-muted)">This only removes the goal — your transactions and account balance are untouched.</p>
+</div>
+<div style="display:flex;gap:1rem;margin-top:1rem">
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger">Yes, delete</button>
+    </form>
+    <a href="/goals" class="btn">Cancel</a>
+</div>
+{% endblock %}

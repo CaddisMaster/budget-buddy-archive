@@ -247,19 +247,34 @@ def create_category(user_id, name):
     return cid
 
 
-def create_budget(user_id, category_id, amount, period_start, period_end):
+def create_budget(user_id, category_id, amount):
+    """Insert a monthly budget override (one row per user+category)."""
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO budgets (category_id, amount, period_start, period_end, user_id) "
-        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
-        (category_id, amount, period_start, period_end, user_id),
+        "INSERT INTO budgets (category_id, amount, user_id) "
+        "VALUES (%s, %s, %s) RETURNING id",
+        (category_id, amount, user_id),
     )
     bid = cur.fetchone()[0]
     conn.commit()
     cur.close()
     conn.close()
     return bid
+
+
+def fetch_budget_by_category(user_id, category_id):
+    """Return (id, amount) for a user's budget in a category, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, amount FROM budgets WHERE user_id = %s AND category_id = %s",
+        (user_id, category_id),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
 
 
 def create_transaction(user_id, account_id, amount, transaction_date,

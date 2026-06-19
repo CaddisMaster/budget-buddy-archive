@@ -94,19 +94,6 @@
 </table>
 </div>
 
-<h2>Suggested budgets</h2>
-<p style="font-size:13px;color:var(--text-muted);margin-bottom:0.75rem">Based on average monthly spending over the last 6 months</p>
-<div class="table-wrapper">
-<table>
-    <tr><th>Category</th><th>Suggested budget</th></tr>
-    {% for row in budget_suggestions %}
-    <tr>
-        <td>{{ row[0] }}</td>
-        <td>${{ "%.2f"|format(row[1]) }}</td>
-    </tr>
-    {% endfor %}
-</table>
-</div>
 <script>
     const cashFlowData = {{ cash_flow_json | safe }};
     const movingAvgData = {{ moving_avg_json | safe }};

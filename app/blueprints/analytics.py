@@ -220,28 +220,6 @@ def analytics():
         """, (current_user.id,))
     spending_by_day = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT
-            c.name AS category,
-            ROUND(AVG(monthly_total)::numeric, 2) AS suggested_budget
-        FROM (
-            SELECT
-                category_id,
-                DATE_TRUNC('month', transaction_date) AS month,
-                SUM(amount) AS monthly_total
-            FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
-            AND transaction_date >= NOW() - INTERVAL '6 months'
-            AND category_id IS NOT NULL
-            GROUP BY category_id, DATE_TRUNC('month', transaction_date)
-        ) monthly
-        JOIN categories c ON c.id = monthly.category_id
-        GROUP BY c.name
-        HAVING COUNT(DISTINCT month) >= 1
-        ORDER BY suggested_budget DESC
-    """, (current_user.id,))
-    budget_suggestions = cursor.fetchall()
-
     cash_flow_json = json.dumps([
         {'month': row[0], 'income': float(row[1]), 'expenses': float(row[2])}
         for row in cash_flow
@@ -266,6 +244,5 @@ def analytics():
         selected_month=selected_month,
         savings_rate=savings_rate,
         yoy=yoy,
-        spending_by_day=spending_by_day,
-        budget_suggestions=budget_suggestions
+        spending_by_day=spending_by_day
     )

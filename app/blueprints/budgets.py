@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 from app.db import get_db_connection
@@ -5,26 +6,60 @@ from app.db import get_db_connection
 bp = Blueprint('budgets', __name__)
 
 
-def compute_budget_vs_actual(user_id, year=None, month=None):
-    """Budget vs actual expense spending per category.
+def compute_budget_suggestions(user_id):
+    """Suggested monthly budget per category = average monthly spend over the
+    last 6 months. Non-adjustment, non-transfer expense transactions only.
 
-    For each budget, `actual` is the sum of that user's non-adjustment expense
-    transactions in the same category whose date falls inside the budget's
-    period; `remaining` is budget minus actual (negative = over budget). When
-    `year` and `month` are given, only budgets whose period_start is in that
-    month are included. Returns rows of (category, budget, actual, remaining).
+    Returns a dict {category_id: suggested_amount (float)}. A category only
+    appears once it has at least one month of qualifying history — brand-new
+    users / categories get nothing, so the cockpit shows them as "—". The
+    average is rounded to whole dollars — cents read oddly on a budget target.
     """
-    params = [user_id]
-    month_filter = ""
-    if year and month:
-        month_filter = (
-            "AND EXTRACT(YEAR FROM b.period_start) = %s "
-            "AND EXTRACT(MONTH FROM b.period_start) = %s"
-        )
-        params.extend([year, month])
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(f"""
+    cursor.execute("""
+        SELECT
+            monthly.category_id,
+            ROUND(AVG(monthly_total)::numeric, 0) AS suggested_budget
+        FROM (
+            SELECT
+                category_id,
+                DATE_TRUNC('month', transaction_date) AS month,
+                SUM(amount) AS monthly_total
+            FROM transactions
+            WHERE user_id = %s AND transaction_type = 'expense'
+            AND is_adjustment = false AND is_transfer = false
+            AND transaction_date >= NOW() - INTERVAL '6 months'
+            AND category_id IS NOT NULL
+            GROUP BY category_id, DATE_TRUNC('month', transaction_date)
+        ) monthly
+        GROUP BY monthly.category_id
+        HAVING COUNT(DISTINCT month) >= 1
+    """, (user_id,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return {row[0]: float(row[1]) for row in rows}
+
+
+def compute_budget_vs_actual(user_id, year=None, month=None):
+    """Budget vs actual expense spending per category for one calendar month.
+
+    Budgets are now a single monthly amount per category, so `budget` is that
+    saved amount and `actual` is the sum of the user's non-adjustment,
+    non-transfer expense transactions in that category during the given month.
+    When `year`/`month` are omitted, the current calendar month is used (the
+    monthly budget is constant, so an "all time" actual would be meaningless).
+    Returns rows of (category, budget, actual, remaining).
+    """
+    if year and month:
+        filter_year, filter_month = int(year), int(month)
+    else:
+        today = datetime.today()
+        filter_year, filter_month = today.year, today.month
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
         SELECT
             c.name AS category,
             b.amount AS budget,
@@ -36,167 +71,121 @@ def compute_budget_vs_actual(user_id, year=None, month=None):
             AND t.transaction_type = 'expense'
             AND t.is_adjustment = false
             AND t.is_transfer = false
-            AND t.transaction_date BETWEEN b.period_start AND b.period_end
+            AND EXTRACT(YEAR FROM t.transaction_date) = %s
+            AND EXTRACT(MONTH FROM t.transaction_date) = %s
             AND t.user_id = b.user_id
         WHERE b.user_id = %s
-        {month_filter}
-        GROUP BY c.name, b.amount, b.period_start, b.period_end
+        GROUP BY c.name, b.amount
         ORDER BY c.name
-    """, params)
+    """, (filter_year, filter_month, user_id))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
     return rows
 
 
-@bp.route('/budgets', methods=['GET', 'POST'])
+@bp.route('/budgets')
 @login_required
 def budgets():
+    """The budgets cockpit: one row per category showing the monthly target
+    (saved override, else suggested average) alongside this month's actual."""
+    today = datetime.today()
     conn = get_db_connection()
     cursor = conn.cursor()
-    if request.method == 'POST':
-        category_id = request.form.get('category_id')
-        amount_str = request.form.get('amount', '').strip()
-        period_start = request.form.get('period_start', '').strip()
-        period_end = request.form.get('period_end', '').strip()
-        errors = []
-        if not category_id:
-            errors.append('Category is required')
-        if not amount_str:
-            errors.append('Amount is required')
-        else:
-            try:
-                amount = float(amount_str)
-                if amount <= 0:
-                    errors.append('Amount must be greater than zero')
-            except ValueError:
-                errors.append('Amount must be a valid number')
-        if not period_start:
-            errors.append('Period start is required')
-        if not period_end:
-            errors.append('Period end is required')
-        if period_start and period_end and period_end <= period_start:
-            errors.append('Period end must be after period start')
-        if errors:
-            cursor.close(); conn.close()
-            for e in errors:
-                flash(e)
-            return redirect(url_for('budgets.budgets'))
-        amount = float(amount_str)
-        try:
-            cursor.execute(
-                "INSERT INTO budgets (category_id, amount, period_start, period_end, user_id) VALUES (%s, %s, %s, %s, %s)",
-                (category_id, amount, period_start, period_end, current_user.id)
-            )
-            conn.commit()
-            flash('Budget added successfully')
-        except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('budgets.budgets'))
     cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
     all_categories = cursor.fetchall()
+    cursor.execute("SELECT category_id, amount FROM budgets WHERE user_id = %s", (current_user.id,))
+    saved = {row[0]: float(row[1]) for row in cursor.fetchall()}
     cursor.execute("""
-        SELECT b.id, c.name, b.amount, b.period_start, b.period_end
-        FROM budgets b
-        JOIN categories c ON b.category_id = c.id
-        WHERE b.user_id = %s
-        ORDER BY b.period_start DESC
-    """, (current_user.id,))
-    all_budgets = cursor.fetchall()
+        SELECT category_id, COALESCE(SUM(amount), 0)
+        FROM transactions
+        WHERE user_id = %s AND transaction_type = 'expense'
+        AND is_adjustment = false AND is_transfer = false
+        AND EXTRACT(YEAR FROM transaction_date) = %s
+        AND EXTRACT(MONTH FROM transaction_date) = %s
+        AND category_id IS NOT NULL
+        GROUP BY category_id
+    """, (current_user.id, today.year, today.month))
+    actuals = {row[0]: float(row[1]) for row in cursor.fetchall()}
     cursor.close()
     conn.close()
-    return render_template('budgets.html', categories=all_categories, budgets=all_budgets)
+
+    suggestions = compute_budget_suggestions(current_user.id)
+    rows = []
+    for cid, name in all_categories:
+        is_set = cid in saved
+        suggested = suggestions.get(cid)
+        effective = saved[cid] if is_set else suggested
+        rows.append((cid, name, effective, is_set, suggested, actuals.get(cid, 0.0)))
+    return render_template('budgets.html', budget_rows=rows, has_categories=bool(all_categories))
 
 
-@bp.route('/budgets/edit/<int:budget_id>', methods=['GET', 'POST'])
+@bp.route('/budgets/set', methods=['POST'])
 @login_required
-def edit_budget(budget_id):
+def set_budget():
+    """Upsert one category's monthly budget amount (the override that sticks)."""
+    category_id = request.form.get('category_id')
+    amount_str = request.form.get('amount', '').strip()
+    errors = []
+    if not category_id:
+        errors.append('Category is required')
+    if not amount_str:
+        errors.append('Amount is required')
+    else:
+        try:
+            amount = float(amount_str)
+            if amount <= 0:
+                errors.append('Amount must be greater than zero')
+        except ValueError:
+            errors.append('Amount must be a valid number')
+    if errors:
+        for e in errors:
+            flash(e)
+        return redirect(url_for('budgets.budgets'))
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM budgets WHERE id = %s AND user_id = %s", (budget_id, current_user.id))
+    # Guard ownership of the category before writing a budget against it.
+    cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
     if cursor.fetchone() is None:
         cursor.close(); conn.close()
         abort(404)
-    if request.method == 'POST':
-        category_id = request.form.get('category_id')
-        amount_str = request.form.get('amount', '').strip()
-        period_start = request.form.get('period_start', '').strip()
-        period_end = request.form.get('period_end', '').strip()
-        errors = []
-        if not category_id:
-            errors.append('Category is required')
-        if not amount_str:
-            errors.append('Amount is required')
-        else:
-            try:
-                amount = float(amount_str)
-                if amount <= 0:
-                    errors.append('Amount must be greater than zero')
-            except ValueError:
-                errors.append('Amount must be a valid number')
-        if not period_start:
-            errors.append('Period start is required')
-        if not period_end:
-            errors.append('Period end is required')
-        if period_start and period_end and period_end <= period_start:
-            errors.append('Period end must be after period start')
-        if errors:
-            cursor.close(); conn.close()
-            for e in errors:
-                flash(e)
-            return redirect(url_for('budgets.edit_budget', budget_id=budget_id))
-        amount = float(amount_str)
-        try:
-            cursor.execute(
-                "UPDATE budgets SET category_id=%s, amount=%s, period_start=%s, period_end=%s WHERE id=%s AND user_id=%s",
-                (category_id, amount, period_start, period_end, budget_id, current_user.id)
-            )
-            conn.commit()
-            flash('Budget updated successfully')
-        except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('budgets.budgets'))
-    cursor.execute("SELECT id, category_id, amount, period_start, period_end FROM budgets WHERE id = %s AND user_id = %s", (budget_id, current_user.id))
-    budget = cursor.fetchone()
-    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
-    all_categories = cursor.fetchall()
+    try:
+        # Budgets are whole-dollar targets — cents read oddly, so round on save.
+        cursor.execute("""
+            INSERT INTO budgets (category_id, amount, user_id)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id, category_id) DO UPDATE SET amount = EXCLUDED.amount
+        """, (category_id, round(float(amount_str)), current_user.id))
+        conn.commit()
+        flash('Budget saved')
+    except Exception as e:
+        flash(f'Error: {e}')
+        conn.rollback()
     cursor.close()
     conn.close()
-    return render_template('edit_budget.html', budget=budget, categories=all_categories)
+    return redirect(url_for('budgets.budgets'))
 
 
-@bp.route('/budgets/delete/<int:budget_id>', methods=['GET', 'POST'])
+@bp.route('/budgets/clear', methods=['POST'])
 @login_required
-def delete_budget(budget_id):
+def clear_budget():
+    """Delete a category's override so it reverts to the suggested average."""
+    category_id = request.form.get('category_id')
+    if not category_id:
+        abort(404)
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM budgets WHERE id = %s AND user_id = %s", (budget_id, current_user.id))
+    cursor.execute("SELECT 1 FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
     if cursor.fetchone() is None:
         cursor.close(); conn.close()
         abort(404)
-    if request.method == 'POST':
-        try:
-            cursor.execute("DELETE FROM budgets WHERE id = %s AND user_id = %s", (budget_id, current_user.id))
-            conn.commit()
-            flash('Budget deleted')
-        except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('budgets.budgets'))
-    cursor.execute("""
-        SELECT b.id, c.name, b.amount, b.period_start, b.period_end
-        FROM budgets b JOIN categories c ON b.category_id = c.id
-        WHERE b.id = %s AND b.user_id = %s
-    """, (budget_id, current_user.id))
-    budget = cursor.fetchone()
+    try:
+        cursor.execute("DELETE FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
+        conn.commit()
+        flash('Budget cleared — reverted to suggested')
+    except Exception as e:
+        flash(f'Error: {e}')
+        conn.rollback()
     cursor.close()
     conn.close()
-    return render_template('delete_budget.html', budget=budget)
+    return redirect(url_for('budgets.budgets'))

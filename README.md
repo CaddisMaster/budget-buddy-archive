@@ -37,9 +37,9 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 - **Recurring transactions** — repeat on six frequencies (weekly, bi-weekly, semi-monthly, monthly, quarterly, annually), auto-processed on page load
 - **Transaction history** — search, filter by month, pagination, and running balance column
 - **CSV export** — download filtered transactions as a CSV file
-- **Analytics** — savings rate, year over year comparison, spending by day of week, and predictive budget suggestions based on the last 6 months of spending
+- **Analytics** — savings rate, year over year comparison, spending by day of week, and budget vs actual
 - **Dashboard** — Chart.js visualisations including spending by category, cash flow, net balance over time, and budget performance
-- **Budget management** — set budgets per category and track actual vs budgeted spending
+- **Smart budgets** — one monthly amount per category, auto-suggested from the last 6 months of spending; edit to set your own (it stays fixed) or clear to revert, with this month's actual shown inline
 - **Admin tools** — user management UI, database backup download via pg_dump
 - **Dark mode** — automatic system-based dark mode support
 - **Mobile responsive** — collapsible sidebar, horizontal table scroll, tested on iPhone
@@ -150,7 +150,7 @@ Once logged in, create additional users via Settings → Manage users.
 
 - `transactions` — id, amount, description, category_id, account_id, transaction_date, transaction_type, is_recurring, frequency, next_due, recur_second_day, is_adjustment, user_id, created_at
 - `categories` — id, name, description, user_id, created_at
-- `budgets` — id, category_id, amount, period_start, period_end, user_id
+- `budgets` — id, category_id, amount (one monthly amount per category), user_id, created_at
 - `account` — account_id, account_name, type, user_id
 - `users` — id, username, password_hash, is_admin, created_at
 

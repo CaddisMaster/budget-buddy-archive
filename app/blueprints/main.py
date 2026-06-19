@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection
 from app.blueprints.goals import build_goals_view
+from app.blueprints.budgets import compute_budget_vs_actual
 
 bp = Blueprint('main', __name__)
 
@@ -107,43 +108,9 @@ def dashboard():
     """, (current_user.id,))
     account_balances = cursor.fetchall()
 
-    if selected_month:
-        cursor.execute("""
-            SELECT
-                c.name AS category,
-                b.amount AS budget,
-                COALESCE(SUM(t.amount), 0) AS actual
-            FROM budgets b
-            JOIN categories c ON b.category_id = c.id
-            LEFT JOIN transactions t ON t.category_id = b.category_id
-                AND t.transaction_type = 'expense'
-                AND t.is_transfer = false
-                AND t.transaction_date BETWEEN b.period_start AND b.period_end
-                AND t.user_id = b.user_id
-            WHERE b.user_id = %s
-            AND EXTRACT(YEAR FROM b.period_start) = %s
-            AND EXTRACT(MONTH FROM b.period_start) = %s
-            GROUP BY c.name, b.amount, b.period_start, b.period_end
-            ORDER BY c.name
-        """, (current_user.id, filter_year, filter_month))
-    else:
-        cursor.execute("""
-            SELECT
-                c.name AS category,
-                b.amount AS budget,
-                COALESCE(SUM(t.amount), 0) AS actual
-            FROM budgets b
-            JOIN categories c ON b.category_id = c.id
-            LEFT JOIN transactions t ON t.category_id = b.category_id
-                AND t.transaction_type = 'expense'
-                AND t.is_transfer = false
-                AND t.transaction_date BETWEEN b.period_start AND b.period_end
-                AND t.user_id = b.user_id
-            WHERE b.user_id = %s
-            GROUP BY c.name, b.amount, b.period_start, b.period_end
-            ORDER BY c.name
-        """, (current_user.id,))
-    budget_data = cursor.fetchall()
+    # Monthly budget vs this-month (or selected-month) actual — same helper the
+    # analytics page uses. Returns (category, budget, actual, remaining).
+    budget_data = compute_budget_vs_actual(current_user.id, filter_year, filter_month)
 
     goals_view = build_goals_view(cursor, current_user.id)
 

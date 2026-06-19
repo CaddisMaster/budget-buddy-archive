@@ -2,45 +2,47 @@
 {% block title %}Budgets — Budget Buddy{% endblock %}
 {% block content %}
 <h1>Budgets</h1>
-<h2>Add budget</h2>
-{% if categories %}
-<form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Category</label>
-    <select name="category_id" required>
-        <option value="">-- select category --</option>
-        {% for cat in categories %}
-        <option value="{{ cat[0] }}">{{ cat[1] }}</option>
-        {% endfor %}
-    </select>
-    <label>Amount</label>
-    <input type="number" step="0.01" name="amount" required>
-    <label>Period start</label>
-    <input type="date" name="period_start" required>
-    <label>Period end</label>
-    <input type="date" name="period_end" required>
-    <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add budget</button>
-</form>
-{% else %}
-<p style="color:var(--text-muted)">You need at least one <a href="/categories">category</a> before you can create a budget.</p>
-{% endif %}
-<h2>Existing budgets</h2>
-{% if budgets %}
+<p style="font-size:13px;color:var(--text-muted);margin-bottom:1rem">
+    Each category gets a monthly budget. Untouched categories show a
+    <strong>suggested</strong> amount from your average spend over the last 6 months —
+    edit it to set your own, which then stays fixed. Suggestions need at least a month of history.
+</p>
+{% if has_categories %}
 <div class="table-wrapper">
     <table>
-        <tr><th>Category</th><th>Amount</th><th>From</th><th>To</th><th>Actions</th></tr>
-        {% for b in budgets %}
+        <tr><th>Category</th><th>Monthly budget</th><th>This month</th><th></th></tr>
+        {% for row in budget_rows %}
+        {# row = (category_id, name, effective_amount, is_set, suggested_amount, actual_this_month) #}
         <tr>
-            <td>{{ b[1] }}</td>
-            <td>${{ "%.2f"|format(b[2]) }}</td>
-            <td>{{ b[3] }}</td>
-            <td>{{ b[4] }}</td>
-            <td><a href="/budgets/edit/{{ b[0] }}">Edit</a> | <a href="/budgets/delete/{{ b[0] }}">Delete</a></td>
+            <td>{{ row[1] }}</td>
+            <td>
+                <form method="post" action="/budgets/set" style="display:flex;gap:0.5rem;align-items:center;margin:0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="category_id" value="{{ row[0] }}">
+                    <input type="number" step="1" min="1" name="amount"
+                           {% if row[2] is not none %}value="{{ "%.0f"|format(row[2]) }}"{% endif %}
+                           placeholder="—" style="width:7rem" required>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    {% if not row[3] and row[4] is not none %}
+                    <span style="font-size:12px;color:var(--text-muted)">Suggested</span>
+                    {% endif %}
+                </form>
+            </td>
+            <td class="expense">${{ "%.0f"|format(row[5]) }}</td>
+            <td>
+                {% if row[3] %}
+                <form method="post" action="/budgets/clear" style="margin:0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="category_id" value="{{ row[0] }}">
+                    <button type="submit" class="btn">Clear</button>
+                </form>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </table>
 </div>
 {% else %}
-<p style="color:var(--text-muted)">No budgets yet.{% if categories %} Add one above.{% endif %}</p>
+<p style="color:var(--text-muted)">You need at least one <a href="/categories">category</a> before you can set a budget.</p>
 {% endif %}
 {% endblock %}

@@ -12,6 +12,7 @@ from tests.conftest import (
     create_category,
     fetch_account,
     fetch_budget,
+    fetch_budget_by_category,
     fetch_category,
     fetch_transaction,
 )
@@ -110,24 +111,26 @@ def test_cannot_delete_another_users_account(client_a, users):
 
 # --- budgets ----------------------------------------------------------------
 
-def test_cannot_edit_another_users_budget(client_a, users):
-    b_budget = create_budget(users["b"]["id"], users["b"]["category_id"],
-                             100.0, "2026-06-01", "2026-06-30")
+def test_cannot_set_budget_on_another_users_category(client_a, users):
+    # A posts B's category_id to /budgets/set — the category ownership guard
+    # must 404 and no budget row may be created against B's category.
+    b_cat = users["b"]["category_id"]
     response = client_a.post(
-        f"/budgets/edit/{b_budget}",
-        data={"category_id": users["b"]["category_id"], "amount": "9999",
-              "period_start": "2026-06-01", "period_end": "2026-06-30"},
+        "/budgets/set",
+        data={"category_id": b_cat, "amount": "9999"},
         follow_redirects=True,
     )
     assert response.status_code == 404
-    _, amount, owner_id = fetch_budget(b_budget)
-    assert float(amount) == 100.0        # unchanged
-    assert owner_id == users["b"]["id"]   # still B's
+    assert fetch_budget_by_category(users["a"]["id"], b_cat) is None
+    assert fetch_budget_by_category(users["b"]["id"], b_cat) is None
 
 
-def test_cannot_delete_another_users_budget(client_a, users):
-    b_budget = create_budget(users["b"]["id"], users["b"]["category_id"],
-                             100.0, "2026-06-01", "2026-06-30")
-    response = client_a.post(f"/budgets/delete/{b_budget}", follow_redirects=True)
+def test_cannot_clear_another_users_budget(client_a, users):
+    b_budget = create_budget(users["b"]["id"], users["b"]["category_id"], 100.0)
+    response = client_a.post(
+        "/budgets/clear",
+        data={"category_id": users["b"]["category_id"]},
+        follow_redirects=True,
+    )
     assert response.status_code == 404
-    assert fetch_budget(b_budget) is not None
+    assert fetch_budget(b_budget) is not None   # still B's

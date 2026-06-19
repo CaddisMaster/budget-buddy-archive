@@ -65,15 +65,15 @@ CREATE SEQUENCE public.transfer_group_seq;
 -- ------------------------------------------------------------
 -- Budgets
 -- ------------------------------------------------------------
+-- One row per (user_id, category_id) holding a single monthly amount; stores
+-- overrides only — a category with no row falls back to its suggested default.
 CREATE TABLE public.budgets (
     id SERIAL PRIMARY KEY,
     category_id integer NOT NULL,
     amount numeric(10,2) NOT NULL,
-    period_start date NOT NULL,
-    period_end date NOT NULL,
     created_at timestamp without time zone DEFAULT now(),
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT valid_period CHECK (period_end > period_start)
+    CONSTRAINT uq_budget_user_category UNIQUE (user_id, category_id)
 );
 
 -- ------------------------------------------------------------

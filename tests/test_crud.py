@@ -102,11 +102,10 @@ def _find_budget_id(user_id, category_id):
     return row[0] if row else None
 
 
-def test_create_budget(client_a, users):
+def test_set_budget(client_a, users):
     cid = create_category(users["a"]["id"], "BudgetCat")
-    client_a.post("/budgets", data={
+    client_a.post("/budgets/set", data={
         "category_id": cid, "amount": "250.00",
-        "period_start": "2026-06-01", "period_end": "2026-06-30",
     }, follow_redirects=True)
     bid = _find_budget_id(users["a"]["id"], cid)
     assert bid is not None
@@ -116,27 +115,24 @@ def test_create_budget(client_a, users):
     assert owner_id == users["a"]["id"]
 
 
-def test_edit_budget(client_a, users):
+def test_set_budget_upserts_in_place(client_a, users):
+    """A second set on the same category updates the existing row, not a new one."""
     cid = create_category(users["a"]["id"], "BudgetEditCat")
-    client_a.post("/budgets", data={
-        "category_id": cid, "amount": "100.00",
-        "period_start": "2026-06-01", "period_end": "2026-06-30",
-    }, follow_redirects=True)
+    client_a.post("/budgets/set", data={"category_id": cid, "amount": "100.00"},
+                  follow_redirects=True)
     bid = _find_budget_id(users["a"]["id"], cid)
-    client_a.post(f"/budgets/edit/{bid}", data={
-        "category_id": cid, "amount": "175.00",
-        "period_start": "2026-06-01", "period_end": "2026-06-30",
-    }, follow_redirects=True)
+    client_a.post("/budgets/set", data={"category_id": cid, "amount": "175.00"},
+                  follow_redirects=True)
+    # Same row, new amount — no duplicate row created.
+    assert _find_budget_id(users["a"]["id"], cid) == bid
     _, amount, _ = fetch_budget(bid)
     assert float(amount) == 175.00
 
 
-def test_delete_budget(client_a, users):
+def test_clear_budget(client_a, users):
     cid = create_category(users["a"]["id"], "BudgetDelCat")
-    client_a.post("/budgets", data={
-        "category_id": cid, "amount": "50.00",
-        "period_start": "2026-06-01", "period_end": "2026-06-30",
-    }, follow_redirects=True)
+    client_a.post("/budgets/set", data={"category_id": cid, "amount": "50.00"},
+                  follow_redirects=True)
     bid = _find_budget_id(users["a"]["id"], cid)
-    client_a.post(f"/budgets/delete/{bid}", follow_redirects=True)
+    client_a.post("/budgets/clear", data={"category_id": cid}, follow_redirects=True)
     assert fetch_budget(bid) is None

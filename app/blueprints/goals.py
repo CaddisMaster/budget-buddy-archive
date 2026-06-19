@@ -2,12 +2,21 @@ import math
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, abort
+    Blueprint, render_template, request, redirect, url_for, flash, abort,
+    make_response
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection
+from app.helpers import is_htmx, hx_toast
 
 bp = Blueprint('goals', __name__)
+
+GOAL_SELECT = (
+    "SELECT g.id, g.name, g.target_amount, g.target_date, g.account_id, "
+    "g.baseline_amount, a.account_name "
+    "FROM goals g JOIN account a ON g.account_id = a.account_id "
+    "WHERE g.user_id = %s"
+)
 
 # How many recent months feed the "projected completion" pace estimate.
 INFLOW_WINDOW_MONTHS = 3
@@ -146,36 +155,38 @@ def _validate(form, user_account_ids):
     return fields, errors
 
 
+def _goal_view(cursor, user_id, row):
+    """Turn one goal row (GOAL_SELECT shape) into a view dict with progress +
+    projections."""
+    (gid, name, target_amount, target_date, account_id,
+     baseline, account_name) = row
+    balance = _account_balance(cursor, user_id, account_id)
+    saved = balance - float(baseline)
+    inflow = _recent_monthly_inflow(cursor, user_id, account_id)
+    projection = compute_goal_projection(target_amount, saved, target_date, inflow)
+    return {
+        'id': gid,
+        'name': name,
+        'target_amount': float(target_amount),
+        'target_date': target_date,
+        'account_name': account_name,
+        'saved': round(saved, 2),
+        **projection,
+    }
+
+
 def build_goals_view(cursor, user_id):
     """Load a user's goals with computed progress + projections. Shared by the
     Goals page and the dashboard widget so the math lives in one place."""
-    cursor.execute(
-        "SELECT g.id, g.name, g.target_amount, g.target_date, g.account_id, "
-        "g.baseline_amount, a.account_name "
-        "FROM goals g JOIN account a ON g.account_id = a.account_id "
-        "WHERE g.user_id = %s ORDER BY g.created_at DESC",
-        (user_id,),
-    )
-    rows = cursor.fetchall()
-    goals_view = []
-    for (gid, name, target_amount, target_date, account_id,
-         baseline, account_name) in rows:
-        balance = _account_balance(cursor, user_id, account_id)
-        saved = balance - float(baseline)
-        inflow = _recent_monthly_inflow(cursor, user_id, account_id)
-        projection = compute_goal_projection(
-            target_amount, saved, target_date, inflow
-        )
-        goals_view.append({
-            'id': gid,
-            'name': name,
-            'target_amount': float(target_amount),
-            'target_date': target_date,
-            'account_name': account_name,
-            'saved': round(saved, 2),
-            **projection,
-        })
-    return goals_view
+    cursor.execute(GOAL_SELECT + " ORDER BY g.created_at DESC", (user_id,))
+    return [_goal_view(cursor, user_id, r) for r in cursor.fetchall()]
+
+
+def build_single_goal_view(cursor, user_id, goal_id):
+    """View dict for one goal, or None if it isn't this user's."""
+    cursor.execute(GOAL_SELECT + " AND g.id = %s", (user_id, goal_id))
+    row = cursor.fetchone()
+    return _goal_view(cursor, user_id, row) if row else None
 
 
 @bp.route('/goals', methods=['GET', 'POST'])
@@ -189,6 +200,8 @@ def goals():
         fields, errors = _validate(request.form, account_ids)
         if errors:
             cursor.close(); conn.close()
+            if is_htmx():
+                return hx_toast(make_response('', 200), '; '.join(errors), 'error')
             for e in errors:
                 flash(e)
             return redirect(url_for('goals.goals'))
@@ -202,17 +215,26 @@ def goals():
         try:
             cursor.execute(
                 "INSERT INTO goals (name, target_amount, target_date, account_id, "
-                "baseline_amount, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+                "baseline_amount, user_id) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
                 (fields['name'], fields['target_amount'], fields['target_date'],
                  fields['account_id'], baseline, current_user.id),
             )
+            new_id = cursor.fetchone()[0]
             conn.commit()
-            flash('Goal added successfully')
         except Exception as e:
-            flash(f'Error: {e}')
             conn.rollback()
-        cursor.close()
-        conn.close()
+            cursor.close(); conn.close()
+            if is_htmx():
+                return hx_toast(make_response('', 200), f'Error: {e}', 'error')
+            flash(f'Error: {e}')
+            return redirect(url_for('goals.goals'))
+        if is_htmx():
+            g = build_single_goal_view(cursor, current_user.id, new_id)
+            cursor.close(); conn.close()
+            resp = make_response(render_template('partials/_goal_card.html', g=g))
+            return hx_toast(resp, 'Goal added')
+        cursor.close(); conn.close()
+        flash('Goal added successfully')
         return redirect(url_for('goals.goals'))
 
     goals_view = build_goals_view(cursor, current_user.id)
@@ -222,7 +244,7 @@ def goals():
     return render_template('goals.html', goals=goals_view, accounts=all_accounts)
 
 
-@bp.route('/goals/edit/<int:goal_id>', methods=['GET', 'POST'])
+@bp.route('/goals/<int:goal_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_goal(goal_id):
     conn = get_db_connection()
@@ -232,15 +254,17 @@ def edit_goal(goal_id):
     if cursor.fetchone() is None:
         cursor.close(); conn.close()
         abort(404)
-    account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
+    all_accounts = _fetch_accounts(cursor, current_user.id)
+    account_ids = {a[0] for a in all_accounts}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
         if errors:
+            goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
+                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None)
             cursor.close(); conn.close()
-            for e in errors:
-                flash(e)
-            return redirect(url_for('goals.edit_goal', goal_id=goal_id))
+            return render_template('partials/_goal_edit_card.html',
+                                   goal=goal, accounts=all_accounts, errors=errors)
         try:
             cursor.execute(
                 "UPDATE goals SET name=%s, target_amount=%s, target_date=%s, "
@@ -249,13 +273,17 @@ def edit_goal(goal_id):
                  fields['account_id'], goal_id, current_user.id),
             )
             conn.commit()
-            flash('Goal updated successfully')
         except Exception as e:
-            flash(f'Error: {e}')
             conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('goals.goals'))
+            goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
+                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None)
+            cursor.close(); conn.close()
+            return render_template('partials/_goal_edit_card.html',
+                                   goal=goal, accounts=all_accounts, errors=[str(e)])
+        g = build_single_goal_view(cursor, current_user.id, goal_id)
+        cursor.close(); conn.close()
+        resp = make_response(render_template('partials/_goal_card.html', g=g))
+        return hx_toast(resp, 'Goal updated')
 
     cursor.execute(
         "SELECT id, name, target_amount, target_date, account_id "
@@ -263,13 +291,25 @@ def edit_goal(goal_id):
         (goal_id, current_user.id),
     )
     goal = cursor.fetchone()
-    all_accounts = _fetch_accounts(cursor, current_user.id)
     cursor.close()
     conn.close()
-    return render_template('edit_goal.html', goal=goal, accounts=all_accounts)
+    return render_template('partials/_goal_edit_card.html', goal=goal, accounts=all_accounts)
 
 
-@bp.route('/goals/delete/<int:goal_id>', methods=['GET', 'POST'])
+@bp.route('/goals/<int:goal_id>/card')
+@login_required
+def goal_card(goal_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    g = build_single_goal_view(cursor, current_user.id, goal_id)
+    cursor.close()
+    conn.close()
+    if g is None:
+        abort(404)
+    return render_template('partials/_goal_card.html', g=g)
+
+
+@bp.route('/goals/<int:goal_id>', methods=['DELETE'])
 @login_required
 def delete_goal(goal_id):
     conn = get_db_connection()
@@ -279,23 +319,16 @@ def delete_goal(goal_id):
     if cursor.fetchone() is None:
         cursor.close(); conn.close()
         abort(404)
-    if request.method == 'POST':
-        try:
-            cursor.execute("DELETE FROM goals WHERE id = %s AND user_id = %s",
-                           (goal_id, current_user.id))
-            conn.commit()
-            flash('Goal deleted')
-        except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('goals.goals'))
-    cursor.execute(
-        "SELECT id, name, target_amount FROM goals WHERE id = %s AND user_id = %s",
-        (goal_id, current_user.id),
-    )
-    goal = cursor.fetchone()
+    try:
+        cursor.execute("DELETE FROM goals WHERE id = %s AND user_id = %s",
+                       (goal_id, current_user.id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        g = build_single_goal_view(cursor, current_user.id, goal_id)
+        cursor.close(); conn.close()
+        resp = make_response(render_template('partials/_goal_card.html', g=g))
+        return hx_toast(resp, f'Error: {e}', 'error')
     cursor.close()
     conn.close()
-    return render_template('delete_goal.html', goal=goal)
+    return hx_toast(make_response('', 200), 'Goal deleted')

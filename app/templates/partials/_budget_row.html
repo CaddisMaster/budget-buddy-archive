@@ -1,0 +1,27 @@
+<tr id="budget-{{ row[0] }}">
+    {# row = (category_id, name, effective_amount, is_set, suggested_amount, actual_this_month) #}
+    <td>{{ row[1] }}</td>
+    <td>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+            <input type="number" step="1" min="1" name="amount" id="budget-amount-{{ row[0] }}"
+                   {% if row[2] is not none %}value="{{ "%.0f"|format(row[2]) }}"{% endif %}
+                   placeholder="—" style="width:7rem" required>
+            <button type="button" class="btn btn-sm btn-primary"
+                hx-post="/budgets/set"
+                hx-vals='{"category_id": "{{ row[0] }}"}'
+                hx-include="#budget-amount-{{ row[0] }}"
+                hx-target="#budget-{{ row[0] }}" hx-swap="outerHTML">Save</button>
+            {% if not row[3] and row[4] is not none %}
+            <span class="suggested-tag">Suggested</span>
+            {% endif %}
+        </div>
+    </td>
+    <td class="expense">${{ "%.0f"|format(row[5]) }}</td>
+    <td>
+        {% if row[3] %}
+        <button type="button" class="btn btn-sm"
+            hx-post="/budgets/clear" hx-vals='{"category_id": "{{ row[0] }}"}'
+            hx-target="#budget-{{ row[0] }}" hx-swap="outerHTML">Clear</button>
+        {% endif %}
+    </td>
+</tr>

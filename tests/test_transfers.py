@@ -84,7 +84,7 @@ def test_edit_transfer_updates_both_legs(client_a, users):
     gid = create_transfer(users["a"]["id"], from_acct, to_acct, 100.00, TODAY)
 
     response = client_a.post(
-        f"/transfers/edit/{gid}",
+        f"/transfers/{gid}/edit",
         data={
             "from_account": from_acct,
             "to_account": to_acct,
@@ -110,7 +110,7 @@ def test_delete_transfer_removes_both_legs(client_a, users):
     gid = create_transfer(users["a"]["id"], from_acct, to_acct, 75.00, TODAY)
     assert count_transfer_legs(gid) == 2
 
-    response = client_a.post(f"/transfers/delete/{gid}", follow_redirects=True)
+    response = client_a.delete(f"/transfers/{gid}", follow_redirects=True)
     assert response.status_code == 200
     assert count_transfer_legs(gid) == 0
 
@@ -120,7 +120,7 @@ def test_delete_transfer_removes_both_legs(client_a, users):
 def test_cannot_delete_another_users_transfer(client_a, users):
     b_to = create_account(users["b"]["id"], "acct-B-2")
     gid = create_transfer(users["b"]["id"], users["b"]["account_id"], b_to, 60.00, TODAY)
-    response = client_a.post(f"/transfers/delete/{gid}", follow_redirects=True)
+    response = client_a.delete(f"/transfers/{gid}", follow_redirects=True)
     assert response.status_code == 404
     assert count_transfer_legs(gid) == 2  # B's transfer survives
 
@@ -129,7 +129,7 @@ def test_cannot_edit_another_users_transfer(client_a, users):
     b_to = create_account(users["b"]["id"], "acct-B-3")
     gid = create_transfer(users["b"]["id"], users["b"]["account_id"], b_to, 60.00, TODAY)
     response = client_a.post(
-        f"/transfers/edit/{gid}",
+        f"/transfers/{gid}/edit",
         data={
             "from_account": users["b"]["account_id"],
             "to_account": b_to,
@@ -143,7 +143,7 @@ def test_cannot_edit_another_users_transfer(client_a, users):
 
 
 def test_missing_transfer_group_returns_404(client_a, users):
-    response = client_a.get("/transfers/edit/99999999", follow_redirects=True)
+    response = client_a.get("/transfers/99999999/edit", follow_redirects=True)
     assert response.status_code == 404
 
 
@@ -154,4 +154,4 @@ def test_history_renders_transfer_row(client_a, users):
     response = client_a.get("/transactions")
     assert response.status_code == 200
     assert b"Transfer" in response.data
-    assert f"/transfers/delete/{gid}".encode() in response.data
+    assert f"/transfers/{gid}".encode() in response.data

@@ -1,0 +1,39 @@
+<tr id="txn-{{ t[0] }}" class="{% if t[10] %}transfer {% endif %}{% if t[6] == 'income' %}income{% else %}expense{% endif %}">
+  <td>{{ t[5] }}</td>
+  <td>{{ t[6] | capitalize }}</td>
+  <td>{{ t[1] }}</td>
+  <td>
+    {{ t[2] }}
+    {% if t[10] %}<span class="transfer-badge">⇄ Transfer</span>{% endif %}
+    {% if t[7] %}<span class="recurring-badge">↻ {{ frequency_labels.get(t[8], t[8]) }}</span>{% endif %}
+    {% if t[9] %}<span class="recurring-badge">Adjustment</span>{% endif %}
+  </td>
+  <td>{{ t[3] or 'Uncategorised' }}</td>
+  <td>{{ t[4] or 'No account' }}</td>
+  <td class="{% if t[12] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(t[12]) }}</td>
+  <td class="row-actions">
+    {% if t[10] %}
+    <button type="button" class="btn btn-sm"
+      hx-get="/transfers/{{ t[11] }}/edit?{{ filter_qs }}"
+      hx-target="#txn-{{ t[0] }}" hx-swap="outerHTML">Edit</button>
+    <button type="button" class="btn btn-sm btn-danger"
+      hx-delete="/transfers/{{ t[11] }}?{{ filter_qs }}"
+      hx-target="#txn-rows" hx-swap="outerHTML"
+      hx-confirm="Delete this transfer (both legs)?">Delete</button>
+    {% else %}
+    <button type="button" class="btn btn-sm"
+      hx-get="/transactions/{{ t[0] }}/edit?{{ filter_qs }}"
+      hx-target="#txn-{{ t[0] }}" hx-swap="outerHTML">Edit</button>
+    <button type="button" class="btn btn-sm btn-danger"
+      hx-delete="/transactions/{{ t[0] }}?{{ filter_qs }}"
+      hx-target="#txn-rows" hx-swap="outerHTML"
+      hx-confirm="Delete this transaction?">Delete</button>
+    {% if t[7] %}
+    <button type="button" class="btn btn-sm btn-danger"
+      hx-post="/transactions/cancel-recurring/{{ t[0] }}?{{ filter_qs }}"
+      hx-target="#txn-rows" hx-swap="outerHTML"
+      hx-confirm="Stop this from recurring?">Cancel recurring</button>
+    {% endif %}
+    {% endif %}
+  </td>
+</tr>

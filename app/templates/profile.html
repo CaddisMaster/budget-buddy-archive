@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Profile — Budget Buddy{% endblock %}
+{% block content %}
+<h1>Profile</h1>
+<div class="card">
+    <p><strong>Username:</strong> {{ current_user.username }}</p>
+    <p style="margin-top:0.5rem"><strong>Role:</strong> {{ 'Admin' if current_user.is_admin else 'User' }}</p>
+    <p style="margin-top:0.5rem"><strong>Member since:</strong> {{ created_at.strftime('%B %-d, %Y') if created_at else '—' }}</p>
+</div>
+
+<h2>Your data</h2>
+<div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Transactions</div><div class="stat-value">{{ txn_count }}</div></div>
+    <div class="stat-card"><div class="stat-label">Categories</div><div class="stat-value">{{ cat_count }}</div></div>
+    <div class="stat-card"><div class="stat-label">Accounts</div><div class="stat-value">{{ acct_count }}</div></div>
+    <div class="stat-card"><div class="stat-label">Goals</div><div class="stat-value">{{ goal_count }}</div></div>
+</div>
+
+<div style="margin-top:1.5rem">
+    <a href="/change-password" class="btn">Change password</a>
+</div>
+{% endblock %}

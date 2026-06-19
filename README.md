@@ -1,5 +1,7 @@
 # Budget Buddy
 
+[![CI](https://github.com/CaddisMaster/budget-buddy/actions/workflows/ci.yml/badge.svg)](https://github.com/CaddisMaster/budget-buddy/actions/workflows/ci.yml)
+
 A personal budget tracking and ledger system built with Python, Flask, and PostgreSQL.
 
 ## Why I Built This

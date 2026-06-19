@@ -65,7 +65,7 @@ def test_transfer_into_linked_account_advances_goal(users):
 
 def test_cannot_delete_another_users_goal(client_a, users):
     gid = create_goal(users["b"]["id"], users["b"]["account_id"], 500)
-    response = client_a.post(f"/goals/delete/{gid}", follow_redirects=True)
+    response = client_a.delete(f"/goals/{gid}", follow_redirects=True)
     assert response.status_code == 404
     assert fetch_goal(gid) is not None  # B's goal survives
 
@@ -73,7 +73,7 @@ def test_cannot_delete_another_users_goal(client_a, users):
 def test_cannot_edit_another_users_goal(client_a, users):
     gid = create_goal(users["b"]["id"], users["b"]["account_id"], 500)
     response = client_a.post(
-        f"/goals/edit/{gid}",
+        f"/goals/{gid}/edit",
         data={"name": "hacked", "target_amount": "1",
               "account_id": users["b"]["account_id"]},
         follow_redirects=True,
@@ -86,5 +86,5 @@ def test_cannot_edit_another_users_goal(client_a, users):
 
 
 def test_missing_goal_returns_404(client_a, users):
-    response = client_a.get("/goals/edit/99999999", follow_redirects=True)
+    response = client_a.get("/goals/99999999/edit", follow_redirects=True)
     assert response.status_code == 404

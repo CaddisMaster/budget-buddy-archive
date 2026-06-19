@@ -31,7 +31,7 @@ def test_create_category(client_a, users):
 
 def test_edit_category(client_a, users):
     cid = create_category(users["a"]["id"], "Original")
-    client_a.post(f"/categories/edit/{cid}",
+    client_a.post(f"/categories/{cid}/edit",
                   data={"name": "Renamed", "description": "now edited"},
                   follow_redirects=True)
     name, description, _ = fetch_category(cid)
@@ -41,7 +41,7 @@ def test_edit_category(client_a, users):
 
 def test_delete_category(client_a, users):
     cid = create_category(users["a"]["id"], "Disposable")
-    client_a.post(f"/categories/delete/{cid}", follow_redirects=True)
+    client_a.delete(f"/categories/{cid}", follow_redirects=True)
     assert fetch_category(cid) is None
 
 
@@ -73,7 +73,7 @@ def test_edit_account(client_a, users):
     client_a.post("/accounts", data={"name": "OldName", "type": "Debit Card"},
                   follow_redirects=True)
     aid = _find_account_id(users["a"]["id"], "OldName")
-    client_a.post(f"/accounts/edit/{aid}",
+    client_a.post(f"/accounts/{aid}/edit",
                   data={"name": "NewName", "type": "Credit Card"},
                   follow_redirects=True)
     account_name, acct_type, _ = fetch_account(aid)
@@ -85,7 +85,7 @@ def test_delete_account(client_a, users):
     client_a.post("/accounts", data={"name": "ToDelete", "type": "Bank Account"},
                   follow_redirects=True)
     aid = _find_account_id(users["a"]["id"], "ToDelete")
-    client_a.post(f"/accounts/delete/{aid}", follow_redirects=True)
+    client_a.delete(f"/accounts/{aid}", follow_redirects=True)
     assert fetch_account(aid) is None
 
 

@@ -1,0 +1,22 @@
+<tr id="transfer-edit-{{ transfer.group_id }}" class="editing">
+  <td colspan="8">
+    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
+      <select name="from_account" required title="From account">
+        {% for a in accounts %}<option value="{{ a[0] }}" {% if a[0] == transfer.from_account %}selected{% endif %}>From: {{ a[1] }}</option>{% endfor %}
+      </select>
+      <select name="to_account" required title="To account">
+        {% for a in accounts %}<option value="{{ a[0] }}" {% if a[0] == transfer.to_account %}selected{% endif %}>To: {{ a[1] }}</option>{% endfor %}
+      </select>
+      <input type="number" step="0.01" name="amount" value="{{ transfer.amount }}" required style="width:7rem">
+      <input type="date" name="transfer_date" value="{{ transfer.transfer_date }}" required>
+      <input type="text" name="description" value="{{ transfer.description }}" placeholder="Description">
+      <button type="button" class="btn btn-sm btn-primary"
+        hx-post="/transfers/{{ transfer.group_id }}/edit?{{ filter_qs }}" hx-include="closest tr"
+        hx-target="#txn-rows" hx-swap="outerHTML">Save</button>
+      <button type="button" class="btn btn-sm"
+        hx-get="/transactions/rows?{{ filter_qs }}"
+        hx-target="#txn-rows" hx-swap="outerHTML">Cancel</button>
+      {% if errors %}<span class="inline-error">{{ errors|join('; ') }}</span>{% endif %}
+    </div>
+  </td>
+</tr>

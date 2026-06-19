@@ -31,7 +31,7 @@ def test_cannot_edit_another_users_transaction(client_a, users):
     b_txn = users["b"]["transaction_id"]
     # A submits an edit against B's transaction id with attacker-chosen values.
     response = client_a.post(
-        f"/transactions/edit/{b_txn}",
+        f"/transactions/{b_txn}/edit",
         data={
             "amount": "9999.99",
             "description": "hacked-by-A",
@@ -49,19 +49,19 @@ def test_cannot_edit_another_users_transaction(client_a, users):
 
 def test_cannot_delete_another_users_transaction(client_a, users):
     b_txn = users["b"]["transaction_id"]
-    response = client_a.post(f"/transactions/delete/{b_txn}", follow_redirects=True)
+    response = client_a.delete(f"/transactions/{b_txn}", follow_redirects=True)
     assert response.status_code == 404
     assert fetch_transaction(b_txn) is not None  # B's transaction survives
 
 
 def test_can_delete_own_transaction(client_a, users):
     a_txn = users["a"]["transaction_id"]
-    client_a.post(f"/transactions/delete/{a_txn}", follow_redirects=True)
+    client_a.delete(f"/transactions/{a_txn}", follow_redirects=True)
     assert fetch_transaction(a_txn) is None
 
 
 def test_missing_transaction_returns_404(client_a, users):
-    response = client_a.get("/transactions/edit/99999999", follow_redirects=True)
+    response = client_a.get("/transactions/99999999/edit", follow_redirects=True)
     assert response.status_code == 404
 
 
@@ -70,7 +70,7 @@ def test_missing_transaction_returns_404(client_a, users):
 def test_cannot_edit_another_users_category(client_a, users):
     b_cat = users["b"]["category_id"]
     response = client_a.post(
-        f"/categories/edit/{b_cat}",
+        f"/categories/{b_cat}/edit",
         data={"name": "hacked", "description": "x"},
         follow_redirects=True,
     )
@@ -82,7 +82,7 @@ def test_cannot_edit_another_users_category(client_a, users):
 
 def test_cannot_delete_another_users_category(client_a, users):
     b_cat = users["b"]["category_id"]
-    response = client_a.post(f"/categories/delete/{b_cat}", follow_redirects=True)
+    response = client_a.delete(f"/categories/{b_cat}", follow_redirects=True)
     assert response.status_code == 404
     assert fetch_category(b_cat) is not None
 
@@ -92,7 +92,7 @@ def test_cannot_delete_another_users_category(client_a, users):
 def test_cannot_edit_another_users_account(client_a, users):
     b_acct = users["b"]["account_id"]
     response = client_a.post(
-        f"/accounts/edit/{b_acct}",
+        f"/accounts/{b_acct}/edit",
         data={"name": "hacked", "type": "Credit Card"},
         follow_redirects=True,
     )
@@ -104,7 +104,7 @@ def test_cannot_edit_another_users_account(client_a, users):
 
 def test_cannot_delete_another_users_account(client_a, users):
     b_acct = users["b"]["account_id"]
-    response = client_a.post(f"/accounts/delete/{b_acct}", follow_redirects=True)
+    response = client_a.delete(f"/accounts/{b_acct}", follow_redirects=True)
     assert response.status_code == 404
     assert fetch_account(b_acct) is not None
 

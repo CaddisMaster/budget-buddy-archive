@@ -1,0 +1,13 @@
+<tr id="category-{{ cat[0] }}">
+  <td>{{ cat[1] }}</td>
+  <td>{{ cat[2] }}</td>
+  <td class="row-actions">
+    <button type="button" class="btn btn-sm"
+      hx-get="/categories/{{ cat[0] }}/edit"
+      hx-target="#category-{{ cat[0] }}" hx-swap="outerHTML">Edit</button>
+    <button type="button" class="btn btn-sm btn-danger"
+      hx-delete="/categories/{{ cat[0] }}"
+      hx-target="#category-{{ cat[0] }}" hx-swap="outerHTML"
+      hx-confirm="Delete this category?">Delete</button>
+  </td>
+</tr>

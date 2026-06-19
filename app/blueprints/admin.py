@@ -1,10 +1,11 @@
 import os
 import subprocess
 from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, abort
 from flask_login import login_required, current_user
 from app import bcrypt
 from app.db import get_db_connection
+from app.helpers import is_htmx, hx_toast
 
 bp = Blueprint('admin', __name__)
 
@@ -122,55 +123,56 @@ def admin_users():
     return render_template('admin_users.html', users=users)
 
 
-@bp.route('/admin/users/delete/<int:user_id>', methods=['GET', 'POST'])
+@bp.route('/admin/users/<int:user_id>', methods=['DELETE'])
 @login_required
 def delete_user(user_id):
     if not current_user.is_admin:
-        flash('Access denied')
-        return redirect(url_for('main.index'))
-    if user_id == current_user.id:
-        flash('You cannot delete your own account')
-        return redirect(url_for('admin.admin_users'))
+        abort(403)
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username FROM users WHERE id = %s", (user_id,))
+    cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
     user = cursor.fetchone()
     if not user:
-        cursor.close()
-        conn.close()
-        flash('User not found')
-        return redirect(url_for('admin.admin_users'))
-    if request.method == 'POST':
-        try:
-            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-            conn.commit()
-            flash(f'User {user[1]} deleted')
-        except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        finally:
-            cursor.close()
-            conn.close()
-        return redirect(url_for('admin.admin_users'))
+        cursor.close(); conn.close()
+        abort(404)
+    if user_id == current_user.id:
+        cursor.close(); conn.close()
+        resp = make_response(render_template('partials/_user_row.html', u=user))
+        return hx_toast(resp, 'You cannot delete your own account', 'error')
+    try:
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        cursor.close(); conn.close()
+        resp = make_response(render_template('partials/_user_row.html', u=user))
+        return hx_toast(resp, f'Error: {e}', 'error')
     cursor.close()
     conn.close()
-    return render_template('delete_user.html', user=user)
+    return hx_toast(make_response('', 200), f'User {user[1]} deleted')
 
 
 @bp.route('/admin/users/toggle-admin/<int:user_id>', methods=['POST'])
 @login_required
 def toggle_admin(user_id):
     if not current_user.is_admin:
-        flash('Access denied')
-        return redirect(url_for('main.index'))
-    if user_id == current_user.id:
-        flash('You cannot change your own admin status')
-        return redirect(url_for('admin.admin_users'))
+        abort(403)
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.close(); conn.close()
+        abort(404)
+    if user_id == current_user.id:
+        cursor.close(); conn.close()
+        resp = make_response(render_template('partials/_user_row.html', u=user))
+        return hx_toast(resp, 'You cannot change your own admin status', 'error')
     cursor.execute("UPDATE users SET is_admin = NOT is_admin WHERE id = %s", (user_id,))
     conn.commit()
+    cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
     cursor.close()
     conn.close()
-    flash('Admin status updated')
-    return redirect(url_for('admin.admin_users'))
+    resp = make_response(render_template('partials/_user_row.html', u=user))
+    return hx_toast(resp, 'Admin status updated')

@@ -1,0 +1,20 @@
+<tr id="account-{{ account[0] }}" class="editing">
+  <td><input type="text" name="name" value="{{ account[1] }}" required></td>
+  <td>
+    <select name="type" required>
+      <option value="Credit Card" {% if account[2] == 'Credit Card' %}selected{% endif %}>Credit Card</option>
+      <option value="Debit Card" {% if account[2] == 'Debit Card' %}selected{% endif %}>Debit Card</option>
+      <option value="Bank Account" {% if account[2] == 'Bank Account' %}selected{% endif %}>Bank Account</option>
+    </select>
+  </td>
+  <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
+  <td class="row-actions">
+    <button type="button" class="btn btn-sm btn-primary"
+      hx-post="/accounts/{{ account[0] }}/edit" hx-include="closest tr"
+      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Save</button>
+    <button type="button" class="btn btn-sm"
+      hx-get="/accounts/{{ account[0] }}/row"
+      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Cancel</button>
+    {% if error %}<span class="inline-error">{{ error }}</span>{% endif %}
+  </td>
+</tr>

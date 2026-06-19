@@ -1,111 +1,126 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash, abort,
+    make_response
+)
 from flask_login import login_required, current_user
-from app.db import get_db_connection
+from app.db import get_db_connection, db_cursor
+from app.helpers import is_htmx, hx_toast
 
 bp = Blueprint('categories', __name__)
+
+
+def _own_category_or_404(cursor, category_id):
+    cursor.execute(
+        "SELECT id, name, description FROM categories WHERE id = %s AND user_id = %s",
+        (category_id, current_user.id),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        abort(404)
+    return row
 
 
 @bp.route('/categories', methods=['GET', 'POST'])
 @login_required
 def categories():
-    conn = get_db_connection()
-    cursor = conn.cursor()
     if request.method == 'POST':
         name = request.form['name'].strip()
         description = request.form.get('description', '').strip()
+        error = None
         if not name:
-            cursor.close(); conn.close()
-            flash('Name is required')
-            return redirect(url_for('categories.categories'))
-        if len(name) > 50:
-            cursor.close(); conn.close()
-            flash('Name must be 50 characters or fewer')
+            error = 'Name is required'
+        elif len(name) > 50:
+            error = 'Name must be 50 characters or fewer'
+        if error:
+            if is_htmx():
+                return hx_toast(make_response('', 200), error, 'error')
+            flash(error)
             return redirect(url_for('categories.categories'))
         try:
-            cursor.execute(
-                "INSERT INTO categories (name, description, user_id) VALUES (%s, %s, %s)",
-                (name, description, current_user.id)
-            )
-            conn.commit()
-            flash('Category added successfully')
+            with db_cursor(commit=True) as cursor:
+                cursor.execute(
+                    "INSERT INTO categories (name, description, user_id) "
+                    "VALUES (%s, %s, %s) RETURNING id, name, description",
+                    (name, description, current_user.id),
+                )
+                cat = cursor.fetchone()
         except Exception as e:
+            if is_htmx():
+                return hx_toast(make_response('', 200), f'Error: {e}', 'error')
             flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
+            return redirect(url_for('categories.categories'))
+        if is_htmx():
+            resp = make_response(render_template('partials/_category_row.html', cat=cat))
+            return hx_toast(resp, 'Category added')
+        flash('Category added successfully')
         return redirect(url_for('categories.categories'))
-    cursor.execute("SELECT id, name, description FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
-    all_categories = cursor.fetchall()
-    cursor.close()
-    conn.close()
+
+    with db_cursor() as cursor:
+        cursor.execute(
+            "SELECT id, name, description FROM categories WHERE user_id = %s ORDER BY name",
+            (current_user.id,),
+        )
+        all_categories = cursor.fetchall()
     return render_template('categories.html', categories=all_categories)
 
 
-@bp.route('/categories/edit/<int:category_id>', methods=['GET', 'POST'])
+@bp.route('/categories/<int:category_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_category(category_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
+    # Guard ownership up front (404 for missing/other-user) so the write path's
+    # try/except below can't accidentally swallow the abort.
+    with db_cursor() as cursor:
+        cat = _own_category_or_404(cursor, category_id)
+
     if request.method == 'POST':
         name = request.form['name'].strip()
         description = request.form.get('description', '').strip()
+        error = None
         if not name:
-            cursor.close(); conn.close()
-            flash('Name is required')
-            return redirect(url_for('categories.edit_category', category_id=category_id))
-        if len(name) > 50:
-            cursor.close(); conn.close()
-            flash('Name must be 50 characters or fewer')
-            return redirect(url_for('categories.edit_category', category_id=category_id))
+            error = 'Name is required'
+        elif len(name) > 50:
+            error = 'Name must be 50 characters or fewer'
+        if error:
+            return render_template('partials/_category_edit_row.html',
+                                   cat=(category_id, name, description), error=error)
         try:
-            cursor.execute(
-                "UPDATE categories SET name=%s, description=%s WHERE id=%s AND user_id=%s",
-                (name, description, category_id, current_user.id)
-            )
-            conn.commit()
-            flash('Category updated successfully')
+            with db_cursor(commit=True) as cursor:
+                cursor.execute(
+                    "UPDATE categories SET name=%s, description=%s WHERE id=%s AND user_id=%s",
+                    (name, description, category_id, current_user.id),
+                )
         except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('categories.categories'))
-    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
-    category = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return render_template('edit_category.html', category=category)
+            return render_template('partials/_category_edit_row.html',
+                                   cat=(category_id, name, description), error=str(e))
+        resp = make_response(render_template('partials/_category_row.html',
+                                             cat=(category_id, name, description)))
+        return hx_toast(resp, 'Category updated')
+
+    return render_template('partials/_category_edit_row.html', cat=cat)
 
 
-@bp.route('/categories/delete/<int:category_id>', methods=['GET', 'POST'])
+@bp.route('/categories/<int:category_id>/row')
+@login_required
+def category_row(category_id):
+    with db_cursor() as cursor:
+        cat = _own_category_or_404(cursor, category_id)
+    return render_template('partials/_category_row.html', cat=cat)
+
+
+@bp.route('/categories/<int:category_id>', methods=['DELETE'])
 @login_required
 def delete_category(category_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
-    if request.method == 'POST':
-        try:
-            cursor.execute("DELETE FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
-            conn.commit()
-            flash('Category deleted')
-        except Exception as e:
-            if 'foreign key' in str(e).lower():
-                flash('Cannot delete — this category is used by existing transactions or budgets')
-            else:
-                flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('categories.categories'))
-    cursor.execute("SELECT id, name, description FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
-    category = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    return render_template('delete_category.html', category=category)
+    with db_cursor() as cursor:
+        cat = _own_category_or_404(cursor, category_id)
+    try:
+        with db_cursor(commit=True) as cursor:
+            cursor.execute(
+                "DELETE FROM categories WHERE id = %s AND user_id = %s",
+                (category_id, current_user.id),
+            )
+    except Exception as e:
+        msg = ('Cannot delete — this category is used by existing transactions or budgets'
+               if 'foreign key' in str(e).lower() else f'Error: {e}')
+        resp = make_response(render_template('partials/_category_row.html', cat=cat))
+        return hx_toast(resp, msg, 'error')
+    return hx_toast(make_response('', 200), 'Category deleted')

@@ -1,8 +1,10 @@
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, abort
+    Blueprint, render_template, request, redirect, url_for, flash, abort,
+    make_response
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection
+from app.helpers import hx_toast
 
 bp = Blueprint('transfers', __name__)
 
@@ -105,9 +107,11 @@ def transfers():
     return render_template('transfer.html', accounts=all_accounts)
 
 
-@bp.route('/transfers/edit/<int:group_id>', methods=['GET', 'POST'])
+@bp.route('/transfers/<int:group_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_transfer(group_id):
+    # Imported here to avoid a circular import at module load.
+    from app.blueprints.transactions import render_history_tbody
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -118,15 +122,25 @@ def edit_transfer(group_id):
         cursor.close(); conn.close()
         abort(404)
 
-    account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
+    all_accounts = _fetch_accounts(cursor, current_user.id)
+    account_ids = {a[0] for a in all_accounts}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
         if errors:
             cursor.close(); conn.close()
-            for e in errors:
-                flash(e)
-            return redirect(url_for('transfers.edit_transfer', group_id=group_id))
+            transfer = {
+                'group_id': group_id,
+                'amount': request.form.get('amount', ''),
+                'description': request.form.get('description', ''),
+                'transfer_date': fields['transfer_date'],
+                'from_account': int(fields['from_account']) if fields['from_account'] else None,
+                'to_account': int(fields['to_account']) if fields['to_account'] else None,
+            }
+            return render_template('partials/_transfer_edit_row.html',
+                                   transfer=transfer, accounts=all_accounts,
+                                   filter_qs=request.query_string.decode(),
+                                   errors=errors)
         desc = fields['description'] or 'Transfer'
         try:
             # Expense leg → From account; income leg → To account. Updating by
@@ -146,13 +160,23 @@ def edit_transfer(group_id):
                  fields['to_account'], group_id, current_user.id),
             )
             conn.commit()
-            flash('Transfer updated successfully')
         except Exception as e:
-            flash(f'Error: {e}')
             conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect('/transactions')
+            cursor.close(); conn.close()
+            transfer = {
+                'group_id': group_id,
+                'amount': request.form.get('amount', ''),
+                'description': request.form.get('description', ''),
+                'transfer_date': fields['transfer_date'],
+                'from_account': int(fields['from_account']) if fields['from_account'] else None,
+                'to_account': int(fields['to_account']) if fields['to_account'] else None,
+            }
+            return render_template('partials/_transfer_edit_row.html',
+                                   transfer=transfer, accounts=all_accounts,
+                                   filter_qs=request.query_string.decode(),
+                                   errors=[str(e)])
+        cursor.close(); conn.close()
+        return hx_toast(make_response(render_history_tbody()), 'Transfer updated')
 
     # Pull the current pair to prefill the form.
     cursor.execute(
@@ -161,7 +185,6 @@ def edit_transfer(group_id):
         (group_id, current_user.id),
     )
     legs = cursor.fetchall()
-    all_accounts = _fetch_accounts(cursor, current_user.id)
     cursor.close()
     conn.close()
     transfer = {
@@ -172,12 +195,15 @@ def edit_transfer(group_id):
         'from_account': next((l[3] for l in legs if l[4] == 'expense'), None),
         'to_account': next((l[3] for l in legs if l[4] == 'income'), None),
     }
-    return render_template('edit_transfer.html', transfer=transfer, accounts=all_accounts)
+    return render_template('partials/_transfer_edit_row.html',
+                           transfer=transfer, accounts=all_accounts,
+                           filter_qs=request.query_string.decode())
 
 
-@bp.route('/transfers/delete/<int:group_id>', methods=['GET', 'POST'])
+@bp.route('/transfers/<int:group_id>', methods=['DELETE'])
 @login_required
 def delete_transfer(group_id):
+    from app.blueprints.transactions import render_history_tbody
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -187,40 +213,16 @@ def delete_transfer(group_id):
     if cursor.fetchone() is None:
         cursor.close(); conn.close()
         abort(404)
-    if request.method == 'POST':
-        try:
-            cursor.execute(
-                "DELETE FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
-                (group_id, current_user.id),
-            )
-            conn.commit()
-            flash('Transfer deleted')
-        except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect('/transactions')
-    cursor.execute(
-        "SELECT amount, description, transaction_date, account_id, transaction_type "
-        "FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
-        (group_id, current_user.id),
-    )
-    legs = cursor.fetchall()
-    # Resolve account names for the confirm screen.
-    cursor.execute(
-        "SELECT account_id, account_name FROM account WHERE user_id = %s",
-        (current_user.id,),
-    )
-    names = {a[0]: a[1] for a in cursor.fetchall()}
+    try:
+        cursor.execute(
+            "DELETE FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
+            (group_id, current_user.id),
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        cursor.close(); conn.close()
+        return hx_toast(make_response(render_history_tbody()), f'Error: {e}', 'error')
     cursor.close()
     conn.close()
-    transfer = {
-        'group_id': group_id,
-        'amount': legs[0][0],
-        'description': legs[0][1],
-        'transfer_date': legs[0][2],
-        'from_name': names.get(next((l[3] for l in legs if l[4] == 'expense'), None)),
-        'to_name': names.get(next((l[3] for l in legs if l[4] == 'income'), None)),
-    }
-    return render_template('delete_transfer.html', transfer=transfer)
+    return hx_toast(make_response(render_history_tbody()), 'Transfer deleted')

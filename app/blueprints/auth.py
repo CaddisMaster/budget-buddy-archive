@@ -29,6 +29,30 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+@bp.route('/profile')
+@login_required
+def profile():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT created_at FROM users WHERE id = %s", (current_user.id,))
+    row = cursor.fetchone()
+    created_at = row[0] if row else None
+    # A small at-a-glance summary of the user's data.
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE user_id = %s", (current_user.id,))
+    txn_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM categories WHERE user_id = %s", (current_user.id,))
+    cat_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM account WHERE user_id = %s", (current_user.id,))
+    acct_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM goals WHERE user_id = %s", (current_user.id,))
+    goal_count = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
+    return render_template('profile.html', created_at=created_at,
+                           txn_count=txn_count, cat_count=cat_count,
+                           acct_count=acct_count, goal_count=goal_count)
+
+
 @bp.route('/change-password', methods=['GET', 'POST'])
 @login_required
 def change_password():

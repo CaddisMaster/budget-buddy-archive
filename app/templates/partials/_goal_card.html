@@ -1,0 +1,40 @@
+<div class="card" id="goal-{{ g.id }}" style="margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:0.5rem">
+        <strong>{{ g.name }}</strong>
+        <span style="font-size:13px;color:var(--text-muted)">{{ g.account_name }}</span>
+    </div>
+    <div class="goal-bar"><div class="goal-bar-fill" style="width:{{ g.percent }}%"></div></div>
+    <p>
+        ${{ "%.2f"|format(g.saved) }} of ${{ "%.2f"|format(g.target_amount) }}
+        ({{ g.percent }}%)
+        {% if g.complete %}
+        <span class="transfer-badge">✓ Reached</span>
+        {% elif g.on_track is true %}
+        <span class="transfer-badge">On track</span>
+        {% elif g.on_track is false %}
+        <span class="recurring-badge">Behind</span>
+        {% endif %}
+    </p>
+    {% if not g.complete %}
+    <p style="font-size:13px;color:var(--text-muted)">
+        ${{ "%.2f"|format(g.remaining) }} to go.
+        {% if g.required_per_month is not none and g.target_date %}
+        Set aside ${{ "%.2f"|format(g.required_per_month) }}/mo to hit {{ g.target_date }}.
+        {% endif %}
+        {% if g.projected_date %}
+        At your recent pace (${{ "%.2f"|format(g.monthly_net_inflow) }}/mo) you'll get there around {{ g.projected_date }}.
+        {% elif g.monthly_net_inflow <= 0 %}
+        No recent net savings into this account yet.
+        {% endif %}
+    </p>
+    {% endif %}
+    <div class="row-actions" style="margin-top:0.5rem">
+        <button type="button" class="btn btn-sm"
+          hx-get="/goals/{{ g.id }}/edit"
+          hx-target="#goal-{{ g.id }}" hx-swap="outerHTML">Edit</button>
+        <button type="button" class="btn btn-sm btn-danger"
+          hx-delete="/goals/{{ g.id }}"
+          hx-target="#goal-{{ g.id }}" hx-swap="outerHTML"
+          hx-confirm="Delete this goal?">Delete</button>
+    </div>
+</div>

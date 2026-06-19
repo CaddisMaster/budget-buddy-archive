@@ -20,6 +20,7 @@ PROTECTED_PAGES = [
     "/analytics",
     "/transfers",
     "/goals",
+    "/profile",
 ]
 
 

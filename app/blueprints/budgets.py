@@ -1,9 +1,42 @@
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash, abort,
+    make_response
+)
 from flask_login import login_required, current_user
 from app.db import get_db_connection
+from app.helpers import is_htmx, hx_toast
 
 bp = Blueprint('budgets', __name__)
+
+
+def build_budget_row(cursor, user_id, category_id):
+    """Rebuild one cockpit row tuple after a set/clear, mirroring budgets():
+    (category_id, name, effective, is_set, suggested, actual_this_month).
+    Returns None if the category isn't this user's."""
+    cursor.execute("SELECT id, name FROM categories WHERE id = %s AND user_id = %s",
+                   (category_id, user_id))
+    cat = cursor.fetchone()
+    if cat is None:
+        return None
+    cid, name = cat
+    cursor.execute("SELECT amount FROM budgets WHERE category_id = %s AND user_id = %s",
+                   (cid, user_id))
+    srow = cursor.fetchone()
+    is_set = srow is not None
+    saved_amt = float(srow[0]) if srow else None
+    today = datetime.today()
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount), 0) FROM transactions
+        WHERE user_id = %s AND category_id = %s AND transaction_type = 'expense'
+        AND is_adjustment = false AND is_transfer = false
+        AND EXTRACT(YEAR FROM transaction_date) = %s
+        AND EXTRACT(MONTH FROM transaction_date) = %s
+    """, (user_id, cid, today.year, today.month))
+    actual = float(cursor.fetchone()[0])
+    suggested = compute_budget_suggestions(user_id).get(cid)
+    effective = saved_amt if is_set else suggested
+    return (cid, name, effective, is_set, suggested, actual)
 
 
 def compute_budget_suggestions(user_id):
@@ -139,6 +172,8 @@ def set_budget():
         except ValueError:
             errors.append('Amount must be a valid number')
     if errors:
+        if is_htmx():
+            return hx_toast(make_response('', 200), '; '.join(errors), 'error')
         for e in errors:
             flash(e)
         return redirect(url_for('budgets.budgets'))
@@ -157,12 +192,21 @@ def set_budget():
             ON CONFLICT (user_id, category_id) DO UPDATE SET amount = EXCLUDED.amount
         """, (category_id, round(float(amount_str)), current_user.id))
         conn.commit()
-        flash('Budget saved')
     except Exception as e:
-        flash(f'Error: {e}')
         conn.rollback()
+        cursor.close(); conn.close()
+        if is_htmx():
+            return hx_toast(make_response('', 200), f'Error: {e}', 'error')
+        flash(f'Error: {e}')
+        return redirect(url_for('budgets.budgets'))
+    if is_htmx():
+        row = build_budget_row(cursor, current_user.id, category_id)
+        cursor.close(); conn.close()
+        resp = make_response(render_template('partials/_budget_row.html', row=row))
+        return hx_toast(resp, 'Budget saved')
     cursor.close()
     conn.close()
+    flash('Budget saved')
     return redirect(url_for('budgets.budgets'))
 
 
@@ -182,10 +226,19 @@ def clear_budget():
     try:
         cursor.execute("DELETE FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
         conn.commit()
-        flash('Budget cleared — reverted to suggested')
     except Exception as e:
-        flash(f'Error: {e}')
         conn.rollback()
+        cursor.close(); conn.close()
+        if is_htmx():
+            return hx_toast(make_response('', 200), f'Error: {e}', 'error')
+        flash(f'Error: {e}')
+        return redirect(url_for('budgets.budgets'))
+    if is_htmx():
+        row = build_budget_row(cursor, current_user.id, category_id)
+        cursor.close(); conn.close()
+        resp = make_response(render_template('partials/_budget_row.html', row=row))
+        return hx_toast(resp, 'Budget cleared — reverted to suggested')
     cursor.close()
     conn.close()
+    flash('Budget cleared — reverted to suggested')
     return redirect(url_for('budgets.budgets'))

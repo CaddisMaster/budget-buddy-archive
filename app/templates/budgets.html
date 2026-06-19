@@ -10,36 +10,12 @@
 {% if has_categories %}
 <div class="table-wrapper">
     <table>
-        <tr><th>Category</th><th>Monthly budget</th><th>This month</th><th></th></tr>
+        <thead><tr><th>Category</th><th>Monthly budget</th><th>This month</th><th></th></tr></thead>
+        <tbody>
         {% for row in budget_rows %}
-        {# row = (category_id, name, effective_amount, is_set, suggested_amount, actual_this_month) #}
-        <tr>
-            <td>{{ row[1] }}</td>
-            <td>
-                <form method="post" action="/budgets/set" style="display:flex;gap:0.5rem;align-items:center;margin:0">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="category_id" value="{{ row[0] }}">
-                    <input type="number" step="1" min="1" name="amount"
-                           {% if row[2] is not none %}value="{{ "%.0f"|format(row[2]) }}"{% endif %}
-                           placeholder="—" style="width:7rem" required>
-                    <button type="submit" class="btn btn-primary">Save</button>
-                    {% if not row[3] and row[4] is not none %}
-                    <span style="font-size:12px;color:var(--text-muted)">Suggested</span>
-                    {% endif %}
-                </form>
-            </td>
-            <td class="expense">${{ "%.0f"|format(row[5]) }}</td>
-            <td>
-                {% if row[3] %}
-                <form method="post" action="/budgets/clear" style="margin:0">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="category_id" value="{{ row[0] }}">
-                    <button type="submit" class="btn">Clear</button>
-                </form>
-                {% endif %}
-            </td>
-        </tr>
+        {% include 'partials/_budget_row.html' %}
         {% endfor %}
+        </tbody>
     </table>
 </div>
 {% else %}

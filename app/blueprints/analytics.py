@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection
 from app.blueprints.budgets import compute_budget_vs_actual
+from app.helpers import recent_months
 
 bp = Blueprint('analytics', __name__)
 
@@ -12,15 +13,7 @@ bp = Blueprint('analytics', __name__)
 @login_required
 def analytics():
     selected_month = request.args.get('month')
-    months = []
-    today = datetime.today()
-    for i in range(12):
-        month = today.month - i
-        year = today.year
-        if month <= 0:
-            month += 12
-            year -= 1
-        months.append(f'{year}-{month:02d}')
+    months = recent_months()
     filter_year = None
     filter_month = None
     if selected_month:

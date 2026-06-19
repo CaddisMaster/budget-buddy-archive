@@ -4,7 +4,8 @@
 <h1>Savings goals</h1>
 <h2>Add goal</h2>
 {% if accounts %}
-<form method="post">
+<form hx-post="/goals" hx-target="#goal-list" hx-swap="afterbegin"
+      hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('goal-empty')?.remove();}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Name</label>
     <input type="text" name="name" maxlength="80" required>
@@ -31,46 +32,12 @@
 {% endif %}
 
 <h2>Your goals</h2>
-{% if goals %}
+<div id="goal-list">
 {% for g in goals %}
-<div class="card" style="margin-bottom:1rem">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:0.5rem">
-        <strong>{{ g.name }}</strong>
-        <span style="font-size:13px;color:var(--text-muted)">{{ g.account_name }}</span>
-    </div>
-    <div style="background:#e5e7eb;border-radius:6px;height:18px;margin:0.5rem 0;overflow:hidden">
-        <div style="background:var(--accent,#2563eb);height:100%;width:{{ g.percent }}%"></div>
-    </div>
-    <p>
-        ${{ "%.2f"|format(g.saved) }} of ${{ "%.2f"|format(g.target_amount) }}
-        ({{ g.percent }}%)
-        {% if g.complete %}
-        <span class="transfer-badge">✓ Reached</span>
-        {% elif g.on_track is true %}
-        <span class="transfer-badge">On track</span>
-        {% elif g.on_track is false %}
-        <span class="recurring-badge">Behind</span>
-        {% endif %}
-    </p>
-    {% if not g.complete %}
-    <p style="font-size:13px;color:var(--text-muted)">
-        ${{ "%.2f"|format(g.remaining) }} to go.
-        {% if g.required_per_month is not none and g.target_date %}
-        Set aside ${{ "%.2f"|format(g.required_per_month) }}/mo to hit {{ g.target_date }}.
-        {% endif %}
-        {% if g.projected_date %}
-        At your recent pace (${{ "%.2f"|format(g.monthly_net_inflow) }}/mo) you'll get there around {{ g.projected_date }}.
-        {% elif g.monthly_net_inflow <= 0 %}
-        No recent net savings into this account yet.
-        {% endif %}
-    </p>
-    {% endif %}
-    <div style="margin-top:0.5rem">
-        <a href="/goals/edit/{{ g.id }}">Edit</a> | <a href="/goals/delete/{{ g.id }}">Delete</a>
-    </div>
-</div>
+{% include 'partials/_goal_card.html' %}
 {% endfor %}
-{% else %}
-<p style="color:var(--text-muted)">No goals yet.{% if accounts %} Add one above.{% endif %}</p>
+{% if not goals %}
+<p id="goal-empty" style="color:var(--text-muted)">No goals yet.{% if accounts %} Add one above.{% endif %}</p>
 {% endif %}
+</div>
 {% endblock %}

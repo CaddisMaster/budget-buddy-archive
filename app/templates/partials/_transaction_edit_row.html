@@ -1,0 +1,43 @@
+<tr id="txn-{{ txn[0] }}" class="editing">
+  {# txn = (id, amount, description, date, category_id, account_id, type, is_adjustment) #}
+  <td><input type="date" name="transaction_date" value="{{ txn[3] }}" required></td>
+  <td>
+    <select name="transaction_type" required>
+      <option value="expense" {% if txn[6] == 'expense' %}selected{% endif %}>Expense</option>
+      <option value="income" {% if txn[6] == 'income' %}selected{% endif %}>Income</option>
+    </select>
+  </td>
+  <td><input type="number" step="0.01" name="amount" value="{{ txn[1] }}" required style="width:6rem"></td>
+  <td><input type="text" name="description" value="{{ txn[2] or '' }}"></td>
+  <td>
+    <select name="category_id">
+      <option value="">— none —</option>
+      {% for c in categories %}
+      <option value="{{ c[0] }}" {% if c[0] == txn[4] %}selected{% endif %}>{{ c[1] }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <select name="account_id">
+      <option value="">— none —</option>
+      {% for a in accounts %}
+      <option value="{{ a[0] }}" {% if a[0] == txn[5] %}selected{% endif %}>{{ a[1] }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <label style="margin:0;display:flex;align-items:center;gap:4px;font-size:12px">
+      <input type="checkbox" name="is_adjustment" value="true" style="width:auto" {% if txn[7] %}checked{% endif %}>
+      Adj.
+    </label>
+  </td>
+  <td class="row-actions">
+    <button type="button" class="btn btn-sm btn-primary"
+      hx-post="/transactions/{{ txn[0] }}/edit?{{ filter_qs }}" hx-include="closest tr"
+      hx-target="#txn-rows" hx-swap="outerHTML">Save</button>
+    <button type="button" class="btn btn-sm"
+      hx-get="/transactions/rows?{{ filter_qs }}"
+      hx-target="#txn-rows" hx-swap="outerHTML">Cancel</button>
+    {% if errors %}<span class="inline-error">{{ errors|join('; ') }}</span>{% endif %}
+  </td>
+</tr>

@@ -3,12 +3,14 @@ import csv
 import io
 import math
 from datetime import datetime, date, timedelta
+from urllib.parse import urlencode
 from dateutil.relativedelta import relativedelta
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, make_response, abort
 )
 from flask_login import login_required, current_user
-from app.db import get_db_connection
+from app.db import get_db_connection, db_cursor
+from app.helpers import recent_months, is_htmx, hx_toast
 
 bp = Blueprint('transactions', __name__)
 
@@ -188,28 +190,39 @@ def process_recurring():
     return redirect('/transactions')
 
 
-@bp.route('/transactions')
-@login_required
-def transactions():
-    run_process_recurring(current_user.id)
-    selected_month = request.args.get('month')
-    search = request.args.get('search', '').strip()
-    page = int(request.args.get('page', 1))
-    per_page = 25
+PER_PAGE = 25
+
+
+def _filter_qs(selected_month, search, page):
+    """Query string carrying the current History filters so inline actions can
+    re-render the same page/filter slice after a mutation."""
+    params = {}
+    if selected_month:
+        params['month'] = selected_month
+    if search:
+        params['search'] = search
+    if page and page != 1:
+        params['page'] = page
+    return urlencode(params)
+
+
+def _current_filters():
+    """Read the History filters off the current request (query string)."""
+    return (
+        request.args.get('month'),
+        request.args.get('search', '').strip(),
+        int(request.args.get('page', 1) or 1),
+    )
+
+
+def _load_history(user_id, selected_month, search, page, per_page=PER_PAGE):
+    """Return (rows_with_running_balance, total, total_pages) for one page of a
+    user's transaction history under the given filters."""
     offset = (page - 1) * per_page
-    months = []
-    today = datetime.today()
-    for i in range(12):
-        month = today.month - i
-        year = today.year
-        if month <= 0:
-            month += 12
-            year -= 1
-        months.append(f'{year}-{month:02d}')
     conn = get_db_connection()
     cursor = conn.cursor()
     filters = ["t.user_id = %s"]
-    params = [current_user.id]
+    params = [user_id]
     if selected_month:
         year, month = selected_month.split('-')
         filters.append("EXTRACT(YEAR FROM t.transaction_date) = %s AND EXTRACT(MONTH FROM t.transaction_date) = %s")
@@ -218,11 +231,10 @@ def transactions():
         filters.append("t.description ILIKE %s")
         params.append(f'%{search}%')
     where_clause = "WHERE " + " AND ".join(filters)
-    count_query = f"SELECT COUNT(*) FROM transactions t {where_clause}"
-    cursor.execute(count_query, params)
+    cursor.execute(f"SELECT COUNT(*) FROM transactions t {where_clause}", params)
     total = cursor.fetchone()[0]
     total_pages = math.ceil(total / per_page) if total > 0 else 1
-    main_query = f"""
+    cursor.execute(f"""
         SELECT t.id, t.amount, t.description, c.name, a.account_name,
             t.transaction_date, t.transaction_type,
             t.is_recurring, t.frequency, t.is_adjustment,
@@ -233,8 +245,7 @@ def transactions():
         {where_clause}
         ORDER BY t.transaction_date DESC, t.id DESC
         LIMIT %s OFFSET %s
-    """
-    cursor.execute(main_query, params + [per_page, offset])
+    """, params + [per_page, offset])
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -247,16 +258,48 @@ def transactions():
             running_balance -= t[1]
         transactions_with_balance.append(t + (running_balance,))
     transactions_with_balance.reverse()
+    return transactions_with_balance, total, total_pages
+
+
+def render_history_tbody():
+    """Re-render the History <tbody> for the request's current filters — shared
+    by every inline mutation (and by the transfers blueprint) so the per-page
+    running balance is always recomputed."""
+    selected_month, search, page = _current_filters()
+    rows, _total, _pages = _load_history(current_user.id, selected_month, search, page)
+    return render_template('partials/_transactions_tbody.html',
+                           transactions=rows,
+                           frequency_labels=FREQUENCY_LABELS,
+                           filter_qs=_filter_qs(selected_month, search, page))
+
+
+@bp.route('/transactions')
+@login_required
+def transactions():
+    run_process_recurring(current_user.id)
+    selected_month = request.args.get('month')
+    search = request.args.get('search', '').strip()
+    page = int(request.args.get('page', 1))
+    months = recent_months()
+    rows, total, total_pages = _load_history(current_user.id, selected_month, search, page)
     return render_template('history.html',
-        transactions=transactions_with_balance,
+        transactions=rows,
         months=months,
         selected_month=selected_month,
         search=search,
         page=page,
         total_pages=total_pages,
         total=total,
-        frequency_labels=FREQUENCY_LABELS
+        frequency_labels=FREQUENCY_LABELS,
+        filter_qs=_filter_qs(selected_month, search, page),
     )
+
+
+@bp.route('/transactions/rows')
+@login_required
+def transaction_rows():
+    """Restore point for Cancel + a generic tbody refresh."""
+    return make_response(render_history_tbody())
 
 
 @bp.route('/transactions/cancel-recurring/<int:id>', methods=['POST'])
@@ -275,11 +318,13 @@ def cancel_recurring(id):
     conn.commit()
     cursor.close()
     conn.close()
+    if is_htmx():
+        return hx_toast(make_response(render_history_tbody()), 'Recurring cancelled')
     flash('Recurring cancelled')
     return redirect('/transactions')
 
 
-@bp.route('/transactions/edit/<int:transaction_id>', methods=['GET', 'POST'])
+@bp.route('/transactions/<int:transaction_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_transaction(transaction_id):
     conn = get_db_connection()
@@ -288,6 +333,11 @@ def edit_transaction(transaction_id):
     if cursor.fetchone() is None:
         cursor.close(); conn.close()
         abort(404)
+    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
+    all_categories = cursor.fetchall()
+    cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
+    all_accounts = cursor.fetchall()
+
     if request.method == 'POST':
         amount_str = request.form['amount'].strip()
         description = request.form['description'].strip()
@@ -312,9 +362,15 @@ def edit_transaction(transaction_id):
             errors.append('Transaction type must be income or expense')
         if errors:
             cursor.close(); conn.close()
-            for e in errors:
-                flash(e)
-            return redirect(url_for('transactions.edit_transaction', transaction_id=transaction_id))
+            txn = (transaction_id, amount_str, description, transaction_date,
+                   int(category_id) if category_id else None,
+                   int(account_id) if account_id else None,
+                   transaction_type, is_adjustment)
+            return render_template('partials/_transaction_edit_row.html',
+                                   txn=txn, categories=all_categories,
+                                   accounts=all_accounts,
+                                   filter_qs=request.query_string.decode(),
+                                   errors=errors)
         amount = float(amount_str)
         try:
             cursor.execute(
@@ -322,25 +378,31 @@ def edit_transaction(transaction_id):
                 (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, transaction_id, current_user.id)
             )
             conn.commit()
-            flash('Transaction updated successfully')
         except Exception as e:
-            flash(f'Error: {e}')
             conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('transactions.transactions'))
+            cursor.close(); conn.close()
+            txn = (transaction_id, amount_str, description, transaction_date,
+                   int(category_id) if category_id else None,
+                   int(account_id) if account_id else None,
+                   transaction_type, is_adjustment)
+            return render_template('partials/_transaction_edit_row.html',
+                                   txn=txn, categories=all_categories,
+                                   accounts=all_accounts,
+                                   filter_qs=request.query_string.decode(),
+                                   errors=[str(e)])
+        cursor.close(); conn.close()
+        return hx_toast(make_response(render_history_tbody()), 'Transaction updated')
+
     cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
-    transaction = cursor.fetchone()
-    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
-    all_categories = cursor.fetchall()
-    cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
-    all_accounts = cursor.fetchall()
+    txn = cursor.fetchone()
     cursor.close()
     conn.close()
-    return render_template('edit_transaction.html', transaction=transaction, categories=all_categories, accounts=all_accounts)
+    return render_template('partials/_transaction_edit_row.html',
+                           txn=txn, categories=all_categories, accounts=all_accounts,
+                           filter_qs=request.query_string.decode())
 
 
-@bp.route('/transactions/delete/<int:transaction_id>', methods=['GET', 'POST'])
+@bp.route('/transactions/<int:transaction_id>', methods=['DELETE'])
 @login_required
 def delete_transaction(transaction_id):
     conn = get_db_connection()
@@ -349,25 +411,16 @@ def delete_transaction(transaction_id):
     if cursor.fetchone() is None:
         cursor.close(); conn.close()
         abort(404)
-    if request.method == 'POST':
-        try:
-            cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
-            conn.commit()
-            flash('Transaction deleted')
-        except Exception as e:
-            flash(f'Error: {e}')
-            conn.rollback()
-        cursor.close()
-        conn.close()
-        return redirect(url_for('transactions.transactions'))
-    cursor.execute("""
-        SELECT t.id, t.amount, t.description, t.transaction_date, t.transaction_type
-        FROM transactions t WHERE t.id = %s AND t.user_id = %s
-    """, (transaction_id, current_user.id))
-    transaction = cursor.fetchone()
+    try:
+        cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        cursor.close(); conn.close()
+        return hx_toast(make_response(render_history_tbody()), f'Error: {e}', 'error')
     cursor.close()
     conn.close()
-    return render_template('delete_transaction.html', transaction=transaction)
+    return hx_toast(make_response(render_history_tbody()), 'Transaction deleted')
 
 
 @bp.route('/transactions/export')

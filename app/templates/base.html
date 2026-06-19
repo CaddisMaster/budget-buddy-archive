@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Budget Buddy{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
 </head>
-<body>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token() }}"}'>
 <div class="app-wrapper">
   <div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
   <aside class="sidebar" id="sidebar">
@@ -28,6 +28,7 @@
       {% if current_user.is_admin %}
       <a href="/settings" {% if '/settings' in request.path %}class="active"{% endif %}>Settings</a>
       {% endif %}
+      <a href="/profile" {% if '/profile' in request.path %}class="active"{% endif %}>Profile</a>
       <a href="/change-password" {% if '/change-password' in request.path %}class="active"{% endif %}>Change password</a>
       <a href="/logout">Logout</a>
     </nav>
@@ -42,6 +43,8 @@
     {% block content %}{% endblock %}
   </main>
 </div>
+<div id="toast-host" aria-live="polite"></div>
+<script src="{{ url_for('static', filename='htmx.min.js') }}"></script>
 <script>
 const sidebar = document.getElementById('sidebar');
 const main = document.getElementById('main');
@@ -62,6 +65,26 @@ function closeSidebar() {
   sidebar.classList.remove('open');
   overlay.classList.remove('active');
 }
+
+// HTMX toasts: servers fire `HX-Trigger: {"showToast": {...}}` to surface
+// success/error feedback, since flash() doesn't render on a partial swap.
+const toastHost = document.getElementById('toast-host');
+function showToast(message, kind) {
+  if (!message) return;
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind === 'error' ? ' toast-error' : '');
+  el.textContent = message;
+  toastHost.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }, 3000);
+}
+document.body.addEventListener('showToast', (e) => {
+  const d = e.detail || {};
+  showToast(d.message || d.value || d, d.kind);
+});
 </script>
 </body>
 </html>

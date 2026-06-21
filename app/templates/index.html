@@ -13,53 +13,48 @@
 {# Add the newest entry at the top. Keep at most 3 cards — drop the oldest. #}
 <div class="card">
   <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+    <strong>Add a transaction by just typing it</strong>
+    <span class="recurring-badge">Jun 2026</span>
+  </div>
+  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
+    <li><strong>Plain-English quick add:</strong> Type something like "spent 42 on
+        groceries at Safeway yesterday" in the box above and Budget Buddy fills in
+        the transaction form for you — amount, category, account, and date.</li>
+    <li><strong>You're always in control:</strong> It pre-fills the form for you to
+        check and tweak — nothing is saved until you add it. An assist, not autopilot.</li>
+    <li><strong>Right where you need it:</strong> The box is here on the home page,
+        and again on the page where you add a transaction.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+    <strong>Edit anything in place — no page reloads</strong>
+    <span class="recurring-badge">Jun 2026</span>
+  </div>
+  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
+    <li><strong>Inline edit &amp; delete:</strong> Transactions, categories, accounts,
+        budgets, and goals all edit right in the list — the row turns into a form,
+        you save, and it swaps straight back. No more jumping to a separate page.</li>
+    <li><strong>Quick confirmation:</strong> Every save or delete pops a small toast
+        so you know it landed, and the page never fully reloads underneath you.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
     <strong>Smart budgets</strong>
     <span class="recurring-badge">Jun 2026</span>
   </div>
   <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-    <li><strong>Budgets set themselves:</strong> every category now shows a
+    <li><strong>Budgets set themselves:</strong> Every category now shows a
         suggested monthly budget based on your average spending over the last six
         months — no more typing in start and end dates for every period.</li>
-    <li><strong>One target, set and forget:</strong> the suggestion is a starting
+    <li><strong>One target, set and forget:</strong> The suggestion is a starting
         point. Edit it to your own number and it stays put; clear it to drop back to
         the suggestion. Each budget is a single monthly amount, in whole dollars.</li>
-    <li><strong>Budgets page is the cockpit:</strong> see this month's spending next
+    <li><strong>Budgets page is the cockpit:</strong> See this month's spending next
         to each category's target in one place, and adjust right there.</li>
-  </ul>
-</div>
-
-<div class="card">
-  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-    <strong>Account transfers &amp; savings goals</strong>
-    <span class="recurring-badge">Jun 2026</span>
-  </div>
-  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-    <li><strong>Transfer money between accounts:</strong> record a move from one
-        account to another in one step — both balances update, and the transfer
-        stays out of your income and expense charts so it doesn't look like new
-        spending or earnings.</li>
-    <li><strong>Savings goals:</strong> set a target on an account and watch your
-        progress fill in. Budget Buddy shows how much to set aside each month to
-        hit your date, plus a projected finish based on your recent pace and an
-        on-track / behind badge.</li>
-    <li><strong>They work together:</strong> a transfer into a goal's account
-        advances the goal automatically — no separate step.</li>
-  </ul>
-</div>
-
-<div class="card">
-  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-    <strong>More flexible recurring transactions &amp; cleaner analytics</strong>
-    <span class="recurring-badge">Jun 2026</span>
-  </div>
-  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-    <li><strong>New recurring schedules:</strong> weekly, bi-weekly, semi-monthly
-        (two pay days a month), monthly, quarterly, and annually — so things like
-        bi-monthly paychecks fit properly.</li>
-    <li><strong>"Exclude from analytics" toggle:</strong> mark opening balances or
-        corrections so they still count toward your account balance but don't distort
-        your spending and income charts.</li>
-    <li><strong>Fix:</strong> recurring transactions no longer duplicate over time.</li>
   </ul>
 </div>
 {% endblock %}

@@ -12,36 +12,20 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 
 🔗 [budget.seandesmet.com](https://budget.seandesmet.com) *(requires login — personal use only)*
 
-## Screenshots
-
-### Login
-![Login](screenshots/Login.png)
-
-### Transaction History
-![Transactions](screenshots/Transactions.png)
-
-### Analytics
-![Analytics 1](screenshots/Analytics%201.png)
-![Analytics 2](screenshots/Analytics%202.png)
-
-### Dashboard
-![Dashboard 1](screenshots/Dashboard%201.png)
-![Dashboard 2](screenshots/Dashboard%202.png)
-![Dashboard 3](screenshots/Dashboard%203.png)
-
-### Settings
-![Settings](screenshots/Settings.png)
-
 ## Features
 
+- **Natural-language quick add (AI)** — type a transaction in plain English ("spent 42 on groceries at Safeway yesterday") and Claude parses it into amount, category, account, and date, pre-filling the add form for you to confirm. Server-side via the Anthropic API (Claude Haiku); an assist, not autopilot — nothing is saved until you press Add
 - **Multi-user** — session-based authentication, admin-only user creation, per-user data isolation
 - **Transaction tracking** — log income and expenses with categories, accounts, and dates
+- **Inline editing** — edit and delete transactions, categories, accounts, budgets, and goals right in the list with HTMX, no full-page reloads
 - **Recurring transactions** — repeat on six frequencies (weekly, bi-weekly, semi-monthly, monthly, quarterly, annually), auto-processed on page load
-- **Transaction history** — search, filter by month, pagination, and running balance column
+- **Account transfers** — move money between accounts in one step; both balances update and the transfer stays out of the income/expense charts
+- **Savings goals** — set a target on an account with a projected completion date and an on-track / behind status, advanced automatically by transfers into that account
+- **Smart budgets** — one monthly amount per category, auto-suggested from the last 6 months of spending; edit to set your own (it stays fixed) or clear to revert, with this month's actual shown inline
+- **Transaction history** — search, filter by month, pagination, and a running balance column
 - **CSV export** — download filtered transactions as a CSV file
 - **Analytics** — savings rate, year over year comparison, spending by day of week, and budget vs actual
 - **Dashboard** — Chart.js visualisations including spending by category, cash flow, net balance over time, and budget performance
-- **Smart budgets** — one monthly amount per category, auto-suggested from the last 6 months of spending; edit to set your own (it stays fixed) or clear to revert, with this month's actual shown inline
 - **Admin tools** — user management UI, database backup download via pg_dump
 - **Dark mode** — automatic system-based dark mode support
 - **Mobile responsive** — collapsible sidebar, horizontal table scroll, tested on iPhone
@@ -52,7 +36,8 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 |-------|-----------|
 | Backend | Python 3, Flask, Gunicorn |
 | Database | PostgreSQL 16 |
-| Frontend | Jinja2, Chart.js, custom CSS |
+| Frontend | Jinja2, HTMX, Chart.js, custom CSS |
+| AI | Anthropic Claude API (Haiku) — natural-language transaction entry |
 | Containerisation | Docker, Docker Compose |
 | Reverse proxy | Nginx |
 | SSL | Let's Encrypt (Certbot) |
@@ -83,19 +68,23 @@ budget-buddy/
 ├── app/
 │   ├── __init__.py       # Flask app + extensions; registers blueprints
 │   ├── models.py         # User model for Flask-Login
-│   ├── db.py             # Database connection helper
+│   ├── db.py             # Connection helper + db_cursor() context manager
+│   ├── helpers.py        # Shared helpers: is_htmx(), hx_toast(), ai_enabled()
+│   ├── ai.py             # Anthropic integration — natural-language parsing
 │   ├── blueprints/       # Routes, one module per area (auth, main,
-│   │                     #   transactions, categories, accounts,
-│   │                     #   budgets, analytics, admin)
+│   │                     #   transactions, categories, accounts, budgets,
+│   │                     #   analytics, admin, transfers, goals)
 │   ├── static/
-│   │   └── style.css     # Full stylesheet with dark mode
-│   └── templates/        # Jinja2 HTML templates
-├── tests/                # pytest suite (date math, routes, data isolation)
+│   │   ├── style.css     # Full stylesheet with dark mode
+│   │   └── htmx.min.js   # Vendored HTMX
+│   └── templates/        # Jinja2 templates (+ partials/ HTMX fragments)
+├── tests/                # pytest suite (date math, routes, isolation,
+│                         #   HTMX endpoints, AI parsing, transfers, goals)
 ├── sql/                  # Numbered migrations + schema.sql
 ├── scripts/              # Data pipeline (ingest, clean, insert)
 ├── landing/
 │   └── index.html        # Personal home page (seandesmet.com)
-├── screenshots/          # App screenshots for README
+├── .github/workflows/    # CI — pytest on every push/PR
 ├── Dockerfile
 ├── docker-compose.yml
 ├── deploy.sh             # Multi-platform build and push to Docker Hub
@@ -122,6 +111,12 @@ DB_USER=admin
 DB_PASSWORD=yourpassword
 SECRET_KEY=yoursecretkey
 ```
+
+Optionally, to enable the AI natural-language quick add, add your Anthropic API key:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+The app runs fine without it — the Quick add box simply stays hidden until a key is set.
 
 Start the app:
 ```bash
@@ -150,13 +145,14 @@ Once logged in, create additional users via Settings → Manage users.
 
 ## Database Schema
 
-- `transactions` — id, amount, description, category_id, account_id, transaction_date, transaction_type, is_recurring, frequency, next_due, recur_second_day, is_adjustment, user_id, created_at
+- `transactions` — id, amount, description, category_id, account_id, transaction_date, transaction_type, is_recurring, frequency, next_due, recur_second_day, is_adjustment, is_transfer, transfer_group_id, user_id, created_at
 - `categories` — id, name, description, user_id, created_at
-- `budgets` — id, category_id, amount (one monthly amount per category), user_id, created_at
+- `budgets` — id, category_id, amount (one monthly amount per category, `UNIQUE(user_id, category_id)`), user_id, created_at
 - `account` — account_id, account_name, type, user_id
+- `goals` — id, name, target_amount, target_date, account_id, baseline_amount, user_id, created_at
 - `users` — id, username, password_hash, is_admin, created_at
 
-All data tables carry a `user_id` foreign key — every query is scoped to the logged-in user for full data isolation.
+A `transfer_group_seq` sequence links each transfer's expense/income pair via a shared `transfer_group_id`. All data tables carry a `user_id` foreign key — every query is scoped to the logged-in user for full data isolation.
 
 ## Security
 
@@ -172,7 +168,7 @@ All data tables carry a `user_id` foreign key — every query is scoped to the l
 
 ## Testing
 
-A pytest suite covers the recurring-transaction date math, route/auth behaviour, and per-user data isolation. Tests run in a throwaway Docker container on the same Python as production — no local install needed:
+A pytest suite covers the recurring-transaction date math, route/auth behaviour, per-user data isolation, the HTMX inline-edit endpoints, transfers and savings goals, and the AI parsing layer (with the network call mocked, so no API key is needed to run the tests). Tests run in a throwaway Docker container on the same Python as production — no local install needed, and the same suite runs in GitHub Actions on every push:
 
 ```bash
 ./test.sh

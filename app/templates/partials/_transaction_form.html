@@ -1,0 +1,82 @@
+{# The Add Transaction form. Rendered server-side on the Add page and swapped in
+   (pre-filled) by the NL quick-add parse endpoint, so it carries its own toggle
+   script and works wherever htmx drops it. `prefill` is an optional dict from
+   app.ai (transaction_type, amount, description, category_id, account_id,
+   transaction_date); empty on a fresh form. #}
+{% set prefill = prefill|default({}) %}
+<form method="post" action="/transactions/new">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Type</label>
+    <select name="transaction_type" required>
+        <option value="">-- select type --</option>
+        <option value="expense" {% if prefill.get('transaction_type') == 'expense' %}selected{% endif %}>Expense</option>
+        <option value="income" {% if prefill.get('transaction_type') == 'income' %}selected{% endif %}>Income</option>
+    </select>
+    <label>Amount</label>
+    <input type="number" step="0.01" name="amount" required value="{{ prefill.get('amount') if prefill.get('amount') is not none else '' }}">
+    <label>Description</label>
+    <input type="text" name="description" value="{{ prefill.get('description', '') }}">
+    <label>Category</label>
+    <select name="category_id">
+        <option value="">-- select category --</option>
+        {% for cat in categories %}
+        <option value="{{ cat[0] }}" {% if prefill.get('category_id') == cat[0] %}selected{% endif %}>{{ cat[1] }}</option>
+        {% endfor %}
+    </select>
+    <label>Account</label>
+    <select name="account_id">
+        <option value="">-- select account --</option>
+        {% for account in accounts %}
+        <option value="{{ account[0] }}" {% if prefill.get('account_id') == account[0] %}selected{% endif %}>{{ account[1] }}</option>
+        {% endfor %}
+    </select>
+    <label>Date</label>
+    <input type="date" name="transaction_date" required value="{{ prefill.get('transaction_date', '') }}">
+    <label>Recurring</label>
+    <select name="is_recurring" id="recurringSelect" onchange="toggleFrequency()">
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+    </select>
+    <div id="frequencyDiv" style="display:none">
+        <label>Frequency</label>
+        <select name="frequency" id="frequencySelect" onchange="toggleSecondDay()">
+            <option value="weekly">Weekly (every week)</option>
+            <option value="biweekly">Bi-weekly (every 2 weeks)</option>
+            <option value="semimonthly">Semi-monthly (twice a month)</option>
+            <option value="monthly" selected>Monthly</option>
+            <option value="quarterly">Quarterly (every 3 months)</option>
+            <option value="annually">Annually</option>
+        </select>
+        <div id="secondDayDiv" style="display:none">
+            <label>Second pay day of month</label>
+            <input type="number" name="recur_second_day" min="1" max="31" placeholder="e.g. 15">
+            <p style="font-size:12px;color:var(--text-muted);margin-top:0.25rem">
+                The day above (from the Date field) is your first pay day; this is the second.
+                Use 31 for "last day of the month."
+            </p>
+        </div>
+    </div>
+    <label style="display:flex;align-items:center;gap:0.5rem;margin-top:1rem;font-weight:normal">
+        <input type="checkbox" name="is_adjustment" value="true" style="width:auto">
+        Exclude from analytics (opening balance / correction)
+    </label>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:0.25rem">
+        Still counts toward your account balance, but is left out of the analytics charts
+        so first-time setup or fix-up entries don't distort your trends.
+    </p>
+    <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add transaction</button>
+</form>
+<script>
+// Defined on window (idempotent) so the inline onchange handlers work whether
+// this form is server-rendered on the Add page or swapped onto Home by htmx.
+window.toggleFrequency = function () {
+    const recurring = document.getElementById('recurringSelect').value === 'true';
+    document.getElementById('frequencyDiv').style.display = recurring ? 'block' : 'none';
+    window.toggleSecondDay();
+};
+window.toggleSecondDay = function () {
+    const recurring = document.getElementById('recurringSelect').value === 'true';
+    const semi = document.getElementById('frequencySelect').value === 'semimonthly';
+    document.getElementById('secondDayDiv').style.display = (recurring && semi) ? 'block' : 'none';
+};
+</script>

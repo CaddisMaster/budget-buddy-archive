@@ -9,8 +9,10 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, make_response, abort
 )
 from flask_login import login_required, current_user
+from app import limiter
 from app.db import get_db_connection, db_cursor
-from app.helpers import recent_months, is_htmx, hx_toast
+from app.helpers import recent_months, is_htmx, hx_toast, ai_enabled
+from app.ai import parse_transaction_text, ParseError
 
 bp = Blueprint('transactions', __name__)
 
@@ -179,7 +181,38 @@ def new_transaction():
     all_accounts = cursor.fetchall()
     cursor.close()
     conn.close()
-    return render_template('new_transaction.html', categories=all_categories, accounts=all_accounts)
+    return render_template('new_transaction.html', categories=all_categories,
+                           accounts=all_accounts, ai_enabled=ai_enabled())
+
+
+@bp.route('/transactions/parse', methods=['POST'])
+@limiter.limit("10 per minute")
+@login_required
+def parse_transaction():
+    """v9.0 NL quick-add: parse free text into a pre-filled Add form fragment.
+
+    Page-agnostic — both Home and the Add page post here and swap the result
+    into #txn-form-wrap. Any failure (no key, API error, unparseable) falls back
+    to an empty form + an error toast, so the manual form is always usable."""
+    text = request.form.get('text', '').strip()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
+        all_categories = cursor.fetchall()
+        cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
+        all_accounts = cursor.fetchall()
+
+    def _form(prefill):
+        return make_response(render_template(
+            'partials/_transaction_form.html',
+            categories=all_categories, accounts=all_accounts, prefill=prefill))
+
+    if not text:
+        return hx_toast(_form({}), 'Type what you bought first', 'error')
+    try:
+        prefill = parse_transaction_text(text, all_categories, all_accounts)
+    except ParseError:
+        return hx_toast(_form({}), "Couldn't parse that — fill it in manually", 'error')
+    return hx_toast(_form(prefill), 'Parsed — review and save')
 
 
 @bp.route('/recurring/process')

@@ -4,6 +4,10 @@
 <h1>Budget Buddy</h1>
 <p style="color: var(--text-muted);">Welcome back. Use the sidebar to navigate, or see what's new below.</p>
 
+{% include 'partials/_quick_add.html' %}
+{# Pre-filled form appears here after a quick-add parse; empty until then. #}
+<div id="txn-form-wrap"></div>
+
 <h2 style="margin-top:1.5rem;font-size:1.1rem">What's new</h2>
 
 {# Add the newest entry at the top. Keep at most 3 cards — drop the oldest. #}

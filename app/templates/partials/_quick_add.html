@@ -1,0 +1,26 @@
+{# v9.0 NL quick-add. Posts free text to /transactions/parse and swaps the
+   pre-filled form into #txn-form-wrap. Shared by Home and the Add page; both
+   carry a #txn-form-wrap target. Self-gated on ai_enabled so callers just
+   include it. CSRF is covered by the hx-headers on <body> in base.html. #}
+{% if ai_enabled %}
+<div class="card" style="margin-bottom:1.5rem">
+  <label for="nl-quick-add" style="font-weight:600">Quick add</label>
+  <p style="font-size:12px;color:var(--text-muted);margin:0.25rem 0 0.6rem">
+    Type it in plain English — e.g. "spent 42 on groceries at Safeway yesterday" —
+    and we'll pre-fill the form below for you to check before saving.
+  </p>
+  <div style="display:flex;gap:0.5rem;align-items:center">
+    <input type="text" id="nl-quick-add" name="text"
+           placeholder="spent 42 on groceries at Safeway yesterday"
+           style="flex:1;margin:0"
+           hx-post="/transactions/parse" hx-target="#txn-form-wrap" hx-swap="innerHTML"
+           hx-trigger="keyup[key=='Enter']" hx-indicator="#nl-spinner">
+    <button type="button" class="btn btn-primary" style="margin:0;white-space:nowrap"
+            hx-post="/transactions/parse" hx-include="#nl-quick-add"
+            hx-target="#txn-form-wrap" hx-swap="innerHTML" hx-indicator="#nl-spinner">
+      Parse
+    </button>
+  </div>
+  <span id="nl-spinner" class="htmx-indicator" style="font-size:12px;color:var(--text-muted)">Parsing…</span>
+</div>
+{% endif %}

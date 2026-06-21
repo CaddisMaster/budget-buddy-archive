@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection
+from app.helpers import ai_enabled
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
 
@@ -12,7 +13,7 @@ bp = Blueprint('main', __name__)
 @bp.route('/')
 @login_required
 def index():
-    return render_template('index.html')
+    return render_template('index.html', ai_enabled=ai_enabled())
 
 
 @bp.route('/dashboard')

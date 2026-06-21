@@ -1,8 +1,16 @@
 """Small shared, DB-free helpers used across blueprints."""
 import json
+import os
 from datetime import datetime
 
 from flask import request
+
+
+def ai_enabled():
+    """True when the NL quick-add (v9) is configured — i.e. an ANTHROPIC_API_KEY
+    is present. Templates gate the quick-add box on this so the feature stays
+    invisible until the key is set."""
+    return bool(os.getenv('ANTHROPIC_API_KEY'))
 
 
 def is_htmx():

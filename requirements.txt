@@ -17,3 +17,4 @@ python-dateutil
 Flask-Login
 Flask-Bcrypt
 Flask-WTF
+anthropic

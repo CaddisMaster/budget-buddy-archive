@@ -19,6 +19,8 @@ def index():
 @bp.route('/dashboard')
 @login_required
 def dashboard():
+    from app.blueprints.schedules import run_due_schedules  # lazy: avoids import cycle
+    run_due_schedules(current_user.id)
     selected_month = request.args.get('month')
     months = []
     today = datetime.today()

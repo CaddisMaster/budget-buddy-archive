@@ -1,0 +1,24 @@
+{# schedule tuple: 0 id, 1 amount, 2 description, 3 category_id, 4 account_id,
+   5 type, 6 frequency, 7 anchor_day, 8 second_day, 9 next_due, 10 is_active,
+   11 category_name, 12 account_name #}
+<tr id="schedule-{{ schedule[0] }}" class="{% if schedule[5] == 'income' %}income{% else %}expense{% endif %}">
+  <td>{{ schedule[5] | capitalize }}</td>
+  <td>${{ "%.2f"|format(schedule[1]) }}</td>
+  <td>{{ schedule[2] or '—' }}</td>
+  <td>{{ schedule[11] or 'Uncategorised' }}</td>
+  <td>{{ schedule[12] or 'No account' }}</td>
+  <td>
+    {{ frequency_labels.get(schedule[6], schedule[6]) }}
+    {% if schedule[6] == 'semimonthly' %}<span style="color:var(--text-muted)">({{ schedule[7] }} &amp; {{ schedule[8] }})</span>{% endif %}
+  </td>
+  <td>{{ schedule[9] }}</td>
+  <td class="row-actions">
+    <button type="button" class="btn btn-sm"
+      hx-get="/scheduled/{{ schedule[0] }}/edit"
+      hx-target="#schedule-{{ schedule[0] }}" hx-swap="outerHTML">Edit</button>
+    <button type="button" class="btn btn-sm btn-danger"
+      hx-delete="/scheduled/{{ schedule[0] }}"
+      hx-target="#schedule-{{ schedule[0] }}" hx-swap="outerHTML"
+      hx-confirm="Delete this schedule? Transactions it already posted stay in your history.">Delete</button>
+  </td>
+</tr>

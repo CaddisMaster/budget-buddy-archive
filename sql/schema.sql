@@ -91,6 +91,30 @@ CREATE TABLE public.goals (
 );
 
 -- ------------------------------------------------------------
+-- Schedules (recurring income & expense templates, v10.0)
+-- ------------------------------------------------------------
+-- A schedule is NOT a ledger row — it generates a plain transaction on each
+-- due date (run_due_schedules). frequency + anchor_day/second_day (semimonthly)
+-- + next_due drive generation. The transactions.is_recurring/frequency/
+-- next_due/recur_second_day columns above are legacy as of v10 (always default).
+CREATE TABLE public.schedules (
+    id SERIAL PRIMARY KEY,
+    amount numeric(10,2) NOT NULL,
+    description text,
+    category_id integer REFERENCES categories(id) ON DELETE RESTRICT,
+    account_id integer NOT NULL REFERENCES account(account_id) ON DELETE RESTRICT,
+    transaction_type character varying(10) NOT NULL DEFAULT 'expense'
+        CHECK (transaction_type IN ('expense', 'income')),
+    frequency character varying(20) NOT NULL,
+    anchor_day smallint,
+    second_day smallint,
+    next_due date NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamp without time zone DEFAULT now(),
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
 -- Foreign Key Constraints
 -- ------------------------------------------------------------
 ALTER TABLE transactions

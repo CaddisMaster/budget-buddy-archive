@@ -65,42 +65,6 @@ def compute_next_due(current, frequency, anchor_day=None, second_day=None):
     return current + relativedelta(months=1)
 
 
-def run_process_recurring(user_id):
-    today = datetime.today().date()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, amount, description, category_id, account_id,
-               transaction_type, frequency, next_due, transaction_date,
-               recur_second_day, is_adjustment
-        FROM transactions
-        WHERE is_recurring = true AND next_due <= %s AND user_id = %s
-    """, (today, user_id))
-    due = cursor.fetchall()
-    for t in due:
-        (tid, amount, desc, cat_id, acc_id, ttype, freq, next_due,
-         anchor_date, second_day, is_adjustment) = t
-        new_next_due = compute_next_due(
-            next_due, freq, anchor_day=anchor_date.day, second_day=second_day
-        )
-        # The generated occurrence is a plain transaction, not a recurring
-        # template — only the original row carries the recurrence.
-        cursor.execute("""
-            INSERT INTO transactions
-                (amount, description, category_id, account_id,
-                 transaction_date, transaction_type,
-                 is_recurring, is_adjustment, user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, false, %s, %s)
-        """, (amount, desc, cat_id, acc_id, next_due, ttype, is_adjustment, user_id))
-        cursor.execute(
-            "UPDATE transactions SET next_due = %s WHERE id = %s AND user_id = %s",
-            (new_next_due, tid, user_id)
-        )
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-
 @bp.route('/transactions/new', methods=['GET', 'POST'])
 @login_required
 def new_transaction():
@@ -127,40 +91,19 @@ def new_transaction():
             errors.append('Account is required')
         if transaction_type not in ('income', 'expense'):
             errors.append('Transaction type must be income or expense')
-        is_recurring = request.form.get('is_recurring') == 'true'
         is_adjustment = request.form.get('is_adjustment') == 'true'
-        frequency = request.form.get('frequency') if is_recurring else None
-        second_day = None
-        if is_recurring:
-            if frequency not in VALID_FREQUENCIES:
-                errors.append('Please choose a valid recurring frequency')
-            elif frequency == 'semimonthly':
-                second_day_raw = request.form.get('recur_second_day', '').strip()
-                try:
-                    second_day = int(second_day_raw)
-                    if not 1 <= second_day <= 31:
-                        errors.append('Second pay day must be between 1 and 31')
-                        second_day = None
-                except ValueError:
-                    errors.append('Second pay day is required for a semi-monthly schedule')
         if errors:
             for error in errors:
                 flash(error)
             return redirect(url_for('transactions.new_transaction'))
-        next_due = None
-        if is_recurring and frequency:
-            start = datetime.strptime(transaction_date, '%Y-%m-%d').date()
-            next_due = compute_next_due(
-                start, frequency, anchor_day=start.day, second_day=second_day
-            )
         conn = None
         cursor = None
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, recur_second_day, is_adjustment, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (amount, description, transaction_date, category_id, account_id, transaction_type, is_recurring, frequency, next_due, second_day, is_adjustment, current_user.id)
+                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, current_user.id)
             )
             conn.commit()
             flash('Transaction added successfully')
@@ -213,14 +156,6 @@ def parse_transaction():
     except ParseError:
         return hx_toast(_form({}), "Couldn't parse that — fill it in manually", 'error')
     return hx_toast(_form(prefill), 'Parsed — review and save')
-
-
-@bp.route('/recurring/process')
-@login_required
-def process_recurring():
-    run_process_recurring(current_user.id)
-    flash('Recurring transactions processed')
-    return redirect('/transactions')
 
 
 PER_PAGE = 25
@@ -309,7 +244,8 @@ def render_history_tbody():
 @bp.route('/transactions')
 @login_required
 def transactions():
-    run_process_recurring(current_user.id)
+    from app.blueprints.schedules import run_due_schedules  # lazy: avoids import cycle
+    run_due_schedules(current_user.id)
     selected_month = request.args.get('month')
     search = request.args.get('search', '').strip()
     page = int(request.args.get('page', 1))
@@ -333,28 +269,6 @@ def transactions():
 def transaction_rows():
     """Restore point for Cancel + a generic tbody refresh."""
     return make_response(render_history_tbody())
-
-
-@bp.route('/transactions/cancel-recurring/<int:id>', methods=['POST'])
-@login_required
-def cancel_recurring(id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
-    cursor.execute(
-        "UPDATE transactions SET is_recurring=false, frequency=NULL, next_due=NULL WHERE id=%s AND user_id=%s",
-        (id, current_user.id)
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
-    if is_htmx():
-        return hx_toast(make_response(render_history_tbody()), 'Recurring cancelled')
-    flash('Recurring cancelled')
-    return redirect('/transactions')
 
 
 @bp.route('/transactions/<int:transaction_id>/edit', methods=['GET', 'POST'])

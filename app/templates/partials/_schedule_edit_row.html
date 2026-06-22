@@ -1,0 +1,56 @@
+{# Inline edit row. Both the semi-monthly pay-day inputs and the Next-date input
+   are shown (no per-row JS); the server uses whichever fits the chosen
+   frequency. schedule tuple shape matches _schedule_row.html. #}
+<tr id="schedule-{{ schedule[0] }}" class="editing">
+  <td>
+    <select name="transaction_type" required>
+      <option value="income" {% if schedule[5] == 'income' %}selected{% endif %}>Income</option>
+      <option value="expense" {% if schedule[5] == 'expense' %}selected{% endif %}>Expense</option>
+    </select>
+  </td>
+  <td><input type="number" step="0.01" name="amount" value="{{ schedule[1] }}" required style="width:6rem"></td>
+  <td><input type="text" name="description" value="{{ schedule[2] or '' }}"></td>
+  <td>
+    <select name="category_id">
+      <option value="">-- none --</option>
+      {% for cat in categories %}
+      <option value="{{ cat[0] }}" {% if schedule[3] == cat[0] %}selected{% endif %}>{{ cat[1] }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <select name="account_id" required>
+      {% for account in accounts %}
+      <option value="{{ account[0] }}" {% if schedule[4] == account[0] %}selected{% endif %}>{{ account[1] }}</option>
+      {% endfor %}
+    </select>
+  </td>
+  <td>
+    <select name="frequency" required>
+      <option value="weekly" {% if schedule[6] == 'weekly' %}selected{% endif %}>Weekly</option>
+      <option value="biweekly" {% if schedule[6] == 'biweekly' %}selected{% endif %}>Bi-weekly</option>
+      <option value="semimonthly" {% if schedule[6] == 'semimonthly' %}selected{% endif %}>Semi-monthly</option>
+      <option value="monthly" {% if schedule[6] == 'monthly' %}selected{% endif %}>Monthly</option>
+      <option value="quarterly" {% if schedule[6] == 'quarterly' %}selected{% endif %}>Quarterly</option>
+      <option value="annually" {% if schedule[6] == 'annually' %}selected{% endif %}>Annually</option>
+    </select>
+  </td>
+  <td>
+    <label style="font-size:11px;color:var(--text-muted);font-weight:normal;margin:0">Pay days (semi-monthly)</label>
+    <div style="display:flex;gap:0.25rem;align-items:center">
+      <input type="number" name="anchor_day" min="1" max="31" value="{{ schedule[7] if schedule[7] is not none else '' }}" style="width:3.5rem;margin:0" placeholder="10">
+      <input type="number" name="second_day" min="1" max="31" value="{{ schedule[8] if schedule[8] is not none else '' }}" style="width:3.5rem;margin:0" placeholder="25">
+    </div>
+    <label style="font-size:11px;color:var(--text-muted);font-weight:normal;margin:0.25rem 0 0">Next date (other)</label>
+    <input type="date" name="next_due" value="{{ schedule[9].strftime('%Y-%m-%d') if schedule[9] else '' }}" style="margin:0">
+  </td>
+  <td class="row-actions">
+    <button type="button" class="btn btn-sm btn-primary"
+      hx-post="/scheduled/{{ schedule[0] }}/edit" hx-include="closest tr"
+      hx-target="#schedule-{{ schedule[0] }}" hx-swap="outerHTML">Save</button>
+    <button type="button" class="btn btn-sm"
+      hx-get="/scheduled/{{ schedule[0] }}/row"
+      hx-target="#schedule-{{ schedule[0] }}" hx-swap="outerHTML">Cancel</button>
+    {% if error %}<span class="inline-error">{{ error }}</span>{% endif %}
+  </td>
+</tr>

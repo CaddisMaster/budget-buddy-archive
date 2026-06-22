@@ -99,6 +99,7 @@ def _delete_user(username):
         cur.execute("DELETE FROM transactions WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM budgets WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM goals WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM schedules WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM categories WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM account WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
@@ -350,6 +351,56 @@ def create_goal(user_id, account_id, target_amount, target_date=None, baseline=0
     cur.close()
     conn.close()
     return gid
+
+
+def create_schedule(user_id, account_id, amount, frequency, next_due,
+                    transaction_type="expense", category_id=None,
+                    anchor_day=None, second_day=None, is_active=True):
+    """Insert a schedule template directly (bypassing the form)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO schedules (amount, description, category_id, account_id, "
+        "transaction_type, frequency, anchor_day, second_day, next_due, is_active, "
+        "user_id) VALUES (%s, 'seed-schedule', %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "RETURNING id",
+        (amount, category_id, account_id, transaction_type, frequency, anchor_day,
+         second_day, next_due, is_active, user_id),
+    )
+    sid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return sid
+
+
+def fetch_schedule(schedule_id):
+    """Return (amount, frequency, next_due, user_id) for a schedule, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT amount, frequency, next_due, user_id FROM schedules WHERE id = %s",
+        (schedule_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def count_transactions_like(user_id, description):
+    """Count a user's transactions with the given description (to verify
+    schedule-generated rows)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM transactions WHERE user_id = %s AND description = %s",
+        (user_id, description),
+    )
+    n = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return n
 
 
 def account_balance(account_id):

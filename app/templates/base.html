@@ -17,6 +17,7 @@
     <nav>
       <a href="/" {% if request.path == '/' %}class="active"{% endif %}>Home</a>
       <a href="/transactions/new" {% if '/transactions/new' in request.path %}class="active"{% endif %}>Add transaction</a>
+      <a href="/scheduled" {% if '/scheduled' in request.path %}class="active"{% endif %}>Scheduled</a>
       <a href="/transfers" {% if '/transfers' in request.path %}class="active"{% endif %}>Transfer money</a>
       <a href="/transactions" {% if request.path == '/transactions' %}class="active"{% endif %}>History</a>
       <a href="/analytics" {% if '/analytics' in request.path %}class="active"{% endif %}>Analytics</a>

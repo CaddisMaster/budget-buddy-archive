@@ -11,7 +11,9 @@ from datetime import date, timedelta
 from app.db import get_db_connection
 from tests.conftest import (
     USER_A,
+    count_transactions_like,
     create_category,
+    create_schedule,
     fetch_budget_by_category,
     fetch_category,
 )
@@ -129,29 +131,15 @@ def test_non_admin_cannot_toggle_admin(client_a, users):
     assert resp.status_code == 403
 
 
-# --- recurring auto-generation (coverage gap) -------------------------------
+# --- schedule auto-generation (coverage gap) --------------------------------
 
-def test_due_recurring_transaction_is_generated_on_history_load(client_a, users):
+def test_due_schedule_is_generated_on_history_load(client_a, users):
+    """A due schedule materializes a plain transaction on GET /transactions; the
+    schedule itself never appears in history."""
     uid = users["a"]["id"]
     yesterday = date.today() - timedelta(days=1)
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO transactions (amount, description, transaction_date, "
-        "category_id, account_id, transaction_type, is_recurring, frequency, "
-        "next_due, user_id) "
-        "VALUES (%s, 'recurring-seed', %s, %s, %s, 'expense', true, 'monthly', %s, %s)",
-        (10, yesterday, users["a"]["category_id"], users["a"]["account_id"],
-         yesterday, uid),
-    )
-    conn.commit()
-    cur.close(); conn.close()
-    # GET /transactions runs run_process_recurring(user)
+    create_schedule(uid, users["a"]["account_id"], 10, "monthly", yesterday,
+                    category_id=users["a"]["category_id"])
+    # GET /transactions runs run_due_schedules(user)
     client_a.get("/transactions")
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM transactions WHERE user_id = %s "
-                "AND description = 'recurring-seed'", (uid,))
-    count = cur.fetchone()[0]
-    cur.close(); conn.close()
-    assert count >= 2  # original template + the generated occurrence
+    assert count_transactions_like(uid, "seed-schedule") == 1  # exactly one occurrence

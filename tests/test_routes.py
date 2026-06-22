@@ -14,6 +14,7 @@ PROTECTED_PAGES = [
     "/dashboard",
     "/transactions",
     "/transactions/new",
+    "/scheduled",
     "/categories",
     "/accounts",
     "/budgets",

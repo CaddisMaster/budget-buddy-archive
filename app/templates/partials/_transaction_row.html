@@ -5,7 +5,6 @@
   <td>
     {{ t[2] }}
     {% if t[10] %}<span class="transfer-badge">⇄ Transfer</span>{% endif %}
-    {% if t[7] %}<span class="recurring-badge">↻ {{ frequency_labels.get(t[8], t[8]) }}</span>{% endif %}
     {% if t[9] %}<span class="recurring-badge">Adjustment</span>{% endif %}
   </td>
   <td>{{ t[3] or 'Uncategorised' }}</td>
@@ -28,12 +27,6 @@
       hx-delete="/transactions/{{ t[0] }}?{{ filter_qs }}"
       hx-target="#txn-rows" hx-swap="outerHTML"
       hx-confirm="Delete this transaction?">Delete</button>
-    {% if t[7] %}
-    <button type="button" class="btn btn-sm btn-danger"
-      hx-post="/transactions/cancel-recurring/{{ t[0] }}?{{ filter_qs }}"
-      hx-target="#txn-rows" hx-swap="outerHTML"
-      hx-confirm="Stop this from recurring?">Cancel recurring</button>
-    {% endif %}
     {% endif %}
   </td>
 </tr>

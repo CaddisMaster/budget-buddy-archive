@@ -7,6 +7,7 @@ accounts. Kept apart from the blueprint so it stays unit-testable (tests
 monkeypatch parse_transaction_text) and so a missing ANTHROPIC_API_KEY — or the
 anthropic package not being installed — never breaks app import.
 """
+import json
 import os
 from datetime import date, datetime
 from typing import Optional
@@ -148,3 +149,74 @@ def _match_id(name, rows):
         if str(row[1]).strip().lower() == target:
             return row[0]
     return None
+
+
+# ---------------------------------------------------------------------------
+# v10.1 — monthly "Insight" digest.
+#
+# The same isolated-seam pattern as the v9 parser, but for summarization: the
+# app computes every figure deterministically (compute_month_facts) and hands
+# them to Claude as JSON; the model only writes a plain-English recap + a tip or
+# two. It must NOT recompute or invent numbers — so nothing the model returns is
+# ever used as a figure, only as prose. Kept in this module so a missing key or
+# package degrades gracefully (ParseError) instead of breaking the dashboard.
+# ---------------------------------------------------------------------------
+
+class _Insight(BaseModel):
+    """The narrative shape we ask Claude to return (structured outputs). Treated
+    as untrusted text — coerced/trimmed in generate_insight()."""
+    summary: str            # 2–3 sentence plain-English recap
+    tips: list[str]         # 1–2 short coaching tips
+
+
+def generate_insight(facts, *, today=None):
+    """Turn already-computed monthly figures into a short narrative digest.
+
+    `facts` is the deterministic dict from compute_month_facts(). Returns
+    {"summary": str, "tips": [str, ...]} (tips capped at 2). Raises ParseError on
+    any failure (no key, package missing, API/output error) so the caller can
+    fall back to the un-generated card + an error toast.
+    """
+    today = today or date.today()
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ParseError("ANTHROPIC_API_KEY is not set")
+
+    parsed = _call_insight_model(facts, today, api_key)
+    if parsed is None:
+        raise ParseError("Model returned no structured output")
+
+    summary = (parsed.summary or "").strip()
+    if not summary:
+        raise ParseError("Model returned an empty summary")
+    tips = [t.strip() for t in (parsed.tips or []) if t and t.strip()][:2]
+    return {"summary": summary, "tips": tips}
+
+
+def _call_insight_model(facts, today, api_key):
+    """The single network call for the digest — isolated so tests stub it without
+    hitting the API. Returns an _Insight (or None); wraps any SDK, network, or
+    missing-package error in ParseError."""
+    system = (
+        "You are a friendly, encouraging personal-finance coach writing a short "
+        "monthly digest. You are given the month's already-computed figures as "
+        "JSON. Do NOT recompute, re-add, or invent any numbers — treat the "
+        "figures as ground truth and only describe them. Write a warm 2-3 "
+        "sentence plain-English recap of how the month is going (income vs "
+        "spending, net, notable categories or budget overruns), then 1-2 short, "
+        "specific, actionable tips. Be supportive, not preachy. Today is "
+        f"{today.isoformat()} and the month may still be in progress."
+    )
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.parse(
+            model=MODEL,
+            max_tokens=400,
+            system=system,
+            messages=[{"role": "user", "content": json.dumps(facts, default=str)}],
+            output_format=_Insight,
+        )
+        return response.parsed_output
+    except Exception as e:  # network, auth, malformed output, missing package
+        raise ParseError(str(e)) from e

@@ -6,6 +6,7 @@ from app.db import get_db_connection
 from app.helpers import ai_enabled
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
+from app.blueprints.insights import load_insight, compute_month_facts
 
 bp = Blueprint('main', __name__)
 
@@ -117,6 +118,18 @@ def dashboard():
 
     goals_view = build_goals_view(cursor, current_user.id)
 
+    # v10.1 Insight card — always the *current* month (independent of the chart
+    # month filter) so the cache key stays stable. Reads the cached digest only;
+    # no model call on page load. Facts are recomputed (cheap) so the card's
+    # deterministic strip renders alongside the cached narrative.
+    ai_on = ai_enabled()
+    insight = None
+    insight_facts = None
+    if ai_on:
+        insight = load_insight(cursor, current_user.id, today.year, today.month)
+        if insight:
+            insight_facts = compute_month_facts(current_user.id, today.year, today.month)
+
     cursor.close()
     conn.close()
 
@@ -136,5 +149,10 @@ def dashboard():
         months=months,
         selected_month=selected_month,
         has_transactions=has_transactions,
-        goals=goals_view
+        goals=goals_view,
+        ai_enabled=ai_on,
+        insight=insight,
+        facts=insight_facts,
+        insight_year=today.year,
+        insight_month=today.month
     )

@@ -11,6 +11,9 @@
         {% endfor %}
     </select>
 </form>
+{% if ai_enabled %}
+{% include 'partials/_insight_card.html' %}
+{% endif %}
 {% if goals %}
 <h2>Savings goals</h2>
 <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">

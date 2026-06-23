@@ -134,3 +134,19 @@ ALTER TABLE budgets
     FOREIGN KEY (category_id)
     REFERENCES categories (id)
     ON DELETE RESTRICT;
+
+-- ------------------------------------------------------------
+-- Insights (v10.1 — cached monthly AI digest, one row per user per month)
+-- content is narrative JSON {"summary": ..., "tips": [...]}; the figures it
+-- describes are recomputed deterministically server-side, never stored here.
+-- ------------------------------------------------------------
+CREATE TABLE public.insights (
+    id SERIAL PRIMARY KEY,
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    year smallint NOT NULL,
+    month smallint NOT NULL,
+    content text NOT NULL,
+    model character varying(50),
+    created_at timestamp without time zone DEFAULT now(),
+    CONSTRAINT uq_insight_user_period UNIQUE (user_id, year, month)
+);

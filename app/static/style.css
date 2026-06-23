@@ -189,3 +189,26 @@ tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
   td, th { padding: 0.5rem 0.6rem; font-size: 13px; }
   #toast-host { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; }
 }
+
+/* HTMX indicator (shown while a request is in flight) */
+.htmx-indicator { opacity: 0; transition: opacity 0.2s ease-in; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+
+/* v10.1 Insight card */
+.insight-card { border-left: 4px solid var(--accent); }
+.insight-head { display: flex; align-items: center; gap: 0.6rem; }
+.insight-spinner { font-size: 12px; color: var(--text-muted); }
+.insight-intro { color: var(--text-muted); font-size: 14px; margin: 0.5rem 0 0.9rem; }
+.facts-strip { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; margin: 0.9rem 0; }
+.fact { display: flex; flex-direction: column; }
+.fact-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.fact-val { font-size: 18px; font-weight: 600; }
+.fact-val.pos { color: var(--success); }
+.fact-val.neg { color: var(--danger); }
+.insight-meta { font-size: 13px; color: var(--text-muted); margin: 0.2rem 0; }
+.insight-warn { color: var(--danger); }
+.insight-summary { font-size: 15px; line-height: 1.5; margin: 0.9rem 0; }
+.insight-tips { margin: 0.5rem 0 0.9rem; padding-left: 1.2rem; font-size: 14px; }
+.insight-tips li { margin: 0.25rem 0; }
+.insight-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.insight-ts { font-size: 12px; color: var(--text-muted); }

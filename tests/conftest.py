@@ -100,6 +100,7 @@ def _delete_user(username):
         cur.execute("DELETE FROM budgets WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM goals WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM schedules WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM insights WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM categories WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM account WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
@@ -430,6 +431,38 @@ def count_transfer_legs(group_id):
     cur.close()
     conn.close()
     return n
+
+
+def create_insight(user_id, year, month, content, model="claude-haiku-4-5"):
+    """Insert a cached insight row directly (bypassing the model/route)."""
+    import json
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO insights (user_id, year, month, content, model) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (user_id, year, month, json.dumps(content), model),
+    )
+    iid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return iid
+
+
+def fetch_insight(user_id, year, month):
+    """Return (content, model, user_id) for a cached insight, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT content, model, user_id FROM insights "
+        "WHERE user_id = %s AND year = %s AND month = %s",
+        (user_id, year, month),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
 
 
 def fetch_goal(goal_id):

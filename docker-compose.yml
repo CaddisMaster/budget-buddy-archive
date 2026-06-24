@@ -10,7 +10,9 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     ports:
-      - "5432:5432"
+      # Bind Postgres to localhost only — never expose the DB to the public internet.
+      # Docker publishes ports by bypassing ufw, so "5432:5432" = world-reachable.
+      - "127.0.0.1:5432:5432"
   web:
     image: caddismaster/budget-buddy:latest
     restart: always

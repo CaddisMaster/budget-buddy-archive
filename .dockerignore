@@ -1,0 +1,36 @@
+# Secrets — NEVER bake these into the image (it's pushed to a PUBLIC Docker Hub repo).
+# The app reads .env at runtime via docker-compose `env_file:`, so it is not needed in the image.
+.env
+.env.*
+*.pem
+*.key
+
+# Database backups / dumps — contain real user financial data, must never ship in the image.
+backups/
+*.dump
+
+# Version control
+.git
+.gitignore
+
+# Python caches / test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local dev / editor cruft
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+
+# Docs & local-only files not needed in the runtime image
+*.md
+CLAUDE.md
+docker-compose*.yml
+deploy.sh
+test.sh
+landing/

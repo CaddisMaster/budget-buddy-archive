@@ -6,7 +6,6 @@ __pycache__/
 .pytest_cache/
 .DS_store
 data/*.csv
-.dockerignore
 backups/
 docker-compose.override.yml
 CLAUDE.md

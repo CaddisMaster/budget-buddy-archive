@@ -19,7 +19,10 @@ services:
     env_file:
       - .env
     ports:
-      - "5001:5000"
+      # Localhost only — Nginx reverse-proxies to 127.0.0.1:5001. A bare "5001:5000"
+      # publishes to 0.0.0.0 and (Docker bypasses ufw) exposes the app over plain
+      # HTTP on the public IP, bypassing HTTPS. Keep it bound to localhost.
+      - "127.0.0.1:5001:5000"
     depends_on:
       - db
 volumes:

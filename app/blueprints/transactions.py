@@ -31,6 +31,41 @@ FREQUENCY_LABELS = {
 }
 
 
+def validate_category_account(cursor, user_id, category_id, account_id):
+    """Ownership guard for write-side FK ids (v10.1.1 IDOR fix). For each
+    non-null id, confirm the row belongs to user_id; return a list of error
+    strings for any that don't, so callers fold it into their existing
+    validation-error path. Mirrors the budgets `/budgets/set` guard, but for
+    the transaction + schedule forms (which previously trusted the posted ids).
+    Shared with blueprints/schedules.py."""
+    errors = []
+    if category_id is not None:
+        cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s",
+                       (category_id, user_id))
+        if cursor.fetchone() is None:
+            errors.append('Invalid category')
+    if account_id is not None:
+        cursor.execute("SELECT 1 FROM account WHERE account_id = %s AND user_id = %s",
+                       (account_id, user_id))
+        if cursor.fetchone() is None:
+            errors.append('Invalid account')
+    return errors
+
+
+# Cells that begin with these chars are interpreted as formulas by Excel/Sheets;
+# prefixing an apostrophe neutralizes CSV formula injection (v10.1.1).
+_CSV_FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+
+def _csv_safe(value):
+    """Neutralize CSV/spreadsheet formula injection: prefix a leading apostrophe
+    when a string cell starts with a formula-trigger char. Non-strings pass
+    through unchanged. Pure (unit-testable)."""
+    if isinstance(value, str) and value and value[0] in _CSV_FORMULA_PREFIXES:
+        return "'" + value
+    return value
+
+
 def _clamp_to_month(year, month, day):
     """Build a date, clamping the day to the last valid day of that month
     (so a '31st' pay day lands on the 28th/30th in shorter months)."""
@@ -92,6 +127,9 @@ def new_transaction():
         if transaction_type not in ('income', 'expense'):
             errors.append('Transaction type must be income or expense')
         is_adjustment = request.form.get('is_adjustment') == 'true'
+        if not errors:
+            with db_cursor() as cursor:
+                errors += validate_category_account(cursor, current_user.id, category_id, account_id)
         if errors:
             for error in errors:
                 flash(error)
@@ -307,6 +345,8 @@ def edit_transaction(transaction_id):
             errors.append('Date is required')
         if transaction_type not in ('income', 'expense'):
             errors.append('Transaction type must be income or expense')
+        if not errors:
+            errors += validate_category_account(cursor, current_user.id, category_id, account_id)
         if errors:
             cursor.close(); conn.close()
             txn = (transaction_id, amount_str, description, transaction_date,
@@ -402,7 +442,7 @@ def export_transactions():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Date', 'Type', 'Amount', 'Description', 'Category', 'Account'])
-    writer.writerows(rows)
+    writer.writerows([_csv_safe(cell) for cell in row] for row in rows)
     output.seek(0)
     response = make_response(output.getvalue())
     response.headers['Content-Disposition'] = 'attachment; filename=transactions.csv'

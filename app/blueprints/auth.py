@@ -1,13 +1,19 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
-from app import bcrypt
+from app import bcrypt, limiter
 from app.db import get_db_connection
 from app.models import User
 
 bp = Blueprint('auth', __name__)
 
+# A throwaway bcrypt hash checked when the username doesn't exist, so a missing
+# user costs the same bcrypt work as a wrong password — no username enumeration
+# via response timing (v10.1.1).
+_DUMMY_PASSWORD_HASH = bcrypt.generate_password_hash('dummy-password-never-matches').decode('utf-8')
+
 
 @bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
@@ -15,7 +21,12 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         user = User.get_by_username(username)
-        if user and bcrypt.check_password_hash(user.password_hash, password):
+        # Always run exactly one bcrypt check (dummy hash when the user is
+        # missing) to keep the response time constant either way.
+        password_hash = user.password_hash if user else _DUMMY_PASSWORD_HASH
+        password_ok = bcrypt.check_password_hash(password_hash, password)
+        if user and password_ok:
+            session.clear()  # drop any pre-login session state (fixation hygiene)
             login_user(user)
             return redirect(url_for('main.index'))
         flash('Invalid username or password')
@@ -54,6 +65,7 @@ def profile():
 
 
 @bp.route('/change-password', methods=['GET', 'POST'])
+@limiter.limit("10 per minute", methods=["POST"])
 @login_required
 def change_password():
     if request.method == 'POST':

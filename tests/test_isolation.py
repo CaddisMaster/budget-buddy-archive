@@ -7,6 +7,7 @@ As of v5.0, edit/delete of a missing or other-user row returns 404 (previously a
 silent redirect with a misleading "success" flash), so these assert both the
 404 status and that B's data is untouched.
 """
+from app.db import get_db_connection
 from tests.conftest import (
     create_budget,
     create_category,
@@ -16,6 +17,34 @@ from tests.conftest import (
     fetch_category,
     fetch_transaction,
 )
+
+
+def _count_transactions(user_id, category_id=None, account_id=None):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    sql = "SELECT COUNT(*) FROM transactions WHERE user_id = %s"
+    params = [user_id]
+    if category_id is not None:
+        sql += " AND category_id = %s"
+        params.append(category_id)
+    if account_id is not None:
+        sql += " AND account_id = %s"
+        params.append(account_id)
+    cur.execute(sql, params)
+    n = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return n
+
+
+def _count_schedules_for_user(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM schedules WHERE user_id = %s", (user_id,))
+    n = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return n
 
 
 def test_listing_only_shows_own_transactions(client_a, users):
@@ -134,3 +163,93 @@ def test_cannot_clear_another_users_budget(client_a, users):
     )
     assert response.status_code == 404
     assert fetch_budget(b_budget) is not None   # still B's
+
+
+# --- write-side IDOR (v10.1.1): can't attach a row to another user's FK -------
+
+def test_cannot_add_transaction_with_another_users_category(client_a, users):
+    # A submits a new transaction using its own account but B's category_id —
+    # the ownership guard must reject it and write nothing.
+    client_a.post(
+        "/transactions/new",
+        data={
+            "amount": "10.00",
+            "description": "idor-cat",
+            "transaction_date": "2026-01-01",
+            "transaction_type": "expense",
+            "account_id": users["a"]["account_id"],
+            "category_id": users["b"]["category_id"],
+        },
+        follow_redirects=True,
+    )
+    assert _count_transactions(users["a"]["id"], category_id=users["b"]["category_id"]) == 0
+
+
+def test_cannot_add_transaction_with_another_users_account(client_a, users):
+    # account_id is required; A supplies B's account_id — must be rejected.
+    client_a.post(
+        "/transactions/new",
+        data={
+            "amount": "10.00",
+            "description": "idor-acct",
+            "transaction_date": "2026-01-01",
+            "transaction_type": "expense",
+            "account_id": users["b"]["account_id"],
+        },
+        follow_redirects=True,
+    )
+    assert _count_transactions(users["a"]["id"], account_id=users["b"]["account_id"]) == 0
+
+
+def test_cannot_edit_transaction_onto_another_users_category(client_a, users):
+    # A edits its OWN transaction but tries to point it at B's category_id.
+    a_txn = users["a"]["transaction_id"]
+    client_a.post(
+        f"/transactions/{a_txn}/edit",
+        data={
+            "amount": "10.00",
+            "description": "idor-edit",
+            "transaction_date": "2026-01-01",
+            "transaction_type": "expense",
+            "account_id": users["a"]["account_id"],
+            "category_id": users["b"]["category_id"],
+        },
+        follow_redirects=True,
+    )
+    assert _count_transactions(users["a"]["id"], category_id=users["b"]["category_id"]) == 0
+
+
+def test_cannot_add_schedule_with_another_users_account(client_a, users):
+    # A creates a schedule pointing at B's account_id — must write nothing.
+    before = _count_schedules_for_user(users["a"]["id"])
+    client_a.post(
+        "/scheduled",
+        data={
+            "amount": "10.00",
+            "description": "idor-sched",
+            "transaction_type": "expense",
+            "frequency": "monthly",
+            "next_due": "2099-01-01",
+            "account_id": users["b"]["account_id"],
+        },
+        follow_redirects=True,
+    )
+    assert _count_schedules_for_user(users["a"]["id"]) == before
+
+
+def test_cannot_add_schedule_with_another_users_category(client_a, users):
+    before = _count_schedules_for_user(users["a"]["id"])
+    client_a.post(
+        "/scheduled",
+        data={
+            "amount": "10.00",
+            "description": "idor-sched-cat",
+            "transaction_type": "expense",
+            "frequency": "monthly",
+            "next_due": "2099-01-01",
+            "account_id": users["a"]["account_id"],
+            "category_id": users["b"]["category_id"],
+        },
+        follow_redirects=True,
+    )
+    assert _count_schedules_for_user(users["a"]["id"]) == before

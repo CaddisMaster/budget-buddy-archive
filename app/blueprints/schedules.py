@@ -15,6 +15,7 @@ from app.db import db_cursor
 from app.helpers import is_htmx, hx_toast
 from app.blueprints.transactions import (
     compute_next_due, _clamp_to_month, VALID_FREQUENCIES, FREQUENCY_LABELS,
+    validate_category_account,
 )
 
 bp = Blueprint('schedules', __name__)
@@ -165,6 +166,10 @@ def _form_lists(cursor):
 def scheduled():
     if request.method == 'POST':
         errors, f = _parse_form(request.form)
+        if not errors:
+            with db_cursor() as cursor:
+                errors += validate_category_account(
+                    cursor, current_user.id, f['category_id'], f['account_id'])
         if errors:
             msg = errors[0]
             if is_htmx():
@@ -218,6 +223,10 @@ def edit_schedule(schedule_id):
 
     if request.method == 'POST':
         errors, f = _parse_form(request.form)
+        if not errors:
+            with db_cursor() as cursor:
+                errors += validate_category_account(
+                    cursor, current_user.id, f['category_id'], f['account_id'])
         if errors:
             return render_template('partials/_schedule_edit_row.html',
                                    schedule=schedule, categories=categories,

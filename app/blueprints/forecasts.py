@@ -122,12 +122,15 @@ def _remaining_scheduled(cursor, user_id, today, month_last):
     items = []
     for desc, amount, ttype, freq, anchor_day, second_day, next_due in cursor.fetchall():
         occ = next_due
-        guard = 0
         # Advance to the first occurrence strictly after today (the dashboard's
         # run_due_schedules normally already did this; be robust if it didn't).
+        # Each loop gets its OWN guard budget so a long catch-up in the first
+        # can't starve the second into under-counting this month's occurrences.
+        guard = 0
         while occ <= today and guard < 500:
             occ = compute_next_due(occ, freq, anchor_day=anchor_day, second_day=second_day)
             guard += 1
+        guard = 0
         while occ <= month_last and guard < 500:
             items.append({'description': desc, 'amount': float(amount),
                           'type': ttype, 'due': occ.isoformat()})
@@ -177,9 +180,17 @@ def compute_forecast(user_id, year, month):
     projected_income = round(income_td + rem_income, 2)
     projected_net = round(projected_income - projected_expenses, 2)
 
-    total_budget = round(sum(float(b) for _, b, _, _ in
-                             compute_budget_vs_actual(user_id, year, month)), 2)
-    projected_over_budget = (round(projected_expenses - total_budget, 2)
+    # Budget context: project only the spend *within budgeted categories* (scaled
+    # by the same run-rate factor that produced projected_expenses) and compare
+    # that to the budget total. Comparing all-category projected spend to a
+    # partial budget (only some categories have one) would read as an overrun
+    # almost every time — a misleading figure the narration would then repeat.
+    budget_rows = compute_budget_vs_actual(user_id, year, month)
+    total_budget = round(sum(float(b) for _, b, _, _ in budget_rows), 2)
+    budgeted_actual = sum(float(a) for _, _, a, _ in budget_rows)
+    factor = (projected_expenses / expenses_td) if expenses_td > 0 else 0.0
+    projected_budgeted_spend = round(budgeted_actual * factor, 2)
+    projected_over_budget = (round(projected_budgeted_spend - total_budget, 2)
                              if total_budget > 0 else None)
 
     return {
@@ -239,7 +250,11 @@ def generate():
             forecast=forecast, forecast_facts=facts,
             forecast_year=year, forecast_month=month, ai_enabled=True))
 
-    if facts['income_to_date'] == 0 and facts['expenses_to_date'] == 0:
+    if (facts['income_to_date'] == 0 and facts['expenses_to_date'] == 0
+            and not facts['remaining_items']):
+        # Nothing logged this month AND nothing scheduled still to come — there's
+        # genuinely nothing to project. (A scheduled paycheck due later this month
+        # is enough to forecast from, even with zero activity so far.)
         return hx_toast(_card(None), 'Not enough activity this month to forecast yet', 'error')
 
     try:

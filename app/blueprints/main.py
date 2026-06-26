@@ -46,7 +46,7 @@ def dashboard():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false AND t.is_adjustment = false
             AND EXTRACT(YEAR FROM t.transaction_date) = %s
             AND EXTRACT(MONTH FROM t.transaction_date) = %s
             GROUP BY c.name
@@ -57,7 +57,7 @@ def dashboard():
             SELECT c.name, SUM(t.amount) AS total
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false
+            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false AND t.is_adjustment = false
             GROUP BY c.name
             ORDER BY total DESC
         """, (current_user.id,))
@@ -70,7 +70,7 @@ def dashboard():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s AND is_transfer = false
+            WHERE user_id = %s AND is_transfer = false AND is_adjustment = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
@@ -83,7 +83,7 @@ def dashboard():
                 SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
                 SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
             FROM transactions
-            WHERE user_id = %s AND is_transfer = false
+            WHERE user_id = %s AND is_transfer = false AND is_adjustment = false
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
         """, (current_user.id,))

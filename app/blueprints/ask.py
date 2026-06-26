@@ -16,6 +16,8 @@ user's own rows (like the v9 parser's _match_id). Nothing is ever interpolated
 into SQL. Gated on ai_enabled() and degrades gracefully (an error fragment +
 toast, never a broken page) when the key/model is unavailable.
 """
+import json
+import logging
 from datetime import date, datetime
 
 from flask import Blueprint, render_template, request, make_response
@@ -25,10 +27,13 @@ from app import limiter
 from app.ai import answer_question, ParseError
 from app.db import db_cursor
 from app.helpers import hx_toast
-from app.blueprints.insights import compute_month_facts
+from app.blueprints.insights import compute_month_facts, category_spending
 from app.blueprints.budgets import compute_budget_vs_actual
+from app.blueprints.accounts import ACCOUNT_ROW_SQL
 
 bp = Blueprint('ask', __name__)
+
+log = logging.getLogger(__name__)
 
 # Bound the rows any single tool can hand back to the model (keeps token cost and
 # answer scope sane; the model never sees more than this).
@@ -42,6 +47,12 @@ class _ToolError(Exception):
 
 
 # --- pure argument validators (the trust boundary) --------------------------
+
+def _money(x):
+    """Coerce a DB numeric to a 2-dp float for the JSON the model sees — the one
+    place money rounding is defined for every tool."""
+    return round(float(x), 2)
+
 
 def _parse_month(args):
     """Pull and validate a 'YYYY-MM' arg → (year, month). Raises _ToolError."""
@@ -98,19 +109,8 @@ def _t_list_categories(user_id, args):
 def _t_spending_by_category(user_id, args):
     year, month = _parse_month(args)
     with db_cursor() as cursor:
-        cursor.execute("""
-            SELECT c.name, SUM(t.amount) AS total
-            FROM transactions t
-            JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense'
-            AND t.is_adjustment = false AND t.is_transfer = false
-            AND EXTRACT(YEAR FROM t.transaction_date) = %s
-            AND EXTRACT(MONTH FROM t.transaction_date) = %s
-            GROUP BY c.name
-            ORDER BY total DESC
-        """, (user_id, year, month))
-        by_cat = [{"category": r[0], "total": round(float(r[1]), 2)}
-                  for r in cursor.fetchall()]
+        rows = category_spending(cursor, user_id, year, month)
+    by_cat = [{"category": name, "total": _money(total)} for name, total in rows]
     return {"month": f"{year}-{month:02d}", "spending_by_category": by_cat}
 
 
@@ -132,9 +132,9 @@ def _t_budget_status(user_id, args):
     rows = compute_budget_vs_actual(user_id, year, month)
     budgets = [{
         "category": cat,
-        "budget": round(float(budget), 2),
-        "actual": round(float(actual), 2),
-        "remaining": round(float(remaining), 2),
+        "budget": _money(budget),
+        "actual": _money(actual),
+        "remaining": _money(remaining),
         "over_budget": float(remaining) < 0,
     } for cat, budget, actual, remaining in rows]
     return {"month": f"{year}-{month:02d}", "budgets": budgets}
@@ -153,7 +153,7 @@ def _t_total_for_category(user_id, args):
         """, (user_id, cid, start, end))
         total = float(cursor.fetchone()[0])
     return {"category": cname, "start_date": start.isoformat(),
-            "end_date": end.isoformat(), "total_spent": round(total, 2)}
+            "end_date": end.isoformat(), "total_spent": _money(total)}
 
 
 def _t_search_transactions(user_id, args):
@@ -162,12 +162,16 @@ def _t_search_transactions(user_id, args):
     limit = _clamp_limit(args)
     text = str(args.get('text', '')).strip()
     with db_cursor() as cursor:
+        # Mirror the History page (_load_history): a description search over ALL
+        # the user's rows — including transfer legs and adjustments, which the
+        # user can see there. Excluding them here made the model answer "no, I
+        # don't see that transfer" about rows plainly visible in History.
         cursor.execute("""
             SELECT t.transaction_date, t.description, t.amount, t.transaction_type,
                    c.name
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.is_transfer = false
+            WHERE t.user_id = %s
             AND t.description ILIKE %s
             AND t.transaction_date >= %s AND t.transaction_date <= %s
             ORDER BY t.transaction_date DESC
@@ -176,7 +180,7 @@ def _t_search_transactions(user_id, args):
         txns = [{
             "date": r[0].isoformat() if r[0] else None,
             "description": r[1],
-            "amount": round(float(r[2]), 2),
+            "amount": _money(r[2]),
             "type": r[3],
             "category": r[4],
         } for r in cursor.fetchall()]
@@ -184,16 +188,21 @@ def _t_search_transactions(user_id, args):
 
 
 def _t_upcoming_scheduled(user_id, args):
+    # Only genuinely upcoming items (due today or later). run_due_schedules()
+    # doesn't fire on /analytics or /ask, so an active schedule can still carry a
+    # past next_due here — without this filter the model would report an already-
+    # overdue date as "upcoming".
+    today = date.today()
     with db_cursor() as cursor:
         cursor.execute("""
             SELECT description, amount, transaction_type, frequency, next_due
             FROM schedules
-            WHERE user_id = %s AND is_active = true
+            WHERE user_id = %s AND is_active = true AND next_due >= %s
             ORDER BY next_due
-        """, (user_id,))
+        """, (user_id, today))
         items = [{
             "description": r[0],
-            "amount": round(float(r[1]), 2),
+            "amount": _money(r[1]),
             "type": r[2],
             "frequency": r[3],
             "next_due": r[4].isoformat() if r[4] else None,
@@ -202,20 +211,16 @@ def _t_upcoming_scheduled(user_id, args):
 
 
 def _t_account_balances(user_id, args):
+    # Reuse the Accounts page's balance query (the single source of the balance
+    # formula) → rows are (account_id, name, type, balance). Present highest
+    # balance first.
     with db_cursor() as cursor:
-        cursor.execute("""
-            SELECT a.account_name,
-                   COALESCE(SUM(CASE WHEN t.transaction_type = 'income'
-                                     THEN t.amount ELSE -t.amount END), 0) AS balance
-            FROM account a
-            LEFT JOIN transactions t ON a.account_id = t.account_id
-                AND t.user_id = a.user_id
-            WHERE a.user_id = %s
-            GROUP BY a.account_id, a.account_name
-            ORDER BY balance DESC
-        """, (user_id,))
-        accts = [{"account": r[0], "balance": round(float(r[1]), 2)}
-                 for r in cursor.fetchall()]
+        cursor.execute(ACCOUNT_ROW_SQL.format(extra=""), (user_id,))
+        rows = cursor.fetchall()
+    accts = sorted(
+        ({"account": r[1], "balance": _money(r[3])} for r in rows),
+        key=lambda a: a["balance"], reverse=True,
+    )
     return {"accounts": accts}
 
 
@@ -235,6 +240,11 @@ def _month_arg():
         "required": ["month"],
         "additionalProperties": False,
     }
+
+
+def _date_arg():
+    """The shared YYYY-MM-DD date property used by the date-range tools."""
+    return {"type": "string", "description": "YYYY-MM-DD"}
 
 
 # (json schema spec, handler). The spec name must match the registry key.
@@ -275,8 +285,8 @@ ASK_TOOLS = [
           "type": "object",
           "properties": {
               "category": {"type": "string", "description": "Exact category name"},
-              "start_date": {"type": "string", "description": "YYYY-MM-DD"},
-              "end_date": {"type": "string", "description": "YYYY-MM-DD"},
+              "start_date": _date_arg(),
+              "end_date": _date_arg(),
           },
           "required": ["category", "start_date", "end_date"],
           "additionalProperties": False,
@@ -292,8 +302,8 @@ ASK_TOOLS = [
           "properties": {
               "text": {"type": "string", "description": "Text to match in the "
                                                         "description"},
-              "start_date": {"type": "string", "description": "YYYY-MM-DD"},
-              "end_date": {"type": "string", "description": "YYYY-MM-DD"},
+              "start_date": _date_arg(),
+              "end_date": _date_arg(),
               "limit": {"type": "integer",
                         "description": f"Max rows (1-{MAX_LIMIT})"},
           },
@@ -325,7 +335,6 @@ def dispatch(user_id, name, raw_input):
     (content_str, is_error). user_id is forced by the caller — the model never
     supplies it. Unknown tool or bad args → an is_error result the model can
     recover from, never a crash."""
-    import json
     handler = _HANDLERS.get(name)
     if handler is None:
         return json.dumps({"error": f"Unknown tool: {name}"}), True
@@ -335,6 +344,9 @@ def dispatch(user_id, name, raw_input):
     except _ToolError as e:
         return json.dumps({"error": str(e)}), True
     except Exception:
+        # A real bug in a handler (not a recoverable bad arg) — log the traceback
+        # so it's diagnosable, but still hand the model a clean is_error result.
+        log.exception("Ask tool %r failed for user %s", name, user_id)
         return json.dumps({"error": "That query couldn't be run."}), True
 
 
@@ -353,8 +365,15 @@ def ask():
         return make_response(render_template(
             'partials/_ask_answer.html', result=result))
 
+    def _toast_only(message):
+        # Fire an error toast WITHOUT swapping, so a previously shown answer in
+        # #ask-answer survives an empty submit or a transient failure.
+        resp = hx_toast(make_response('', 200), message, 'error')
+        resp.headers['HX-Reswap'] = 'none'
+        return resp
+
     if not question:
-        return hx_toast(_answer(None), 'Type a question first', 'error')
+        return _toast_only('Type a question first')
 
     # Bind the user id into the dispatch callback — ai.py never sees it.
     def _dispatch(tool_name, raw_input):
@@ -363,6 +382,6 @@ def ask():
     try:
         result = answer_question(question, TOOL_SPECS, _dispatch, today=date.today())
     except ParseError:
-        return hx_toast(_answer(None), "Couldn't answer that right now", 'error')
+        return _toast_only("Couldn't answer that right now")
 
     return _answer(result)

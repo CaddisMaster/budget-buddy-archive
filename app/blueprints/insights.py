@@ -36,6 +36,30 @@ def _prev_month(year, month):
     return year, month - 1
 
 
+def category_spending(cursor, user_id, year, month, limit=None):
+    """Expense spending grouped by category for one month (non-adjustment,
+    non-transfer), highest first → [(name, total_float), ...]. The single source
+    for the per-category rollup, reused by the dashboard digest and the Ask tool
+    so they can never disagree on what counts."""
+    sql = """
+        SELECT c.name, SUM(t.amount) AS total
+        FROM transactions t
+        JOIN categories c ON t.category_id = c.id
+        WHERE t.user_id = %s AND t.transaction_type = 'expense'
+        AND t.is_adjustment = false AND t.is_transfer = false
+        AND EXTRACT(YEAR FROM t.transaction_date) = %s
+        AND EXTRACT(MONTH FROM t.transaction_date) = %s
+        GROUP BY c.name
+        ORDER BY total DESC
+    """
+    params = [user_id, year, month]
+    if limit is not None:
+        sql += " LIMIT %s"
+        params.append(limit)
+    cursor.execute(sql, params)
+    return [(r[0], float(r[1])) for r in cursor.fetchall()]
+
+
 def _income_expense(cursor, user_id, year, month):
     """(income, expenses) totals for one month — non-adjustment, non-transfer,
     matching how the dashboard and analytics count real cash flow."""
@@ -67,20 +91,8 @@ def compute_month_facts(user_id, year, month):
         py, pm = _prev_month(year, month)
         p_income, p_expenses = _income_expense(cursor, user_id, py, pm)
 
-        cursor.execute("""
-            SELECT c.name, SUM(t.amount) AS total
-            FROM transactions t
-            JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense'
-            AND t.is_adjustment = false AND t.is_transfer = false
-            AND EXTRACT(YEAR FROM t.transaction_date) = %s
-            AND EXTRACT(MONTH FROM t.transaction_date) = %s
-            GROUP BY c.name
-            ORDER BY total DESC
-            LIMIT 5
-        """, (user_id, year, month))
-        top_categories = [{'name': r[0], 'amount': float(r[1])}
-                          for r in cursor.fetchall()]
+        top_categories = [{'name': n, 'amount': a} for n, a in
+                          category_spending(cursor, user_id, year, month, limit=5)]
 
     # Budget overruns reuse the shared month-based helper (its own connection).
     overruns = []

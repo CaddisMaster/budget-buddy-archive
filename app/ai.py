@@ -352,7 +352,10 @@ def answer_question(question, tool_specs, dispatch, *, today=None):
         blocks = list(response.content or [])
         tool_uses = [b for b in blocks if getattr(b, "type", None) == "tool_use"]
 
-        if getattr(response, "stop_reason", None) != "tool_use" and not tool_uses:
+        # Drive purely off the presence of tool_use blocks — the actual contract.
+        # (stop_reason can disagree with the block list on a malformed turn; acting
+        # on it would post an empty tool_result message the API then rejects.)
+        if not tool_uses:
             text = " ".join(
                 b.text.strip() for b in blocks
                 if getattr(b, "type", None) == "text" and getattr(b, "text", "")
@@ -367,8 +370,12 @@ def answer_question(question, tool_specs, dispatch, *, today=None):
         messages.append({"role": "assistant", "content": blocks})
         results = []
         for tu in tool_uses:
-            tools_used.append(tu.name)
             content, is_error = dispatch(tu.name, tu.input)
+            # Only credit a tool that actually returned data — a failed call the
+            # model recovered from shouldn't show in the "Computed from your data"
+            # footer.
+            if not is_error:
+                tools_used.append(tu.name)
             results.append({
                 "type": "tool_result",
                 "tool_use_id": tu.id,
@@ -380,31 +387,45 @@ def answer_question(question, tool_specs, dispatch, *, today=None):
     raise ParseError("Exceeded tool-use turn limit")
 
 
+_ASK_SYSTEM = (
+    "You answer questions about the user's OWN personal finances. You may "
+    "answer ONLY by calling the provided tools — never compute, estimate, or "
+    "invent a figure yourself; call a tool and report exactly what it "
+    "returns. Use list_categories first if you need the user's category "
+    "names. If the available tools cannot answer the question, say so plainly "
+    "rather than guessing. Keep the final answer concise, friendly, and in "
+    "plain English — write plain text only, with NO Markdown, asterisks, "
+    "bullet syntax, or other formatting. Today's date is {today}."
+)
+
+# One client per api_key, reused across the up-to-6 turns of a question (and
+# across questions) so the loop keeps the httpx keep-alive pool warm instead of
+# re-doing the TLS handshake to api.anthropic.com on every turn.
+_ask_clients = {}
+
+
+def _get_ask_client(api_key):
+    client = _ask_clients.get(api_key)
+    if client is None:
+        import anthropic
+        # Bound each call so a stuck request fails fast into the graceful fallback
+        # rather than hanging the loop toward the gunicorn worker timeout.
+        client = anthropic.Anthropic(api_key=api_key, timeout=30.0)
+        _ask_clients[api_key] = client
+    return client
+
+
 def _call_ask_model(messages, tool_specs, today, api_key):
     """The single network call for the ask loop — isolated so tests can stub it
     without hitting the API (feeding canned tool_use/text responses). Returns the
     raw Message (with .content and .stop_reason); wraps any SDK, network, or
     missing-package error in ParseError."""
-    system = (
-        "You answer questions about the user's OWN personal finances. You may "
-        "answer ONLY by calling the provided tools — never compute, estimate, or "
-        "invent a figure yourself; call a tool and report exactly what it "
-        "returns. Use list_categories first if you need the user's category "
-        "names. If the available tools cannot answer the question, say so plainly "
-        "rather than guessing. Keep the final answer concise, friendly, and in "
-        "plain English — write plain text only, with NO Markdown, asterisks, "
-        "bullet syntax, or other formatting. Today's date is "
-        f"{today.isoformat()}."
-    )
     try:
-        import anthropic
-        # Bound each call so a stuck request fails fast into the graceful fallback
-        # rather than hanging the loop toward the gunicorn worker timeout.
-        client = anthropic.Anthropic(api_key=api_key, timeout=30.0)
+        client = _get_ask_client(api_key)
         return client.messages.create(
             model=ASK_MODEL,
             max_tokens=1024,
-            system=system,
+            system=_ASK_SYSTEM.format(today=today.isoformat()),
             tools=tool_specs,
             messages=messages,
         )

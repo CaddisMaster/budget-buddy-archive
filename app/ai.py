@@ -220,3 +220,81 @@ def _call_insight_model(facts, today, api_key):
         return response.parsed_output
     except Exception as e:  # network, auth, malformed output, missing package
         raise ParseError(str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# v10.2 — month-ahead "Forecast" projection.
+#
+# The capstone of the AI arc and the twin of Insight: where Insight recaps the
+# month behind you, Forecast looks forward. The app computes every figure
+# deterministically (compute_forecast — month-to-date actuals, a day-weighted
+# spend projection, and remaining scheduled income) and hands them to Claude as
+# JSON; the model only narrates the outlook + a tip or two. Same isolated-seam,
+# graceful-degradation contract as Insight — it must NOT recompute or invent
+# numbers, and a missing key/package degrades to a ParseError, never a broken
+# dashboard.
+# ---------------------------------------------------------------------------
+
+class _Forecast(BaseModel):
+    """The narrative shape we ask Claude to return (structured outputs). Treated
+    as untrusted text — coerced/trimmed in generate_forecast()."""
+    summary: str            # 2–3 sentence plain-English month-ahead outlook
+    tips: list[str]         # 1–2 short, forward-looking tips
+
+
+def generate_forecast(facts, *, today=None):
+    """Turn already-computed projection figures into a short forward-looking
+    narrative.
+
+    `facts` is the deterministic dict from compute_forecast(). Returns
+    {"summary": str, "tips": [str, ...]} (tips capped at 2). Raises ParseError on
+    any failure (no key, package missing, API/output error) so the caller can
+    fall back to the un-generated card + an error toast.
+    """
+    today = today or date.today()
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ParseError("ANTHROPIC_API_KEY is not set")
+
+    parsed = _call_forecast_model(facts, today, api_key)
+    if parsed is None:
+        raise ParseError("Model returned no structured output")
+
+    summary = (parsed.summary or "").strip()
+    if not summary:
+        raise ParseError("Model returned an empty summary")
+    tips = [t.strip() for t in (parsed.tips or []) if t and t.strip()][:2]
+    return {"summary": summary, "tips": tips}
+
+
+def _call_forecast_model(facts, today, api_key):
+    """The single network call for the forecast — isolated so tests stub it
+    without hitting the API. Returns a _Forecast (or None); wraps any SDK,
+    network, or missing-package error in ParseError."""
+    system = (
+        "You are a friendly, encouraging personal-finance coach writing a short "
+        "month-AHEAD forecast. You are given the month's already-computed "
+        "projection figures as JSON (month-to-date actuals, a projected "
+        "end-of-month income/expenses/net, remaining scheduled items, and budget "
+        "totals). Do NOT recompute, re-add, or invent any numbers — treat the "
+        "figures as ground truth and only describe them. Write a warm 2-3 "
+        "sentence plain-English outlook for the rest of the month (where net is "
+        "headed, whether spending is on pace vs budget, the next notable "
+        "scheduled income or bill), then 1-2 short, specific, forward-looking "
+        "tips. Be supportive, not preachy. Today is "
+        f"{today.isoformat()} and the month is still in progress, so frame it as "
+        "a projection ('on pace to…', 'you're likely to…'), not a fact."
+    )
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.parse(
+            model=MODEL,
+            max_tokens=400,
+            system=system,
+            messages=[{"role": "user", "content": json.dumps(facts, default=str)}],
+            output_format=_Forecast,
+        )
+        return response.parsed_output
+    except Exception as e:  # network, auth, malformed output, missing package
+        raise ParseError(str(e)) from e

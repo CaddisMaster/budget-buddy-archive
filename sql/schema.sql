@@ -150,3 +150,15 @@ CREATE TABLE public.insights (
     created_at timestamp without time zone DEFAULT now(),
     CONSTRAINT uq_insight_user_period UNIQUE (user_id, year, month)
 );
+
+-- v10.2 Forecast — cached month-ahead AI projection narrative (see sql/16).
+CREATE TABLE public.forecasts (
+    id SERIAL PRIMARY KEY,
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    year smallint NOT NULL,
+    month smallint NOT NULL,
+    content text NOT NULL,
+    model character varying(50),
+    created_at timestamp without time zone DEFAULT now(),
+    CONSTRAINT uq_forecast_user_period UNIQUE (user_id, year, month)
+);

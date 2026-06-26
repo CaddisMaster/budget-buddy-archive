@@ -7,6 +7,7 @@ from app.helpers import ai_enabled
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
 from app.blueprints.insights import load_insight, compute_month_facts
+from app.blueprints.forecasts import load_forecast, compute_forecast
 
 bp = Blueprint('main', __name__)
 
@@ -125,10 +126,17 @@ def dashboard():
     ai_on = ai_enabled()
     insight = None
     insight_facts = None
+    forecast = None
+    forecast_facts = None
     if ai_on:
         insight = load_insight(cursor, current_user.id, today.year, today.month)
         if insight:
             insight_facts = compute_month_facts(current_user.id, today.year, today.month)
+        # v10.2 Forecast — the forward-looking twin of Insight, same current-month
+        # cache key, cache-only on load (no model call).
+        forecast = load_forecast(cursor, current_user.id, today.year, today.month)
+        if forecast:
+            forecast_facts = compute_forecast(current_user.id, today.year, today.month)
 
     cursor.close()
     conn.close()
@@ -154,5 +162,9 @@ def dashboard():
         insight=insight,
         facts=insight_facts,
         insight_year=today.year,
-        insight_month=today.month
+        insight_month=today.month,
+        forecast=forecast,
+        forecast_facts=forecast_facts,
+        forecast_year=today.year,
+        forecast_month=today.month
     )

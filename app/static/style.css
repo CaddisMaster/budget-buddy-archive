@@ -196,6 +196,8 @@ tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
 
 /* v10.1 Insight card */
 .insight-card { border-left: 4px solid var(--accent); }
+/* v10.2 Forecast card — same layout (reuses .insight-* classes), distinct accent */
+.forecast-card { border-left: 4px solid #7c5cff; }
 .insight-head { display: flex; align-items: center; gap: 0.6rem; }
 .insight-spinner { font-size: 12px; color: var(--text-muted); }
 .insight-intro { color: var(--text-muted); font-size: 14px; margin: 0.5rem 0 0.9rem; }

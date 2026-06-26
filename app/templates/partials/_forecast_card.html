@@ -1,0 +1,41 @@
+{% set month_names = ['','January','February','March','April','May','June','July','August','September','October','November','December'] %}
+<div id="forecast-card" class="card forecast-card">
+  <div class="insight-head">
+    <h2 style="margin:0">🔮 Forecast — {{ month_names[forecast_month] }} {{ forecast_year }}</h2>
+    <span id="forecast-spinner" class="htmx-indicator insight-spinner">Forecasting…</span>
+  </div>
+  {% if forecast %}
+  <div class="facts-strip">
+    <div class="fact"><span class="fact-label">Projected income</span><span class="fact-val">${{ "%.0f"|format(forecast_facts.projected_income) }}</span></div>
+    <div class="fact"><span class="fact-label">Projected expenses</span><span class="fact-val">${{ "%.0f"|format(forecast_facts.projected_expenses) }}</span></div>
+    <div class="fact"><span class="fact-label">Projected net</span><span class="fact-val {{ 'pos' if forecast_facts.projected_net >= 0 else 'neg' }}">${{ "%.0f"|format(forecast_facts.projected_net) }}</span></div>
+  </div>
+  <p class="insight-meta">So far this month: income ${{ "%.0f"|format(forecast_facts.income_to_date) }}, spent ${{ "%.0f"|format(forecast_facts.expenses_to_date) }} (day {{ forecast_facts.day_of_month }} of {{ forecast_facts.days_in_month }}).</p>
+  {% if forecast_facts.remaining_items %}
+  {% set nxt = forecast_facts.remaining_items[0] %}
+  <p class="insight-meta">Next scheduled: {{ nxt.description or (nxt.type | capitalize) }} ${{ "%.0f"|format(nxt.amount) }} on {{ nxt.due }}{% if forecast_facts.remaining_items|length > 1 %} (+{{ forecast_facts.remaining_items|length - 1 }} more this month){% endif %}.</p>
+  {% endif %}
+  {% if forecast_facts.projected_over_budget is not none and forecast_facts.projected_over_budget > 0 %}
+  <p class="insight-meta insight-warn">On pace to exceed your budgets by ~${{ "%.0f"|format(forecast_facts.projected_over_budget) }}.</p>
+  {% endif %}
+  <p class="insight-summary">{{ forecast.summary }}</p>
+  {% if forecast.tips %}
+  <ul class="insight-tips">
+    {% for t in forecast.tips %}<li>{{ t }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div class="insight-foot">
+    <span class="insight-ts">{% if forecast.created_at %}Generated {{ forecast.created_at.strftime('%b %d, %Y %H:%M') }} · {% endif %}{{ 'day-weighted run-rate' if forecast_facts.method == 'day_weighted' else 'flat run-rate' }}</span>
+    <button class="btn-sm" hx-post="/forecasts/generate"
+            hx-vals='{"year": {{ forecast_year }}, "month": {{ forecast_month }}}'
+            hx-target="#forecast-card" hx-swap="outerHTML"
+            hx-indicator="#forecast-spinner">Regenerate</button>
+  </div>
+  {% else %}
+  <p class="insight-intro">See where this month is headed — a projected end-of-month net from your spending pace and upcoming scheduled income, with a tip or two. Written from your own numbers.</p>
+  <button class="btn-sm" hx-post="/forecasts/generate"
+          hx-vals='{"year": {{ forecast_year }}, "month": {{ forecast_month }}}'
+          hx-target="#forecast-card" hx-swap="outerHTML"
+          hx-indicator="#forecast-spinner">Generate forecast</button>
+  {% endif %}
+</div>

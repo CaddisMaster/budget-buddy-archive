@@ -2,6 +2,7 @@
 {% block title %}Analytics — Budget Buddy{% endblock %}
 {% block content %}
 <h1>Analytics</h1>
+{% include 'partials/_ask.html' %}
 <form method="get" style="margin-bottom:1rem">
     <label>Filter by month</label>
     <select name="month" onchange="this.form.submit()">

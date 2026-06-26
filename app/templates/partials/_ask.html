@@ -1,0 +1,27 @@
+{# v10.3 "Ask your finances" box. Posts a plain-English question to /ask and
+   swaps the answer into #ask-answer. Self-gated on ai_enabled so the analytics
+   page just includes it. CSRF is covered by the hx-headers on <body> in
+   base.html. #}
+{% if ai_enabled %}
+<div class="card" style="margin-bottom:1.5rem">
+  <label for="ask-question" style="font-weight:600">Ask your finances</label>
+  <p style="font-size:12px;color:var(--text-muted);margin:0.25rem 0 0.6rem">
+    Ask in plain English — e.g. "how much did I spend on groceries last month?" or
+    "am I on track this month?" — and we'll answer from your own numbers.
+  </p>
+  <div style="display:flex;gap:0.5rem;align-items:center">
+    <input type="text" id="ask-question" name="question"
+           placeholder="how much did I spend on groceries last month?"
+           style="flex:1;margin:0"
+           hx-post="/ask" hx-target="#ask-answer" hx-swap="innerHTML"
+           hx-trigger="keyup[key=='Enter']" hx-indicator="#ask-spinner">
+    <button type="button" class="btn btn-primary" style="margin:0;white-space:nowrap"
+            hx-post="/ask" hx-include="#ask-question"
+            hx-target="#ask-answer" hx-swap="innerHTML" hx-indicator="#ask-spinner">
+      Ask
+    </button>
+  </div>
+  <span id="ask-spinner" class="htmx-indicator" style="font-size:12px;color:var(--text-muted)">Thinking…</span>
+  <div id="ask-answer"></div>
+</div>
+{% endif %}

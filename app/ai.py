@@ -298,3 +298,115 @@ def _call_forecast_model(facts, today, api_key):
         return response.parsed_output
     except Exception as e:  # network, auth, malformed output, missing package
         raise ParseError(str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# v10.3 — "Ask your finances" (tool-use).
+#
+# The capstone LLM technique and the only one not built before: multi-turn tool
+# use. The user asks a plain-English question; the model answers ONLY by calling
+# the app's read-only, per-user-scoped query tools — it never computes or invents
+# a figure, it calls a tool and reports what the tool returns. Same split of
+# responsibility as Insight/Forecast, but multi-turn:
+#
+#   model -> tool_use -> app runs the tool -> tool_result -> model -> answer
+#
+# The security boundary is the tool surface, which lives in blueprints/ask.py
+# (where current_user.id is bound). This module owns ONLY the conversation loop
+# and its single isolated network seam — it never touches the DB and is never
+# handed a user id. `dispatch` is a callback the blueprint supplies (a closure
+# over the current user) that validates args and runs one fixed query.
+# ---------------------------------------------------------------------------
+
+ASK_MODEL = MODEL          # Haiku — Sean's cost call, same as the other AI beats.
+ASK_MAX_TURNS = 6          # hard cap on model<->tool round-trips (loop guard).
+
+
+def answer_question(question, tool_specs, dispatch, *, today=None):
+    """Answer a free-text finance question by letting Claude orchestrate the
+    read-only query tools and narrate the result.
+
+    `tool_specs` is the list of tool JSON definitions; `dispatch(name, raw_input)`
+    is the blueprint's per-user callback returning a (content_str, is_error)
+    tuple for each tool call. Returns {"answer": str, "tools_used": [name, ...]}.
+    Raises ParseError on any failure (no key/package, API error, empty answer,
+    or exceeding the turn cap) so the caller can fall back gracefully.
+    """
+    today = today or date.today()
+    question = (question or "").strip()
+    if not question:
+        raise ParseError("No question to answer")
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ParseError("ANTHROPIC_API_KEY is not set")
+
+    messages = [{"role": "user", "content": question}]
+    tools_used = []
+
+    for _ in range(ASK_MAX_TURNS):
+        response = _call_ask_model(messages, tool_specs, today, api_key)
+        if response is None:
+            raise ParseError("Model returned no response")
+
+        blocks = list(response.content or [])
+        tool_uses = [b for b in blocks if getattr(b, "type", None) == "tool_use"]
+
+        if getattr(response, "stop_reason", None) != "tool_use" and not tool_uses:
+            text = " ".join(
+                b.text.strip() for b in blocks
+                if getattr(b, "type", None) == "text" and getattr(b, "text", "")
+            ).strip()
+            if not text:
+                raise ParseError("Model returned an empty answer")
+            return {"answer": text, "tools_used": tools_used}
+
+        # Echo the assistant turn (incl. its tool_use blocks) back, then run each
+        # tool and return ALL results in a single user message (the API contract
+        # for parallel tool calls).
+        messages.append({"role": "assistant", "content": blocks})
+        results = []
+        for tu in tool_uses:
+            tools_used.append(tu.name)
+            content, is_error = dispatch(tu.name, tu.input)
+            results.append({
+                "type": "tool_result",
+                "tool_use_id": tu.id,
+                "content": content,
+                "is_error": is_error,
+            })
+        messages.append({"role": "user", "content": results})
+
+    raise ParseError("Exceeded tool-use turn limit")
+
+
+def _call_ask_model(messages, tool_specs, today, api_key):
+    """The single network call for the ask loop — isolated so tests can stub it
+    without hitting the API (feeding canned tool_use/text responses). Returns the
+    raw Message (with .content and .stop_reason); wraps any SDK, network, or
+    missing-package error in ParseError."""
+    system = (
+        "You answer questions about the user's OWN personal finances. You may "
+        "answer ONLY by calling the provided tools — never compute, estimate, or "
+        "invent a figure yourself; call a tool and report exactly what it "
+        "returns. Use list_categories first if you need the user's category "
+        "names. If the available tools cannot answer the question, say so plainly "
+        "rather than guessing. Keep the final answer concise, friendly, and in "
+        "plain English — write plain text only, with NO Markdown, asterisks, "
+        "bullet syntax, or other formatting. Today's date is "
+        f"{today.isoformat()}."
+    )
+    try:
+        import anthropic
+        # Bound each call so a stuck request fails fast into the graceful fallback
+        # rather than hanging the loop toward the gunicorn worker timeout.
+        client = anthropic.Anthropic(api_key=api_key, timeout=30.0)
+        return client.messages.create(
+            model=ASK_MODEL,
+            max_tokens=1024,
+            system=system,
+            tools=tool_specs,
+            messages=messages,
+        )
+    except Exception as e:  # network, auth, malformed output, missing package
+        raise ParseError(str(e)) from e

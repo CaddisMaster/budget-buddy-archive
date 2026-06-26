@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection
 from app.blueprints.budgets import compute_budget_vs_actual
-from app.helpers import recent_months
+from app.helpers import recent_months, ai_enabled
 
 bp = Blueprint('analytics', __name__)
 
@@ -237,5 +237,6 @@ def analytics():
         selected_month=selected_month,
         savings_rate=savings_rate,
         yoy=yoy,
-        spending_by_day=spending_by_day
+        spending_by_day=spending_by_day,
+        ai_enabled=ai_enabled()
     )

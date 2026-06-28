@@ -33,5 +33,92 @@
     </p>
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Make transfer</button>
 </form>
+
+<h2 style="margin-top:2rem">Automatic transfers</h2>
+<p style="color:var(--text-muted)">
+    Set up a recurring transfer once — Budget Buddy posts it automatically on each
+    due date, going forward (never back-dated), just like the Scheduled tab does
+    for income and bills.
+</p>
+
+<form hx-post="/transfers/recurring" hx-target="#transfer-schedule-rows" hx-swap="afterbegin"
+      hx-on::after-request="if(event.detail.successful){this.reset();toggleAutoTransferFields();document.getElementById('auto-transfer-empty')?.remove();}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>From account</label>
+    <select name="from_account" required>
+        <option value="">-- select account --</option>
+        {% for account in accounts %}
+        <option value="{{ account[0] }}">{{ account[1] }}</option>
+        {% endfor %}
+    </select>
+    <label>To account</label>
+    <select name="to_account" required>
+        <option value="">-- select account --</option>
+        {% for account in accounts %}
+        <option value="{{ account[0] }}">{{ account[1] }}</option>
+        {% endfor %}
+    </select>
+    <label>Amount</label>
+    <input type="number" step="0.01" name="amount" required>
+    <label>Description</label>
+    <input type="text" name="description" placeholder="Transfer">
+    <label>Frequency</label>
+    <select name="frequency" id="autoTransferFreq" onchange="toggleAutoTransferFields()">
+        <option value="weekly">Weekly (every week)</option>
+        <option value="biweekly">Bi-weekly (every 2 weeks)</option>
+        <option value="semimonthly">Semi-monthly (twice a month)</option>
+        <option value="monthly" selected>Monthly</option>
+        <option value="quarterly">Quarterly (every 3 months)</option>
+        <option value="annually">Annually</option>
+    </select>
+    <div id="autoTransferSemiDiv" style="display:none">
+        <label>Days of the month</label>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+            <input type="number" name="anchor_day" min="1" max="31" placeholder="e.g. 1" style="margin:0">
+            <span>and</span>
+            <input type="number" name="second_day" min="1" max="31" placeholder="e.g. 15" style="margin:0">
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:0.25rem">
+            The two days each month to move the money. Use 31 for "last day." We'll
+            start from the next upcoming day — nothing back-dated.
+        </p>
+    </div>
+    <div id="autoTransferDateDiv">
+        <label>Next date</label>
+        <input type="date" name="next_due">
+        <p style="font-size:12px;color:var(--text-muted);margin-top:0.25rem">
+            The first date this should run. Must be today or later.
+        </p>
+    </div>
+    <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add automatic transfer</button>
+</form>
+
+<h3 style="margin-top:1.5rem">Your automatic transfers</h3>
+<div class="table-wrapper">
+    <table>
+        <thead><tr>
+            <th>From</th><th>To</th><th>Amount</th><th>Description</th>
+            <th>Frequency</th><th>Next due</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="transfer-schedule-rows">
+        {% for schedule in schedules %}
+        {% include 'partials/_transfer_schedule_row.html' %}
+        {% endfor %}
+        {% if not schedules %}
+        <tr id="auto-transfer-empty"><td colspan="7" style="color:var(--text-muted)">No automatic transfers yet. Add one above.</td></tr>
+        {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+// Show the two-day inputs for semi-monthly, the Next-date picker otherwise.
+window.toggleAutoTransferFields = function () {
+    const semi = document.getElementById('autoTransferFreq').value === 'semimonthly';
+    document.getElementById('autoTransferSemiDiv').style.display = semi ? 'block' : 'none';
+    document.getElementById('autoTransferDateDiv').style.display = semi ? 'none' : 'block';
+};
+toggleAutoTransferFields();
+</script>
 {% endif %}
 {% endblock %}

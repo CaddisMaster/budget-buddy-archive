@@ -22,7 +22,9 @@ def index():
 @login_required
 def dashboard():
     from app.blueprints.schedules import run_due_schedules  # lazy: avoids import cycle
+    from app.blueprints.transfers import run_due_transfers
     run_due_schedules(current_user.id)
+    run_due_transfers(current_user.id)
     selected_month = request.args.get('month')
     months = []
     today = datetime.today()

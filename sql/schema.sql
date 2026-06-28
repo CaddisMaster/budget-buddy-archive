@@ -162,3 +162,24 @@ CREATE TABLE public.forecasts (
     created_at timestamp without time zone DEFAULT now(),
     CONSTRAINT uq_forecast_user_period UNIQUE (user_id, year, month)
 );
+
+-- ------------------------------------------------------------
+-- Transfer schedules (v10.4 — recurring transfers; see sql/17)
+-- The transfer-tab twin of `schedules`: run_due_transfers() materializes a
+-- paired expense+income transfer (shared transfer_group_id, is_transfer=true) on
+-- each due date going forward. Two accounts, no category → its own table.
+-- ------------------------------------------------------------
+CREATE TABLE public.transfer_schedules (
+    id SERIAL PRIMARY KEY,
+    amount numeric(10,2) NOT NULL,
+    description text,
+    from_account_id integer NOT NULL REFERENCES account(account_id) ON DELETE RESTRICT,
+    to_account_id   integer NOT NULL REFERENCES account(account_id) ON DELETE RESTRICT,
+    frequency character varying(20) NOT NULL,
+    anchor_day smallint,
+    second_day smallint,
+    next_due date NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamp without time zone DEFAULT now(),
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);

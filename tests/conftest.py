@@ -100,6 +100,7 @@ def _delete_user(username):
         cur.execute("DELETE FROM budgets WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM goals WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM schedules WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM transfer_schedules WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM insights WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM forecasts WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM categories WHERE user_id = %s", (user_id,))
@@ -388,6 +389,54 @@ def fetch_schedule(schedule_id):
     cur.close()
     conn.close()
     return row
+
+
+def create_transfer_schedule(user_id, from_account, to_account, amount, frequency,
+                             next_due, anchor_day=None, second_day=None,
+                             is_active=True, description="seed-auto-transfer"):
+    """Insert a recurring-transfer template directly (bypassing the form)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO transfer_schedules (amount, description, from_account_id, "
+        "to_account_id, frequency, anchor_day, second_day, next_due, is_active, "
+        "user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        (amount, description, from_account, to_account, frequency, anchor_day,
+         second_day, next_due, is_active, user_id),
+    )
+    tsid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return tsid
+
+
+def fetch_transfer_schedule(schedule_id):
+    """Return (amount, frequency, next_due, from_account_id, to_account_id,
+    user_id) for a recurring transfer, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT amount, frequency, next_due, from_account_id, to_account_id, "
+        "user_id FROM transfer_schedules WHERE id = %s",
+        (schedule_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def count_transfer_schedules(user_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM transfer_schedules WHERE user_id = %s", (user_id,)
+    )
+    n = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return n
 
 
 def count_transactions_like(user_id, description):

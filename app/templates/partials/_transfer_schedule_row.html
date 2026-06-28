@@ -1,0 +1,23 @@
+{# transfer-schedule tuple: 0 id, 1 amount, 2 description, 3 from_account_id,
+   4 to_account_id, 5 frequency, 6 anchor_day, 7 second_day, 8 next_due,
+   9 is_active, 10 from_account_name, 11 to_account_name #}
+<tr id="transfer-schedule-{{ schedule[0] }}">
+  <td>{{ schedule[10] or 'No account' }}</td>
+  <td>{{ schedule[11] or 'No account' }}</td>
+  <td>${{ "%.2f"|format(schedule[1]) }}</td>
+  <td>{{ schedule[2] or '—' }}</td>
+  <td>
+    {{ frequency_labels.get(schedule[5], schedule[5]) }}
+    {% if schedule[5] == 'semimonthly' %}<span style="color:var(--text-muted)">({{ schedule[6] }} &amp; {{ schedule[7] }})</span>{% endif %}
+  </td>
+  <td>{{ schedule[8] }}</td>
+  <td class="row-actions">
+    <button type="button" class="btn btn-sm"
+      hx-get="/transfers/recurring/{{ schedule[0] }}/edit"
+      hx-target="#transfer-schedule-{{ schedule[0] }}" hx-swap="outerHTML">Edit</button>
+    <button type="button" class="btn btn-sm btn-danger"
+      hx-delete="/transfers/recurring/{{ schedule[0] }}"
+      hx-target="#transfer-schedule-{{ schedule[0] }}" hx-swap="outerHTML"
+      hx-confirm="Delete this automatic transfer? Transfers it already posted stay in your history.">Delete</button>
+  </td>
+</tr>

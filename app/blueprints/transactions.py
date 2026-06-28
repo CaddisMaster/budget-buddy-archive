@@ -283,7 +283,9 @@ def render_history_tbody():
 @login_required
 def transactions():
     from app.blueprints.schedules import run_due_schedules  # lazy: avoids import cycle
+    from app.blueprints.transfers import run_due_transfers
     run_due_schedules(current_user.id)
+    run_due_transfers(current_user.id)
     selected_month = request.args.get('month')
     search = request.args.get('search', '').strip()
     page = int(request.args.get('page', 1))

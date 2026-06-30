@@ -27,6 +27,7 @@
   <a href="/transactions/export{% if selected_month %}?month={{ selected_month }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn">Export CSV</a>
 </div>
 <p style="font-size:13px;color:var(--text-muted);margin-bottom:0.75rem">{{ total }} transaction{{ 's' if total != 1 else '' }}</p>
+{% if cleanup_enabled %}{% include 'partials/_cleanup_banner.html' %}{% endif %}
 {% if total == 0 and not search and not selected_month %}
 <p style="color:var(--text-muted)">No transactions yet. <a href="/transactions/new">Add your first transaction →</a></p>
 {% else %}

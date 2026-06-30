@@ -1,0 +1,16 @@
+{# v10.5 Auto-Categorize banner. Wrapper kept in the DOM (incl. an empty
+   #cleanup-panel) so apply can OOB-swap it to refresh the count + clear the
+   review list. `oob` marks it for the out-of-band swap on apply. #}
+<div id="cleanup-banner"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if uncategorized_count > 0 %}
+  <div class="card" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+    <span>⚠ {{ uncategorized_count }} uncategorized transaction{{ 's' if uncategorized_count != 1 else '' }}</span>
+    <button class="btn btn-primary"
+            hx-post="/transactions/cleanup/scan"
+            hx-target="#cleanup-panel" hx-swap="innerHTML"
+            hx-indicator="#cleanup-spinner">Review →</button>
+    <span id="cleanup-spinner" class="htmx-indicator" style="color:var(--text-muted)">Scanning your transactions…</span>
+  </div>
+  {% endif %}
+  <div id="cleanup-panel"></div>
+</div>

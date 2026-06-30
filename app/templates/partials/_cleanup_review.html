@@ -1,0 +1,42 @@
+{# v10.5 Auto-Categorize review list. Proposals only — nothing is applied until
+   the user confirms. Pre-checked rows; the category dropdown is editable so the
+   user can override the suggestion or uncheck the row entirely. Confirm posts
+   the checked rows to /cleanup/apply, which swaps the History tbody (#txn-rows)
+   and OOB-refreshes the banner. #}
+<form hx-post="/transactions/cleanup/apply" hx-target="#txn-rows" hx-swap="outerHTML">
+  <div class="card" style="margin-bottom:1rem">
+    <h3 style="margin-top:0">Suggested categories</h3>
+    <p style="font-size:13px;color:var(--text-muted)">
+      Review the suggestions below. Override a category, or uncheck a row to skip it —
+      nothing is applied until you confirm.
+    </p>
+    <div class="table-wrapper">
+    <table>
+      <thead><tr><th></th><th>Description</th><th>Amount</th><th>Category</th><th>Confidence</th></tr></thead>
+      <tbody>
+      {% for it in items %}
+      <tr>
+        <td><input type="checkbox" name="row_id" value="{{ it.id }}" checked></td>
+        <td>{{ it.description }}{% if it.current_category %}
+          <span style="color:var(--text-muted)">(now: {{ it.current_category }})</span>{% endif %}</td>
+        <td>{{ '%.2f'|format(it.amount) }}</td>
+        <td>
+          <select name="category_{{ it.id }}">
+            {% for c in categories %}
+            <option value="{{ c[0] }}" {% if c[0] == it.suggested_id %}selected{% endif %}>{{ c[1] }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td><span class="recurring-badge">{{ it.confidence }}</span></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div style="margin-top:0.75rem;display:flex;gap:0.5rem">
+      <button type="submit" class="btn btn-primary">Confirm selected</button>
+      <button type="button" class="btn"
+              onclick="document.getElementById('cleanup-panel').innerHTML=''">Cancel</button>
+    </div>
+  </div>
+</form>

@@ -431,3 +431,140 @@ def _call_ask_model(messages, tool_specs, today, api_key):
         )
     except Exception as e:  # network, auth, malformed output, missing package
         raise ParseError(str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# v10.5 — "Auto-Categorize & Cleanup" (batch classification).
+#
+# Budget Buddy's fifth AI feature and its batch-classification beat. The app
+# picks the candidate rows (uncategorized, plus recent rows that may be
+# mis-filed) and owns the write; the model only PROPOSES a category name +
+# confidence per row. Same split and graceful-degradation contract as the other
+# beats: one isolated network seam, a pure normalizer that re-resolves every
+# proposed name against the user's OWN categories (so the model can never invent
+# a category or reach another user's rows), and ParseError on any failure. The
+# user bulk-confirms in a review list — nothing the model returns is ever applied
+# automatically. Sean's deliberate cost call: this is the ONE feature on Sonnet
+# (categorization accuracy is worth more than pennies here), unlike the Haiku
+# beats above.
+# ---------------------------------------------------------------------------
+
+CATEGORIZE_MODEL = "claude-sonnet-4-6"
+_CONFIDENCES = ("high", "medium", "low")
+
+
+class _Suggestion(BaseModel):
+    """One proposed categorization. Treated as untrusted — re-resolved and
+    re-validated in _normalize_suggestions()."""
+    id: int                       # the transaction id we asked about
+    category: Optional[str]       # one of the user's category names, or null
+    confidence: str               # "high" | "medium" | "low"
+
+
+class _Suggestions(BaseModel):
+    """The batch shape we ask Claude to return (structured outputs)."""
+    suggestions: list[_Suggestion]
+
+
+def classify_transactions(rows, categories, *, today=None):
+    """Propose a category for each candidate transaction in one batched call.
+
+    `rows` is the candidate payload — a list of dicts with at least
+    {id, description, amount, type, current_category}. `categories` is the user's
+    own rows as (id, name) tuples (the same shape new_transaction loads). Returns
+    a list of resolved suggestions:
+
+        [{id, category_id, category_name, confidence}, ...]
+
+    Each category_id is matched ONLY against a category the user actually owns
+    (server-side, case-insensitive); proposals naming nothing the user owns are
+    dropped, as are ids outside the submitted set. Raises ParseError on any
+    failure (no key, package missing, API/output error) so the caller can fall
+    back to the un-scanned banner + an error toast.
+    """
+    today = today or date.today()
+    if not rows:
+        return []
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ParseError("ANTHROPIC_API_KEY is not set")
+
+    category_names = [c[1] for c in categories]
+    parsed = _call_categorize_model(rows, category_names, today, api_key)
+    if parsed is None:
+        raise ParseError("Model returned no structured output")
+
+    valid_ids = {int(r["id"]) for r in rows}
+    return _normalize_suggestions(parsed, categories, valid_ids)
+
+
+def _normalize_suggestions(parsed, categories, valid_ids):
+    """Coerce/validate the model's batch into safe, resolved suggestions. Pure —
+    no API, so the resolution and validation logic is directly unit-testable.
+    Drops any proposal whose category doesn't resolve to a row the user owns or
+    whose id wasn't one we asked about."""
+    out = []
+    seen = set()
+    for s in (parsed.suggestions or []):
+        try:
+            sid = int(s.id)
+        except (TypeError, ValueError):
+            continue
+        if sid not in valid_ids or sid in seen:
+            continue
+        category_id = _match_id(s.category, categories)
+        if category_id is None:
+            continue  # model named nothing the user actually owns
+        confidence = (s.confidence or "").strip().lower()
+        if confidence not in _CONFIDENCES:
+            confidence = "low"
+        seen.add(sid)
+        out.append({
+            "id": sid,
+            "category_id": category_id,
+            "category_name": _name_for(category_id, categories),
+            "confidence": confidence,
+        })
+    return out
+
+
+def _name_for(category_id, categories):
+    """The owned category's display name for a resolved id (None if not found)."""
+    for row in categories:
+        if row[0] == category_id:
+            return row[1]
+    return None
+
+
+def _call_categorize_model(rows, category_names, today, api_key):
+    """The single network call for batch classification — isolated so tests can
+    stub it without hitting the API. Returns a _Suggestions (or None); wraps any
+    SDK, network, or missing-package error in ParseError."""
+    system = (
+        "You categorize personal-finance transactions. You are given a JSON list "
+        "of transactions (each with an id, description, amount, type, and the "
+        "current category if any) and the user's available category names. For "
+        "EACH transaction, choose the single best-fitting category from the "
+        "provided list and return its exact name, or null if none fits — do NOT "
+        "invent a category that isn't in the list. Set confidence to 'high', "
+        "'medium', or 'low' based on how clearly the description maps to the "
+        "category. Return one suggestion object per input transaction, echoing "
+        "its id. Today's date is " + today.isoformat() + ".\n"
+        "Available categories: " + json.dumps(category_names)
+    )
+    try:
+        import anthropic
+        # Bound the call so a stuck request fails fast into the graceful fallback
+        # rather than drifting toward the gunicorn worker timeout.
+        client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
+        response = client.messages.parse(
+            model=CATEGORIZE_MODEL,
+            max_tokens=2048,
+            system=system,
+            messages=[{"role": "user", "content": json.dumps(rows, default=str)}],
+            output_format=_Suggestions,
+        )
+        return response.parsed_output
+    except Exception as e:  # network, auth, malformed output, missing package
+        raise ParseError(str(e)) from e

@@ -12,7 +12,7 @@ from flask_login import login_required, current_user
 from app import limiter
 from app.db import get_db_connection, db_cursor
 from app.helpers import recent_months, is_htmx, hx_toast, ai_enabled
-from app.ai import parse_transaction_text, ParseError
+from app.ai import parse_transaction_text, classify_transactions, ParseError
 
 bp = Blueprint('transactions', __name__)
 
@@ -291,6 +291,8 @@ def transactions():
     page = int(request.args.get('page', 1))
     months = recent_months()
     rows, total, total_pages = _load_history(current_user.id, selected_month, search, page)
+    cleanup_enabled = ai_enabled()
+    uncategorized_count = count_uncategorized(current_user.id) if cleanup_enabled else 0
     return render_template('history.html',
         transactions=rows,
         months=months,
@@ -301,6 +303,8 @@ def transactions():
         total=total,
         frequency_labels=FREQUENCY_LABELS,
         filter_qs=_filter_qs(selected_month, search, page),
+        cleanup_enabled=cleanup_enabled,
+        uncategorized_count=uncategorized_count,
     )
 
 
@@ -450,3 +454,208 @@ def export_transactions():
     response.headers['Content-Disposition'] = 'attachment; filename=transactions.csv'
     response.headers['Content-Type'] = 'text/csv'
     return response
+
+
+# ---------------------------------------------------------------------------
+# v10.5 — Auto-Categorize & Cleanup.
+#
+# A banner on History counts uncategorized rows; "Review" runs ONE batched Sonnet
+# call (app/ai.py::classify_transactions) over the candidate rows and renders a
+# review list of PROPOSALS the user bulk-confirms. The app picks the candidates
+# and owns the write (ownership + validate_category_account guards); the model
+# only proposes. Nothing auto-applies. Gated on ai_enabled(); degrades to an
+# error toast, never a broken History page.
+# ---------------------------------------------------------------------------
+
+CLEANUP_BATCH_CAP = 50          # max rows sent to the model per scan
+CLEANUP_RECENT_DAYS = 90        # window of categorized rows eligible for re-suggestion
+
+
+def count_uncategorized(user_id):
+    """How many of the user's real EXPENSE transactions have no category — the
+    deterministic number the History banner shows. Scoped to expenses on purpose:
+    categories in Budget Buddy are effectively expense categories (budgets, the
+    category breakdown, and analytics all filter to expense), so an uncategorized
+    income row has no downstream effect AND can never get a suggestion — counting
+    it would make the banner promise a fix the scan can't deliver."""
+    with db_cursor() as cursor:
+        cursor.execute("""
+            SELECT COUNT(*) FROM transactions
+            WHERE user_id = %s AND category_id IS NULL
+            AND transaction_type = 'expense'
+            AND is_transfer = false AND is_adjustment = false
+        """, (user_id,))
+        return cursor.fetchone()[0]
+
+
+def _load_cleanup_candidates(user_id, cap=CLEANUP_BATCH_CAP):
+    """Rows to hand the classifier, newest first: ALL uncategorized rows first,
+    then fill any remaining slots (up to `cap`) with recently-categorized rows so
+    obviously mis-filed ones can be re-suggested. Scoped to EXPENSES (see
+    count_uncategorized) and excludes transfers/adjustments. Returns row dicts
+    carrying current_category (name or None) for the payload."""
+    candidates = []
+    with db_cursor() as cursor:
+        cursor.execute("""
+            SELECT t.id, t.description, t.amount, t.transaction_type,
+                   t.category_id, c.name
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = %s AND t.category_id IS NULL
+            AND t.transaction_type = 'expense'
+            AND t.is_transfer = false AND t.is_adjustment = false
+            ORDER BY t.transaction_date DESC, t.id DESC
+            LIMIT %s
+        """, (user_id, cap))
+        candidates = list(cursor.fetchall())
+
+        remaining = cap - len(candidates)
+        if remaining > 0:
+            cursor.execute("""
+                SELECT t.id, t.description, t.amount, t.transaction_type,
+                       t.category_id, c.name
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
+                WHERE t.user_id = %s AND t.category_id IS NOT NULL
+                AND t.transaction_type = 'expense'
+                AND t.is_transfer = false AND t.is_adjustment = false
+                AND t.transaction_date >= %s
+                ORDER BY t.transaction_date DESC, t.id DESC
+                LIMIT %s
+            """, (user_id, date.today() - timedelta(days=CLEANUP_RECENT_DAYS), remaining))
+            candidates += list(cursor.fetchall())
+
+    rows = []
+    for r in candidates:
+        rows.append({
+            'id': r[0],
+            'description': r[1] or '',
+            'amount': float(r[2]),
+            'type': r[3],
+            'current_category_id': r[4],
+            'current_category': r[5],
+        })
+    return rows
+
+
+def _cleanup_payload(rows):
+    """The trimmed view the model sees — never expose internal ids beyond the row
+    id it must echo back, and only the fields it needs to classify."""
+    return [{
+        'id': r['id'],
+        'description': r['description'],
+        'amount': r['amount'],
+        'type': r['type'],
+        'current_category': r['current_category'],
+    } for r in rows]
+
+
+@bp.route('/transactions/cleanup/scan', methods=['POST'])
+@limiter.limit("10 per minute")
+@login_required
+def cleanup_scan():
+    """Run one batched classification over the candidate rows and render the
+    review list. Surfaces a suggestion when the row is uncategorized (any
+    confidence) or when it's categorized and the model proposes a DIFFERENT
+    category at HIGH confidence. Any failure / nothing to review falls back to an
+    error toast without clearing the panel."""
+    if not ai_enabled():
+        abort(404)
+
+    rows = _load_cleanup_candidates(current_user.id)
+    by_id = {r['id']: r for r in rows}
+
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name",
+                       (current_user.id,))
+        all_categories = cursor.fetchall()
+
+    def _toast_only(message):
+        resp = hx_toast(make_response('', 200), message, 'error')
+        resp.headers['HX-Reswap'] = 'none'
+        return resp
+
+    if not rows:
+        return _toast_only('Nothing to review — everything is categorized')
+
+    try:
+        suggestions = classify_transactions(_cleanup_payload(rows), all_categories)
+    except ParseError:
+        return _toast_only("Couldn't scan right now — try again")
+
+    items = []
+    for s in suggestions:
+        row = by_id.get(s['id'])
+        if row is None:
+            continue
+        current_id = row['current_category_id']
+        if current_id is None:
+            pass  # uncategorized — always surface
+        elif s['category_id'] == current_id or s['confidence'] != 'high':
+            continue  # categorized: only high-confidence disagreements
+        items.append({
+            'id': row['id'],
+            'description': row['description'],
+            'amount': row['amount'],
+            'type': row['type'],
+            'current_category': row['current_category'],
+            'suggested_id': s['category_id'],
+            'suggested_name': s['category_name'],
+            'confidence': s['confidence'],
+        })
+
+    if not items:
+        return _toast_only('Nothing to review — no confident suggestions')
+
+    resp = make_response(render_template(
+        'partials/_cleanup_review.html', items=items, categories=all_categories))
+    return hx_toast(resp, f'{len(items)} suggestion{"s" if len(items) != 1 else ""} to review')
+
+
+@bp.route('/transactions/cleanup/apply', methods=['POST'])
+@limiter.limit("10 per minute")
+@login_required
+def cleanup_apply():
+    """Apply the checked suggestions — for each checked row, set its category to
+    the chosen one. Guards transaction ownership (WHERE id AND user_id) AND
+    validates the chosen category belongs to the user (validate_category_account)
+    before writing, so the model/form can't reach another user's data. Returns
+    the refreshed History tbody + an updated banner. Nothing auto-applies — only
+    rows the user checked are written."""
+    if not ai_enabled():
+        abort(404)
+
+    checked = request.form.getlist('row_id')
+    applied = 0
+    with db_cursor(commit=True) as cursor:
+        for rid in checked:
+            try:
+                row_id = int(rid)
+            except (TypeError, ValueError):
+                continue
+            category_id = request.form.get(f'category_{row_id}') or None
+            if category_id is None:
+                continue
+            try:
+                category_id = int(category_id)
+            except (TypeError, ValueError):
+                continue
+            if validate_category_account(cursor, current_user.id, category_id, None):
+                continue  # not the user's category — skip (write-side IDOR guard)
+            cursor.execute(
+                "UPDATE transactions SET category_id = %s WHERE id = %s AND user_id = %s",
+                (category_id, row_id, current_user.id))
+            applied += cursor.rowcount
+
+    resp = make_response(render_history_tbody() + _cleanup_banner_oob(current_user.id))
+    message = (f'{applied} transaction{"s" if applied != 1 else ""} categorized'
+               if applied else 'Nothing applied')
+    return hx_toast(resp, message, 'success' if applied else 'error')
+
+
+def _cleanup_banner_oob(user_id):
+    """The History banner re-rendered as an out-of-band swap, so applying updates
+    the count (and clears the review panel) alongside the refreshed tbody."""
+    return render_template('partials/_cleanup_banner.html',
+                           uncategorized_count=count_uncategorized(user_id),
+                           cleanup_enabled=True, oob=True)

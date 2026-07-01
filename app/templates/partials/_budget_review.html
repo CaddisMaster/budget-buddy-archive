@@ -1,0 +1,40 @@
+{# v10.7 AI Budget Review list. Proposals only — nothing is applied until the
+   user confirms. Pre-checked rows; the amount input is editable so the user can
+   override the proposal or uncheck the row entirely. Confirm posts the checked
+   rows to /budgets/review/apply, which swaps the whole budgets tbody
+   (#budget-rows) and OOB-clears this panel. #}
+<form hx-post="/budgets/review/apply" hx-target="#budget-rows" hx-swap="outerHTML">
+  <div class="card" style="margin-bottom:1rem">
+    <h3 style="margin-top:0">Proposed budgets</h3>
+    <p class="insight-summary">{{ summary }}</p>
+    <p style="font-size:13px;color:var(--text-muted)">
+      Edit an amount, or uncheck a row to skip it — nothing is applied until you confirm.
+    </p>
+    <div class="table-wrapper">
+    <table>
+      <thead><tr><th></th><th>Category</th><th>Current</th><th>Proposed</th><th>Why</th></tr></thead>
+      <tbody>
+      {% for it in items %}
+      <tr>
+        <td><input type="checkbox" name="category_id" value="{{ it.id }}" checked></td>
+        <td>{{ it.name }}</td>
+        <td>
+          {% if it.current is not none %}${{ "%.0f"|format(it.current) }}
+          {% elif it.suggested is not none %}<span style="color:var(--text-muted)">${{ "%.0f"|format(it.suggested) }} suggested</span>
+          {% else %}—{% endif %}
+        </td>
+        <td><input type="number" step="1" min="1" name="amount_{{ it.id }}"
+                   value="{{ it.proposed }}" style="width:7rem"></td>
+        <td style="font-size:13px;color:var(--text-muted)">{{ it.reason }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div style="margin-top:0.75rem;display:flex;gap:0.5rem">
+      <button type="submit" class="btn btn-primary">Confirm selected</button>
+      <button type="button" class="btn"
+              onclick="document.getElementById('budget-review-panel').innerHTML=''">Cancel</button>
+    </div>
+  </div>
+</form>

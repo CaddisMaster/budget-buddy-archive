@@ -1,0 +1,8 @@
+{# The whole budgets tbody, extracted so review-apply can refresh every row at
+   once (each effective amount may shift). Per-row Save/Clear still swap their
+   own <tr id="budget-N"> — those ids are unchanged inside this wrapper. #}
+<tbody id="budget-rows">
+{% for row in budget_rows %}
+{% include 'partials/_budget_row.html' %}
+{% endfor %}
+</tbody>

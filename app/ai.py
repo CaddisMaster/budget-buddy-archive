@@ -8,6 +8,7 @@ monkeypatch parse_transaction_text) and so a missing ANTHROPIC_API_KEY — or th
 anthropic package not being installed — never breaks app import.
 """
 import json
+import math
 import os
 from datetime import date, datetime
 from typing import Optional
@@ -564,6 +565,169 @@ def _call_categorize_model(rows, category_names, today, api_key):
             system=system,
             messages=[{"role": "user", "content": json.dumps(rows, default=str)}],
             output_format=_Suggestions,
+        )
+        return response.parsed_output
+    except Exception as e:  # network, auth, malformed output, missing package
+        raise ParseError(str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# v10.7 — "AI Budget Review" (right-sizing).
+#
+# The sixth AI feature: one batched review of the user's monthly budgets. The
+# app computes every figure deterministically (compute_budget_review_facts —
+# per-category monthly history, current budget, overrun record) and hands them
+# to Claude as JSON; the model proposes ONE right-sized whole-dollar amount +
+# a one-sentence reason per category, plus a short narrated summary. Unlike the
+# narration-only beats, the model DOES pick the numbers here — so the pure
+# normalizer is the guard: every proposed category is re-resolved against the
+# user's OWN rows (_match_id, invents nothing), and every amount is snapped
+# into a deterministic range derived from the facts themselves. Nothing is
+# applied automatically — the blueprint shows a bulk-confirm review list.
+# ---------------------------------------------------------------------------
+
+BUDGET_REASON_MAX = 200
+
+
+class _BudgetProposal(BaseModel):
+    """One proposed monthly budget. Treated as untrusted — re-resolved and
+    clamped in _normalize_budget_proposals()."""
+    category: str                 # one of the user's category names (echoed back)
+    amount: int                   # proposed whole-dollar monthly budget
+    reason: str                   # one short plain-text sentence
+
+
+class _BudgetReview(BaseModel):
+    """The batch shape we ask Claude to return (structured outputs)."""
+    summary: str                  # 2-3 sentence plain-text overview
+    proposals: list[_BudgetProposal]
+
+
+def propose_budgets(facts, categories, *, today=None):
+    """Propose a right-sized monthly budget per category in one batched call.
+
+    `facts` is the deterministic dict from compute_budget_review_facts();
+    `categories` is the user's own rows as (id, name) tuples. Returns
+
+        {"summary": str,
+         "proposals": [{category_id, category_name, amount, reason}, ...]}
+
+    Each category_id is matched ONLY against a category the user actually owns
+    and each amount is snapped into a range derived from that category's own
+    history, so the model can neither invent a category nor propose a wild
+    figure. Raises ParseError on any failure (no key, package missing,
+    API/output error) so the caller can fall back to an error toast.
+    """
+    today = today or date.today()
+    if not facts.get("categories"):
+        return {"summary": "", "proposals": []}
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ParseError("ANTHROPIC_API_KEY is not set")
+
+    category_names = [c[1] for c in categories]
+    parsed = _call_budget_model(facts, category_names, today, api_key)
+    if parsed is None:
+        raise ParseError("Model returned no structured output")
+
+    summary = (parsed.summary or "").strip()
+    if not summary:
+        raise ParseError("Model returned an empty summary")
+
+    facts_by_name = {
+        str(f["name"]).strip().lower(): f for f in facts["categories"]
+    }
+    return {
+        "summary": summary,
+        "proposals": _normalize_budget_proposals(parsed, categories, facts_by_name),
+    }
+
+
+def _normalize_budget_proposals(parsed, categories, facts_by_name):
+    """Coerce/validate the model's proposals into safe, resolved rows. Pure —
+    no API, so the resolution and clamping logic is directly unit-testable.
+    Drops proposals naming a category the user doesn't own or one we didn't ask
+    about; snaps out-of-range amounts to the nearest bound of a deterministic
+    range built from the category's own facts (rather than dropping — the row
+    stays reviewable with a sane figure)."""
+    out = []
+    seen = set()
+    for p in (parsed.proposals or []):
+        category_id = _match_id(p.category, categories)
+        if category_id is None or category_id in seen:
+            continue  # not the user's category, or a duplicate (first wins)
+        fact = facts_by_name.get(str(p.category).strip().lower())
+        if fact is None:
+            continue  # model proposed for a category we didn't ask about
+
+        # The clamp basis comes from the facts themselves, so ai.py stays
+        # DB-free: half the typical month up to double it (widened to cover the
+        # worst observed month, which is a legitimate "budget for the spike").
+        basis = fact.get("avg_monthly") or fact.get("current_budget")
+        if not basis:
+            continue  # nothing sane to clamp against
+        worst_month = max(
+            (m.get("spent") or 0 for m in fact.get("monthly_totals", [])),
+            default=0,
+        )
+        lo = max(1, math.floor(0.5 * basis))
+        hi = max(math.ceil(2 * basis), math.ceil(worst_month), lo)
+
+        try:
+            amount = int(round(float(p.amount)))
+        except (TypeError, ValueError):
+            continue
+        if amount <= 0:
+            continue
+        amount = min(max(amount, lo), hi)
+
+        reason = (p.reason or "").strip()[:BUDGET_REASON_MAX]
+        if not reason:
+            reason = "Based on your recent spending"
+
+        seen.add(category_id)
+        out.append({
+            "category_id": category_id,
+            "category_name": _name_for(category_id, categories),
+            "amount": amount,
+            "reason": reason,
+        })
+    return out
+
+
+def _call_budget_model(facts, category_names, today, api_key):
+    """The single network call for the budget review — isolated so tests can
+    stub it without hitting the API. Returns a _BudgetReview (or None); wraps
+    any SDK, network, or missing-package error in ParseError."""
+    system = (
+        "You are a friendly personal-finance coach right-sizing monthly "
+        "category budgets. You are given JSON facts per category: its monthly "
+        "spend totals over the last few months, the average, the current saved "
+        "budget if any, and how many months exceeded it. The facts are ground "
+        "truth — do NOT recompute, re-add, or invent figures. For each category "
+        "propose ONE whole-dollar monthly budget grounded in its typical "
+        "months, not one-off spikes: raise budgets that are chronically "
+        "overrun, trim ones well above real spending. Note the current month "
+        f"({facts.get('current_month')}) is still IN PROGRESS, so treat its "
+        "total as partial. Pick category names ONLY from the provided list, "
+        "exactly as written. Give a one-sentence reason per proposal and first "
+        "a warm 2-3 sentence summary of the overall budget picture. Write "
+        "plain text only, with NO Markdown, asterisks, bullet syntax, or other "
+        f"formatting. Today's date is {today.isoformat()}.\n"
+        "Categories: " + json.dumps(category_names)
+    )
+    try:
+        import anthropic
+        # Bound the call so a stuck request fails fast into the graceful fallback
+        # rather than drifting toward the gunicorn worker timeout.
+        client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
+        response = client.messages.parse(
+            model=MODEL,
+            max_tokens=3000,
+            system=system,
+            messages=[{"role": "user", "content": json.dumps(facts, default=str)}],
+            output_format=_BudgetReview,
         )
         return response.parsed_output
     except Exception as e:  # network, auth, malformed output, missing package

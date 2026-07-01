@@ -1,7 +1,9 @@
 {% set month_names = ['','January','February','March','April','May','June','July','August','September','October','November','December'] %}
-<div id="forecast-card" class="card forecast-card">
-  <div class="insight-head">
-    <h2 style="margin:0">🔮 Forecast — {{ month_names[forecast_month] }} {{ forecast_year }}</h2>
+<div id="forecast-card" class="card ai-card forecast-card">
+  <div class="ai-head">
+    {% include 'partials/_ai_spark.html' %}
+    <h2>Forecast — {{ month_names[forecast_month] }} {{ forecast_year }}</h2>
+    <span class="ai-badge">AI</span>
     <span id="forecast-spinner" class="htmx-indicator insight-spinner">Forecasting…</span>
   </div>
   {% if forecast %}

@@ -46,6 +46,12 @@ def _this_month():
     return t.year, t.month
 
 
+def _prev_month():
+    """The last complete month — what the dashboard Insight card now recaps."""
+    t = date.today()
+    return (t.year - 1, 12) if t.month == 1 else (t.year, t.month - 1)
+
+
 # --- compute_month_facts (deterministic, DB-backed) -------------------------
 
 def test_compute_month_facts_figures_and_overruns(users):
@@ -119,7 +125,13 @@ def test_generate_returns_card_fragment_and_caches(client_a, users, monkeypatch)
 # --- cache hit: dashboard load must NOT call the model ----------------------
 
 def test_dashboard_uses_cache_without_calling_model(client_a, users, monkeypatch):
-    year, month = _this_month()
+    # The dashboard Insight card recaps the previous complete month, so seed
+    # prior-month activity (making the card show), generate that month's digest,
+    # then confirm the dashboard reuses the cache without another model call.
+    a = users["a"]
+    year, month = _prev_month()
+    create_transaction(a["id"], a["account_id"], 30, date(year, month, 15),
+                       transaction_type="expense", category_id=a["category_id"])
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     seam = _Seam(_Insight(summary="Cached recap text.", tips=["Tip one"]))
     monkeypatch.setattr(ai, "_call_insight_model", seam)
@@ -163,7 +175,12 @@ def test_generate_no_data_month_skips_model(client_a, users, monkeypatch):
 # --- isolation: A cannot see B's cached insight -----------------------------
 
 def test_dashboard_never_shows_another_users_insight(client_a, users, monkeypatch):
-    year, month = _this_month()
+    # Seed A's prior-month activity so A's card renders, then plant B's cached
+    # digest for that same (read) month — A must never see it.
+    a = users["a"]
+    year, month = _prev_month()
+    create_transaction(a["id"], a["account_id"], 30, date(year, month, 15),
+                       transaction_type="expense", category_id=a["category_id"])
     create_insight(users["b"]["id"], year, month,
                    {"summary": "B-PRIVATE-SUMMARY", "tips": []})
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")

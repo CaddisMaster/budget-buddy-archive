@@ -58,6 +58,16 @@ def test_login_with_bad_password_stays_on_login(anon_client, users):
     assert b"Invalid username or password" in response.data
 
 
+def test_dashboard_shows_hero_summary(client_a):
+    """v10.6 Refresh — the dashboard renders the at-a-glance hero (net position +
+    income/expenses) for a user with transactions."""
+    response = client_a.get("/dashboard")
+    assert response.status_code == 200
+    assert b"Net position" in response.data
+    # USER_A is seeded with a single $42.50 expense, so it surfaces in the hero.
+    assert b"42.50" in response.data
+
+
 def test_logout_redirects_to_login(client_a):
     response = client_a.get("/logout")
     assert response.status_code == 302

@@ -3,8 +3,10 @@
    review list. `oob` marks it for the out-of-band swap on apply. #}
 <div id="cleanup-banner"{% if oob %} hx-swap-oob="true"{% endif %}>
   {% if uncategorized_count > 0 %}
-  <div class="card" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
-    <span>⚠ {{ uncategorized_count }} uncategorized transaction{{ 's' if uncategorized_count != 1 else '' }}</span>
+  <div class="card ai-card" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem">
+    {% include 'partials/_ai_spark.html' %}
+    <span><strong>{{ uncategorized_count }}</strong> uncategorized transaction{{ 's' if uncategorized_count != 1 else '' }}</span>
+    <span class="ai-badge">AI</span>
     <button class="btn btn-primary"
             hx-post="/transactions/cleanup/scan"
             hx-target="#cleanup-panel" hx-swap="innerHTML"

@@ -6,7 +6,7 @@ from app.db import get_db_connection
 from app.helpers import ai_enabled
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
-from app.blueprints.insights import load_insight, compute_month_facts
+from app.blueprints.insights import load_insight, compute_month_facts, _prev_month
 from app.blueprints.forecasts import load_forecast, compute_forecast
 
 bp = Blueprint('main', __name__)
@@ -121,24 +121,36 @@ def dashboard():
 
     goals_view = build_goals_view(cursor, current_user.id)
 
-    # v10.1 Insight card — always the *current* month (independent of the chart
-    # month filter) so the cache key stays stable. Reads the cached digest only;
-    # no model call on page load. Facts are recomputed (cheap) so the card's
-    # deterministic strip renders alongside the cached narrative.
+    # AI cards (both independent of the chart month filter so their cache keys
+    # stay stable; cache-only on load, no model call). Each is positioned at a
+    # distinct moment in time and HIDDEN entirely when its target month has
+    # nothing to say (v10.6) — so the dashboard never leads with a dead card:
+    #   * Insight (v10.1) is RETROSPECTIVE → the last COMPLETE month, so on the
+    #     1st of a new month it shows a fully-populated prior-month recap rather
+    #     than an empty in-progress one. Shown only if that month had activity.
+    #   * Forecast (v10.2) is PROSPECTIVE → the current month. Shown only when
+    #     there's something to project (month-to-date activity OR a scheduled
+    #     item still to land) — mirrors the generator's own not-enough-data gate.
     ai_on = ai_enabled()
     insight = None
     insight_facts = None
+    show_insight = False
     forecast = None
     forecast_facts = None
+    show_forecast = False
+    insight_year, insight_month = _prev_month(today.year, today.month)
     if ai_on:
-        insight = load_insight(cursor, current_user.id, today.year, today.month)
-        if insight:
-            insight_facts = compute_month_facts(current_user.id, today.year, today.month)
-        # v10.2 Forecast — the forward-looking twin of Insight, same current-month
-        # cache key, cache-only on load (no model call).
-        forecast = load_forecast(cursor, current_user.id, today.year, today.month)
-        if forecast:
-            forecast_facts = compute_forecast(current_user.id, today.year, today.month)
+        insight_facts = compute_month_facts(current_user.id, insight_year, insight_month)
+        show_insight = insight_facts['income'] > 0 or insight_facts['expenses'] > 0
+        if show_insight:
+            insight = load_insight(cursor, current_user.id, insight_year, insight_month)
+
+        forecast_facts = compute_forecast(current_user.id, today.year, today.month)
+        show_forecast = not (forecast_facts['income_to_date'] == 0
+                             and forecast_facts['expenses_to_date'] == 0
+                             and not forecast_facts['remaining_items'])
+        if show_forecast:
+            forecast = load_forecast(cursor, current_user.id, today.year, today.month)
 
     cursor.close()
     conn.close()
@@ -150,7 +162,21 @@ def dashboard():
     budget_json = json.dumps([{'category': r[0], 'budget': float(r[1]), 'actual': float(r[2])} for r in budget_data])
 
     has_transactions = bool(cash_flow) or bool(spending)
+
+    # v10.6 hero — income/expenses/net for the current view (a single selected
+    # month, or all time). Derived from cash_flow (already fetched) — no extra query.
+    hero_income = sum(float(r[1]) for r in cash_flow)
+    hero_expenses = sum(float(r[2]) for r in cash_flow)
+    summary = {
+        'income': hero_income,
+        'expenses': hero_expenses,
+        'net': hero_income - hero_expenses,
+        'savings_rate': ((hero_income - hero_expenses) / hero_income * 100) if hero_income > 0 else None,
+        'label': selected_month if selected_month else 'All time',
+    }
+
     return render_template('dashboard.html',
+        summary=summary,
         spending_json=spending_json,
         cash_flow_json=cash_flow_json,
         net_balance_json=net_balance_json,
@@ -161,10 +187,12 @@ def dashboard():
         has_transactions=has_transactions,
         goals=goals_view,
         ai_enabled=ai_on,
+        show_insight=show_insight,
         insight=insight,
         facts=insight_facts,
-        insight_year=today.year,
-        insight_month=today.month,
+        insight_year=insight_year,
+        insight_month=insight_month,
+        show_forecast=show_forecast,
         forecast=forecast,
         forecast_facts=forecast_facts,
         forecast_year=today.year,

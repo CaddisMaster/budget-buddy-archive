@@ -11,9 +11,44 @@
         {% endfor %}
     </select>
 </form>
+{% if has_transactions %}
+<div class="hero">
+    <div class="hero-top">
+        <div>
+            <div class="hero-label">Net position · {{ summary.label }}</div>
+            <div class="hero-net {{ 'pos' if summary.net >= 0 else 'neg' }}">
+                {{ '−' if summary.net < 0 else '+' }}${{ "%.2f"|format(summary.net|abs) }}
+            </div>
+            <div class="hero-caption">
+                {% if summary.savings_rate is not none %}
+                    {{ "%.0f"|format(summary.savings_rate) }}% of income kept
+                {% else %}
+                    Income vs. expenses
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <div class="hero-stat-label">Income</div>
+            <div class="hero-stat-val pos">${{ "%.2f"|format(summary.income) }}</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-label">Expenses</div>
+            <div class="hero-stat-val neg">${{ "%.2f"|format(summary.expenses) }}</div>
+        </div>
+        <div class="hero-stat">
+            <div class="hero-stat-label">Net</div>
+            <div class="hero-stat-val {{ 'pos' if summary.net >= 0 else 'neg' }}">
+                {{ '−' if summary.net < 0 else '' }}${{ "%.2f"|format(summary.net|abs) }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% if ai_enabled %}
-{% include 'partials/_insight_card.html' %}
-{% include 'partials/_forecast_card.html' %}
+{% if show_insight %}{% include 'partials/_insight_card.html' %}{% endif %}
+{% if show_forecast %}{% include 'partials/_forecast_card.html' %}{% endif %}
 {% endif %}
 {% if goals %}
 <h2>Savings goals</h2>
@@ -26,7 +61,7 @@
             {% elif g.on_track is true %}<span class="transfer-badge">On track</span>
             {% elif g.on_track is false %}<span class="recurring-badge">Behind</span>{% endif %}
         </div>
-        <div style="background:#e5e7eb;border-radius:6px;height:14px;margin:0.5rem 0;overflow:hidden">
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;height:14px;margin:0.5rem 0;overflow:hidden">
             <div style="background:var(--accent);height:100%;width:{{ g.percent }}%"></div>
         </div>
         <p style="font-size:13px;color:var(--text-muted)">
@@ -38,25 +73,28 @@
 <p style="margin-bottom:1.5rem"><a href="/goals">Manage goals →</a></p>
 {% endif %}
 {% if has_transactions %}
-<h2>Spending by category</h2>
-<div style="max-width: 400px;">
-    <canvas id="spendingPie"></canvas>
-</div>
-<h2>Income vs expenses by month</h2>
-<div style="max-width: 700px;">
-    <canvas id="cashFlowBar"></canvas>
-</div>
-<h2>Net balance over time</h2>
-<div style="max-width: 700px;">
-    <canvas id="netBalanceLine"></canvas>
-</div>
-<h2>Account balances</h2>
-<div style="max-width: 500px;">
-    <canvas id="accountBar"></canvas>
-</div>
-<h2>Budget vs actual</h2>
-<div style="max-width: 700px;">
-    <canvas id="budgetBar"></canvas>
+<h2>Charts</h2>
+<div class="chart-grid">
+    <div class="chart-card">
+        <h3>Spending by category</h3>
+        <canvas id="spendingPie"></canvas>
+    </div>
+    <div class="chart-card">
+        <h3>Account balances</h3>
+        <canvas id="accountBar"></canvas>
+    </div>
+    <div class="chart-card wide">
+        <h3>Income vs expenses by month</h3>
+        <canvas id="cashFlowBar"></canvas>
+    </div>
+    <div class="chart-card wide">
+        <h3>Net balance over time</h3>
+        <canvas id="netBalanceLine"></canvas>
+    </div>
+    <div class="chart-card wide">
+        <h3>Budget vs actual</h3>
+        <canvas id="budgetBar"></canvas>
+    </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
@@ -65,26 +103,39 @@ const cashFlowData = {{ cash_flow_json | safe }};
 const netBalanceData = {{ net_balance_json | safe }};
 const accountData = {{ account_json | safe }};
 const budgetData = {{ budget_json | safe }};
+
+// Theme Chart.js from the CSS design tokens so charts match the app (incl. dark mode).
+const _css = getComputedStyle(document.documentElement);
+const cssVar = (n) => _css.getPropertyValue(n).trim();
+const PALETTE = ['#378ADD','#1D9E75','#EF9F27','#E24B4A','#7c5cff','#D4537E','#639922'];
+Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+Chart.defaults.font.size = 12;
+Chart.defaults.color = cssVar('--text-muted');
+Chart.defaults.borderColor = cssVar('--border');
+Chart.defaults.plugins.legend.labels.boxWidth = 12;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.padding = 14;
+const gridColor = cssVar('--border');
+const gridScales = { x: { grid: { color: gridColor } }, y: { beginAtZero: true, grid: { color: gridColor } } };
+
 new Chart(document.getElementById('spendingPie'), {
-    type: 'pie',
+    type: 'doughnut',
     data: {
         labels: spendingData.map(d => d.category),
-        datasets: [{
-            data: spendingData.map(d => d.total),
-            backgroundColor: ['#378ADD','#1D9E75','#EF9F27','#E24B4A','#7F77DD','#D4537E','#639922']
-        }]
-    }
+        datasets: [{ data: spendingData.map(d => d.total), backgroundColor: PALETTE, borderColor: cssVar('--surface'), borderWidth: 2 }]
+    },
+    options: { aspectRatio: 1.6, cutout: '58%', plugins: { legend: { position: 'right' } } }
 });
 new Chart(document.getElementById('cashFlowBar'), {
     type: 'bar',
     data: {
         labels: cashFlowData.map(d => d.month),
         datasets: [
-            {label: 'Income', data: cashFlowData.map(d => d.income), backgroundColor: '#1D9E75'},
-            {label: 'Expenses', data: cashFlowData.map(d => d.expenses), backgroundColor: '#E24B4A'}
+            {label: 'Income', data: cashFlowData.map(d => d.income), backgroundColor: '#1D9E75', borderRadius: 4},
+            {label: 'Expenses', data: cashFlowData.map(d => d.expenses), backgroundColor: '#E24B4A', borderRadius: 4}
         ]
     },
-    options: { scales: { y: { beginAtZero: true } } }
+    options: { aspectRatio: 3.2, scales: gridScales }
 });
 new Chart(document.getElementById('netBalanceLine'), {
     type: 'line',
@@ -94,12 +145,13 @@ new Chart(document.getElementById('netBalanceLine'), {
             label: 'Net balance',
             data: netBalanceData.map(d => d.balance),
             borderColor: '#378ADD',
-            backgroundColor: 'rgba(55,138,221,0.1)',
+            backgroundColor: 'rgba(55,138,221,0.12)',
             fill: true,
-            tension: 0.3
+            tension: 0.3,
+            pointRadius: 2
         }]
     },
-    options: { scales: { y: { beginAtZero: false } } }
+    options: { aspectRatio: 3.2, scales: { x: { grid: { color: gridColor } }, y: { beginAtZero: false, grid: { color: gridColor } } } }
 });
 new Chart(document.getElementById('accountBar'), {
     type: 'bar',
@@ -108,21 +160,22 @@ new Chart(document.getElementById('accountBar'), {
         datasets: [{
             label: 'Balance',
             data: accountData.map(d => d.balance),
-            backgroundColor: accountData.map(d => d.balance >= 0 ? '#1D9E75' : '#E24B4A')
+            backgroundColor: accountData.map(d => d.balance >= 0 ? '#1D9E75' : '#E24B4A'),
+            borderRadius: 4
         }]
     },
-    options: { indexAxis: 'y', scales: { x: { beginAtZero: true } } }
+    options: { aspectRatio: 1.6, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, grid: { color: gridColor } }, y: { grid: { color: gridColor } } } }
 });
 new Chart(document.getElementById('budgetBar'), {
     type: 'bar',
     data: {
         labels: budgetData.map(d => d.category),
         datasets: [
-            {label: 'Budget', data: budgetData.map(d => d.budget), backgroundColor: '#378ADD'},
-            {label: 'Actual', data: budgetData.map(d => d.actual), backgroundColor: '#E24B4A'}
+            {label: 'Budget', data: budgetData.map(d => d.budget), backgroundColor: '#378ADD', borderRadius: 4},
+            {label: 'Actual', data: budgetData.map(d => d.actual), backgroundColor: '#E24B4A', borderRadius: 4}
         ]
     },
-    options: { scales: { y: { beginAtZero: true } } }
+    options: { aspectRatio: 3.2, scales: gridScales }
 });
 </script>
 {% else %}

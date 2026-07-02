@@ -52,20 +52,20 @@
 {% endif %}
 {% if goals %}
 <h2>Savings goals</h2>
-<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+{% include 'partials/_goal_summary.html' %}
+<div class="goal-grid">
     {% for g in goals %}
-    <div class="card" style="flex:1 1 260px;margin-bottom:0">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:0.5rem">
-            <strong>{{ g.name }}</strong>
+    <div class="card goal-card goal-mini">
+        <div class="goal-head">
+            <strong class="goal-name">{{ g.name }}</strong>
             {% if g.complete %}<span class="transfer-badge">✓ Reached</span>
             {% elif g.on_track is true %}<span class="transfer-badge">On track</span>
             {% elif g.on_track is false %}<span class="recurring-badge">Behind</span>{% endif %}
         </div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;height:14px;margin:0.5rem 0;overflow:hidden">
-            <div style="background:var(--accent);height:100%;width:{{ g.percent }}%"></div>
-        </div>
-        <p style="font-size:13px;color:var(--text-muted)">
-            ${{ "%.2f"|format(g.saved) }} / ${{ "%.2f"|format(g.target_amount) }} ({{ g.percent }}%)
+        <div class="goal-bar"><div class="goal-bar-fill" style="width:{{ g.percent }}%"></div></div>
+        <p class="goal-figures">
+            ${{ "%.2f"|format(g.saved) }} / ${{ "%.2f"|format(g.target_amount) }}
+            <span class="goal-pct">({{ g.percent }}%)</span>
         </p>
     </div>
     {% endfor %}

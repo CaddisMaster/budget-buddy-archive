@@ -808,3 +808,79 @@ def _call_digest_model(facts, today, api_key):
         return response.parsed_output
     except Exception as e:  # network, auth, malformed output, missing package
         raise ParseError(str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# v10.8 — "Goal Coach".
+#
+# Budget Buddy's eighth AI feature and the twin of Insight/Forecast, pointed at
+# the Goals page. The app already computes every figure a goal needs
+# (build_goals_view + compute_goal_projection — saved, percent, remaining,
+# on_track, projected_date, required_per_month, monthly_net_inflow); this seam
+# only narrates that pace into a short recap + a nudge or two. Same isolated-seam,
+# narrate-don't-compute, graceful-ParseError contract — nothing it returns is ever
+# used as a figure. Its own 8th seam so tests stub it independently.
+# ---------------------------------------------------------------------------
+
+class _Coach(BaseModel):
+    """The narrative shape we ask Claude to return (structured outputs). Treated
+    as untrusted text — coerced/trimmed in generate_goal_coach()."""
+    summary: str            # 2–3 sentence plain-English recap of goal progress
+    tips: list[str]         # 1–2 short, practical nudges
+
+
+def generate_goal_coach(facts, *, today=None):
+    """Turn already-computed savings-goal figures into a short coaching narrative.
+
+    `facts` is the deterministic dict from compute_goal_coach_facts(). Returns
+    {"summary": str, "tips": [str, ...]} (tips capped at 2). Raises ParseError on
+    any failure (no key, package missing, API/output error) so the caller can
+    fall back to the un-generated card + an error toast.
+    """
+    today = today or date.today()
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ParseError("ANTHROPIC_API_KEY is not set")
+
+    parsed = _call_coach_model(facts, today, api_key)
+    if parsed is None:
+        raise ParseError("Model returned no structured output")
+
+    summary = (parsed.summary or "").strip()
+    if not summary:
+        raise ParseError("Model returned an empty summary")
+    tips = [t.strip() for t in (parsed.tips or []) if t and t.strip()][:2]
+    return {"summary": summary, "tips": tips}
+
+
+def _call_coach_model(facts, today, api_key):
+    """The single network call for the goal coach — isolated so tests stub it
+    without hitting the API. Returns a _Coach (or None); wraps any SDK, network,
+    or missing-package error in ParseError."""
+    system = (
+        "You are a friendly, encouraging savings coach writing a short recap of "
+        "how someone is tracking against their savings goals. You are given each "
+        "goal's already-computed figures as JSON (name, target, amount saved, "
+        "percent complete, amount remaining, whether it's on track or behind, the "
+        "projected completion date, and the monthly amount needed to hit the "
+        "target date). Do NOT recompute, re-add, or invent any numbers — treat the "
+        "figures as ground truth and only describe them. Write a warm 2-3 sentence "
+        "plain-English recap of where the goals stand (celebrate what's on track, "
+        "gently flag what's behind), then 1-2 short, specific, practical nudges to "
+        "help close the gap. Be supportive, not preachy. Write plain text only, "
+        "with NO Markdown, asterisks, bullet syntax, or other formatting. Today is "
+        f"{today.isoformat()}."
+    )
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
+        response = client.messages.parse(
+            model=MODEL,
+            max_tokens=400,
+            system=system,
+            messages=[{"role": "user", "content": json.dumps(facts, default=str)}],
+            output_format=_Coach,
+        )
+        return response.parsed_output
+    except Exception as e:  # network, auth, malformed output, missing package
+        raise ParseError(str(e)) from e

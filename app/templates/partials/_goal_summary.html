@@ -1,0 +1,14 @@
+{# Overall savings-goal progress strip. Expects `goals` (a list of goal view
+   dicts with `saved` + `target_amount`) in context; used on /goals and the
+   dashboard so the rollup math lives in one place. #}
+{% set total_saved = goals|sum(attribute='saved') %}
+{% set total_target = goals|sum(attribute='target_amount') %}
+{% set overall = (total_saved / total_target * 100) if total_target > 0 else 0 %}
+<div class="goal-summary">
+  <div class="goal-summary-main">
+    <span class="goal-summary-saved">${{ "%.2f"|format(total_saved) }}</span>
+    <span class="goal-summary-of">saved of ${{ "%.2f"|format(total_target) }} target</span>
+  </div>
+  <div class="goal-bar goal-summary-bar"><div class="goal-bar-fill" style="width:{{ [overall, 100]|min }}%"></div></div>
+  <span class="goal-summary-pct">{{ "%.0f"|format(overall) }}% overall</span>
+</div>

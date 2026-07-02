@@ -1,12 +1,12 @@
-<div class="card" id="goal-{{ g.id }}" style="margin-bottom:1rem">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:0.5rem">
-        <strong>{{ g.name }}</strong>
-        <span style="font-size:13px;color:var(--text-muted)">{{ g.account_name }}</span>
+<div class="card goal-card" id="goal-{{ g.id }}">
+    <div class="goal-head">
+        <strong class="goal-name">{{ g.name }}</strong>
+        <span class="goal-account">{{ g.account_name }}</span>
     </div>
     <div class="goal-bar"><div class="goal-bar-fill" style="width:{{ g.percent }}%"></div></div>
-    <p>
+    <p class="goal-figures">
         ${{ "%.2f"|format(g.saved) }} of ${{ "%.2f"|format(g.target_amount) }}
-        ({{ g.percent }}%)
+        <span class="goal-pct">({{ g.percent }}%)</span>
         {% if g.complete %}
         <span class="transfer-badge">✓ Reached</span>
         {% elif g.on_track is true %}
@@ -16,7 +16,7 @@
         {% endif %}
     </p>
     {% if not g.complete %}
-    <p style="font-size:13px;color:var(--text-muted)">
+    <p class="goal-sub">
         ${{ "%.2f"|format(g.remaining) }} to go.
         {% if g.required_per_month is not none and g.target_date %}
         Set aside ${{ "%.2f"|format(g.required_per_month) }}/mo to hit {{ g.target_date }}.
@@ -28,7 +28,7 @@
         {% endif %}
     </p>
     {% endif %}
-    <div class="row-actions" style="margin-top:0.5rem">
+    <div class="row-actions goal-actions">
         <button type="button" class="btn btn-sm"
           hx-get="/goals/{{ g.id }}/edit"
           hx-target="#goal-{{ g.id }}" hx-swap="outerHTML">Edit</button>

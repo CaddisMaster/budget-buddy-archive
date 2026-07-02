@@ -2,6 +2,9 @@
 {% block title %}Savings Goals — Budget Buddy{% endblock %}
 {% block content %}
 <h1>Savings goals</h1>
+{% if ai_enabled and show_coach %}
+{% with facts = coach_facts %}{% include 'partials/_goal_coach_card.html' %}{% endwith %}
+{% endif %}
 <h2>Add goal</h2>
 {% if accounts %}
 <form hx-post="/goals" hx-target="#goal-list" hx-swap="afterbegin"
@@ -32,6 +35,9 @@
 {% endif %}
 
 <h2>Your goals</h2>
+{% if goals %}
+{% include 'partials/_goal_summary.html' %}
+{% endif %}
 <div id="goal-list">
 {% for g in goals %}
 {% include 'partials/_goal_card.html' %}

@@ -166,6 +166,19 @@ CREATE TABLE public.forecasts (
     CONSTRAINT uq_forecast_user_period UNIQUE (user_id, year, month)
 );
 
+-- Goal Coach — cached AI narration of savings-goal pace, one row per
+-- (user, month) (see sql/19). Twin of insights/forecasts, pointed at /goals.
+CREATE TABLE public.goal_coach (
+    id SERIAL PRIMARY KEY,
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    year smallint NOT NULL,
+    month smallint NOT NULL,
+    content text NOT NULL,
+    model character varying(50),
+    created_at timestamp without time zone DEFAULT now(),
+    CONSTRAINT uq_goal_coach_user_period UNIQUE (user_id, year, month)
+);
+
 -- ------------------------------------------------------------
 -- Transfer schedules (v10.4 — recurring transfers; see sql/17)
 -- The transfer-tab twin of `schedules`: run_due_transfers() materializes a

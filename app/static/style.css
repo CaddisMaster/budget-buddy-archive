@@ -219,6 +219,23 @@ tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
 .goal-bar { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; height: 18px; margin: 0.5rem 0; overflow: hidden; }
 .goal-bar-fill { background: var(--accent); height: 100%; }
 
+/* Goals — cards, grid, and overall summary strip (v10.8 glow-up) */
+.goal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.goal-card .goal-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }
+.goal-name { font-size: var(--fs-md); font-weight: 650; letter-spacing: -0.01em; }
+.goal-account { font-size: var(--fs-sm); color: var(--text-muted); }
+.goal-figures { font-size: var(--fs-sm); margin: 0.4rem 0 0; }
+.goal-pct { color: var(--text-muted); }
+.goal-sub { font-size: 13px; color: var(--text-muted); margin: 0.5rem 0 0; line-height: 1.5; }
+.goal-actions { margin-top: 0.7rem; }
+.goal-mini { margin-bottom: 0; }
+.goal-summary { display: flex; align-items: center; gap: 0.6rem 1.1rem; flex-wrap: wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem 1.15rem; margin-bottom: 1rem; }
+.goal-summary-main { display: flex; align-items: baseline; gap: 0.4rem; }
+.goal-summary-saved { font-size: var(--fs-lg); font-weight: 650; letter-spacing: -0.02em; }
+.goal-summary-of { font-size: var(--fs-sm); color: var(--text-muted); }
+.goal-summary-bar { flex: 1 1 160px; margin: 0; height: 14px; }
+.goal-summary-pct { font-size: var(--fs-sm); color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+
 /* Toasts */
 #toast-host {
   position: fixed; bottom: 1.25rem; right: 1.25rem;

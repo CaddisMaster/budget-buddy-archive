@@ -1,3 +1,4 @@
+import json
 import math
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
@@ -6,8 +7,10 @@ from flask import (
     make_response
 )
 from flask_login import login_required, current_user
+from app import limiter
+from app.ai import generate_goal_coach, ParseError, MODEL
 from app.db import get_db_connection
-from app.helpers import is_htmx, hx_toast
+from app.helpers import is_htmx, hx_toast, ai_enabled
 
 bp = Blueprint('goals', __name__)
 
@@ -189,6 +192,62 @@ def build_single_goal_view(cursor, user_id, goal_id):
     return _goal_view(cursor, user_id, row) if row else None
 
 
+# --- v10.8 Goal Coach — deterministic facts + cache (twin of Insight) --------
+#
+# The app computes every figure (build_goals_view + compute_goal_projection);
+# app.ai.generate_goal_coach() only narrates them. Nothing the model returns is
+# ever used as a number.
+
+def compute_goal_coach_facts(cursor, user_id):
+    """The ONLY source of figures the coach narrates — reshapes each goal's
+    already-computed view into a JSON-friendly per-goal fact plus rollups. Reads
+    the user's own rows only. Returns:
+
+        {goals: [{name, target_amount, saved, percent, remaining, complete,
+                  on_track, required_per_month, projected_date, target_date,
+                  monthly_net_inflow}, ...],
+         count, incomplete_count, on_track_count, total_saved, total_target}
+    """
+    goals = build_goals_view(cursor, user_id)
+    goal_facts = [{
+        'name': g['name'],
+        'target_amount': g['target_amount'],
+        'saved': g['saved'],
+        'percent': g['percent'],
+        'remaining': g['remaining'],
+        'complete': g['complete'],
+        'on_track': g['on_track'],
+        'required_per_month': g['required_per_month'],
+        'projected_date': g['projected_date'],
+        'target_date': g['target_date'],
+        'monthly_net_inflow': g['monthly_net_inflow'],
+    } for g in goals]
+    return {
+        'goals': goal_facts,
+        'count': len(goals),
+        'incomplete_count': sum(1 for g in goals if not g['complete']),
+        'on_track_count': sum(1 for g in goals if g['on_track'] is True),
+        'total_saved': round(sum(g['saved'] for g in goals), 2),
+        'total_target': round(sum(g['target_amount'] for g in goals), 2),
+    }
+
+
+def load_goal_coach(cursor, user_id, year, month):
+    """Return the cached coaching for (user, month) as {summary, tips,
+    created_at}, or None. Takes an existing cursor so /goals reuses its
+    connection. No model call on read."""
+    cursor.execute("""
+        SELECT content, created_at FROM goal_coach
+        WHERE user_id = %s AND year = %s AND month = %s
+    """, (user_id, int(year), int(month)))
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    data = json.loads(row[0])
+    data['created_at'] = row[1]
+    return data
+
+
 @bp.route('/goals', methods=['GET', 'POST'])
 @login_required
 def goals():
@@ -239,9 +298,74 @@ def goals():
 
     goals_view = build_goals_view(cursor, current_user.id)
     all_accounts = _fetch_accounts(cursor, current_user.id)
+    # Goal Coach card (gated on the AI key + at least one in-progress goal). Read
+    # the cache only — never a model call on page load, mirroring the dashboard
+    # Insight/Forecast cards.
+    today = date.today()
+    ai_on = ai_enabled()
+    coach = coach_facts = None
+    show_coach = False
+    if ai_on:
+        coach_facts = compute_goal_coach_facts(cursor, current_user.id)
+        show_coach = coach_facts['incomplete_count'] > 0
+        if show_coach:
+            coach = load_goal_coach(cursor, current_user.id, today.year, today.month)
     cursor.close()
     conn.close()
-    return render_template('goals.html', goals=goals_view, accounts=all_accounts)
+    return render_template('goals.html', goals=goals_view, accounts=all_accounts,
+                           ai_enabled=ai_on, show_coach=show_coach,
+                           coach=coach, coach_facts=coach_facts)
+
+
+@bp.route('/goals/coach/generate', methods=['POST'])
+@limiter.limit("10 per minute")
+@login_required
+def coach_generate():
+    """Generate (or Regenerate) this month's goal coaching: compute the facts,
+    have Claude narrate them once, cache the result, and swap the card.
+
+    HTMX endpoint — the /goals coach card posts here and swaps itself
+    (#goal-coach-card) with the returned fragment. Any failure falls back to the
+    un-generated card + an error toast, so the page never breaks."""
+    today = datetime.today()
+    year, month = today.year, today.month
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    facts = compute_goal_coach_facts(cursor, current_user.id)
+
+    def _card(coach):
+        return make_response(render_template(
+            'partials/_goal_coach_card.html',
+            coach=coach, facts=facts, ai_enabled=True))
+
+    if facts['incomplete_count'] == 0:
+        cursor.close(); conn.close()
+        return hx_toast(_card(None), 'No goals in progress to coach yet', 'error')
+
+    try:
+        result = generate_goal_coach(facts)
+    except ParseError:
+        cursor.close(); conn.close()
+        return hx_toast(_card(None), "Couldn't generate coaching right now", 'error')
+
+    try:
+        cursor.execute("""
+            INSERT INTO goal_coach (user_id, year, month, content, model)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (user_id, year, month)
+            DO UPDATE SET content = EXCLUDED.content, model = EXCLUDED.model,
+                          created_at = now()
+        """, (current_user.id, year, month, json.dumps(result), MODEL))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        cursor.close(); conn.close()
+        return hx_toast(_card(None), "Couldn't save coaching right now", 'error')
+    cursor.close(); conn.close()
+
+    coach = dict(result)
+    coach['created_at'] = today
+    return hx_toast(_card(coach), 'Coaching ready')
 
 
 @bp.route('/goals/<int:goal_id>/edit', methods=['GET', 'POST'])

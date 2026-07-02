@@ -1,0 +1,33 @@
+<div id="goal-coach-card" class="card ai-card goal-coach-card">
+  <div class="ai-head">
+    {% include 'partials/_ai_spark.html' %}
+    <h2>Goal Coach</h2>
+    <span class="ai-badge">AI</span>
+    <span id="coach-spinner" class="htmx-indicator insight-spinner">Generating…</span>
+  </div>
+  {% if coach %}
+  <div class="facts-strip">
+    <div class="fact"><span class="fact-label">Goals</span><span class="fact-val">{{ facts.count }}</span></div>
+    <div class="fact"><span class="fact-label">Saved</span><span class="fact-val">${{ "%.0f"|format(facts.total_saved) }}</span></div>
+    <div class="fact"><span class="fact-label">Target</span><span class="fact-val">${{ "%.0f"|format(facts.total_target) }}</span></div>
+    <div class="fact"><span class="fact-label">On track</span><span class="fact-val">{{ facts.on_track_count }} of {{ facts.incomplete_count }}</span></div>
+  </div>
+  <p class="insight-summary">{{ coach.summary }}</p>
+  {% if coach.tips %}
+  <ul class="insight-tips">
+    {% for t in coach.tips %}<li>{{ t }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  <div class="insight-foot">
+    <span class="insight-ts">{% if coach.created_at %}Generated {{ coach.created_at.strftime('%b %d, %Y %H:%M') }}{% endif %}</span>
+    <button class="btn-sm" hx-post="/goals/coach/generate"
+            hx-target="#goal-coach-card" hx-swap="outerHTML"
+            hx-indicator="#coach-spinner">Regenerate</button>
+  </div>
+  {% else %}
+  <p class="insight-intro">Get a plain-English read on how your savings goals are tracking — what's on pace, what's behind, and a nudge or two to close the gap — written from your own numbers.</p>
+  <button class="btn-sm" hx-post="/goals/coach/generate"
+          hx-target="#goal-coach-card" hx-swap="outerHTML"
+          hx-indicator="#coach-spinner">Generate coaching</button>
+  {% endif %}
+</div>

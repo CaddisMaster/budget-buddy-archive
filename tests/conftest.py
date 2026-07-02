@@ -103,6 +103,7 @@ def _delete_user(username):
         cur.execute("DELETE FROM transfer_schedules WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM insights WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM forecasts WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM goal_coach WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM categories WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM account WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
@@ -538,6 +539,38 @@ def fetch_forecast(user_id, year, month):
     cur = conn.cursor()
     cur.execute(
         "SELECT content, model, user_id FROM forecasts "
+        "WHERE user_id = %s AND year = %s AND month = %s",
+        (user_id, year, month),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+def create_goal_coach(user_id, year, month, content, model="claude-haiku-4-5"):
+    """Insert a cached goal-coach row directly (bypassing the model/route)."""
+    import json
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO goal_coach (user_id, year, month, content, model) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (user_id, year, month, json.dumps(content), model),
+    )
+    gcid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return gcid
+
+
+def fetch_goal_coach(user_id, year, month):
+    """Return (content, model, user_id) for a cached goal coach, or None."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT content, model, user_id FROM goal_coach "
         "WHERE user_id = %s AND year = %s AND month = %s",
         (user_id, year, month),
     )

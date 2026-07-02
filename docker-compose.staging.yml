@@ -1,0 +1,32 @@
+# Staging gate — run the EXACT published image (not a local source build) before
+# promoting it to :latest. Self-contained (own throwaway DB, isolated ports/project),
+# so it never collides with the local dev stack and never merges the source-build
+# override (passing -f disables the default docker-compose.override.yml).
+#
+#   TAG=v10.8.0 docker compose -p bb-staging -f docker-compose.staging.yml up --pull always
+#   # smoke-test at http://localhost:5002 (register a throwaway user), then ./promote.sh $TAG
+#   TAG=v10.8.0 docker compose -p bb-staging -f docker-compose.staging.yml down -v
+#
+# The DB is throwaway (no named volume): a fresh schema.sql each `up`, torn down with -v.
+# Reuses .env, so it wires up like prod (DB_HOST=db resolves to this file's db service)
+# and real AI features work with your key. NOTE: on an arm64 Mac this pulls the arm64
+# slice of the multi-arch image; prod runs amd64 (same source/Dockerfile — negligible drift).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "127.0.0.1:5433:5432"
+  web:
+    image: caddismaster/budget-buddy:${TAG:?set TAG to the version you just built, e.g. TAG=v10.8.0}
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:5002:5000"
+    depends_on:
+      - db

@@ -1,10 +1,17 @@
+import re
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app import bcrypt, limiter
 from app.db import get_db_connection
+from app.mailer import mail_enabled
 from app.models import User
 
 bp = Blueprint('auth', __name__)
+
+# Deliberately loose — just enough to reject obvious typos ("no @" / "no dot");
+# real validity is proven by whether Resend can deliver.
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 # A throwaway bcrypt hash checked when the username doesn't exist, so a missing
 # user costs the same bcrypt work as a wrong password — no username enumeration
@@ -45,9 +52,12 @@ def logout():
 def profile():
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT created_at FROM users WHERE id = %s", (current_user.id,))
+    cursor.execute("SELECT created_at, email, weekly_digest FROM users WHERE id = %s",
+                   (current_user.id,))
     row = cursor.fetchone()
     created_at = row[0] if row else None
+    email = row[1] if row else None
+    weekly_digest = row[2] if row else False
     # A small at-a-glance summary of the user's data.
     cursor.execute("SELECT COUNT(*) FROM transactions WHERE user_id = %s", (current_user.id,))
     txn_count = cursor.fetchone()[0]
@@ -61,7 +71,36 @@ def profile():
     conn.close()
     return render_template('profile.html', created_at=created_at,
                            txn_count=txn_count, cat_count=cat_count,
-                           acct_count=acct_count, goal_count=goal_count)
+                           acct_count=acct_count, goal_count=goal_count,
+                           email=email, weekly_digest=weekly_digest,
+                           mail_enabled=mail_enabled())
+
+
+@bp.route('/profile/settings', methods=['POST'])
+@login_required
+def profile_settings():
+    """Save the weekly-digest opt-in + email address. Scoped to current_user, so
+    a user can only ever change their own row."""
+    email = request.form.get('email', '').strip()
+    weekly_digest = request.form.get('weekly_digest') == 'on'
+
+    if email and not _EMAIL_RE.match(email):
+        flash('Please enter a valid email address')
+        return redirect(url_for('auth.profile'))
+    if weekly_digest and not email:
+        flash('Add an email address to receive the weekly digest')
+        return redirect(url_for('auth.profile'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET email = %s, weekly_digest = %s WHERE id = %s",
+        (email or None, weekly_digest, current_user.id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    flash('Preferences saved')
+    return redirect(url_for('auth.profile'))
 
 
 @bp.route('/change-password', methods=['GET', 'POST'])

@@ -11,7 +11,10 @@ CREATE TABLE public.users (
     username VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     is_admin BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    email TEXT,
+    weekly_digest BOOLEAN NOT NULL DEFAULT false,
+    last_digest_sent_on DATE
 );
 
 -- ------------------------------------------------------------

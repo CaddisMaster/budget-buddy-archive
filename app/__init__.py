@@ -64,7 +64,7 @@ def load_user(user_id):
 
 from app.blueprints import (
   auth, main, transactions, categories, accounts, budgets, analytics, admin,
-  transfers, goals, schedules, insights, forecasts, ask
+  transfers, goals, schedules, insights, forecasts, ask, digests
 )
 
 app.register_blueprint(auth.bp)
@@ -81,3 +81,25 @@ app.register_blueprint(schedules.bp)
 app.register_blueprint(insights.bp)
 app.register_blueprint(forecasts.bp)
 app.register_blueprint(ask.bp)
+app.register_blueprint(digests.bp)
+
+# `flask send-digests` — run the weekly digest send manually (local/testing).
+app.cli.add_command(digests.send_digests_command)
+
+# v10.8 Weekly Email Digest — in-process scheduler. Guarded on ENABLE_DIGEST_SCHEDULER
+# so it fires ONLY in prod (never under pytest or local unless deliberately enabled),
+# and on mail_enabled() so it's a no-op without a Resend key. gunicorn runs a single
+# worker (no --preload), so exactly one scheduler instance exists — no double-fire.
+# The users.last_digest_sent_on guard + misfire_grace_time make it safe across
+# restarts. Sunday 18:00 America/New_York.
+from app.mailer import mail_enabled
+
+if os.getenv('ENABLE_DIGEST_SCHEDULER') == '1' and mail_enabled():
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from app.blueprints.digests import send_weekly_digests
+
+    _scheduler = BackgroundScheduler(timezone='America/New_York', daemon=True)
+    _scheduler.add_job(send_weekly_digests, 'cron', day_of_week='sun', hour=18,
+                       id='weekly_digest', replace_existing=True,
+                       misfire_grace_time=3600)
+    _scheduler.start()

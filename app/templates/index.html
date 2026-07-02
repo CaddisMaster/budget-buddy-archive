@@ -10,58 +10,38 @@
 
 <h2 style="margin-top:1.5rem;font-size:1.1rem">What's new</h2>
 
-{# Add the newest entry at the top. Keep at most 3 cards — drop the oldest. #}
+{# ONE card per WEEKLY release (ships Thursdays). Each release day, REPLACE the whole
+   card's contents with THIS week's changes — the release date in the badge, and one
+   feature block (bold sub-heading + plain-English bullets) per feature shipped that
+   week. Weekly bundle, not one card per feature; only ever one card here at a time. #}
 <div class="card">
-  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-    <strong>Let AI right-size your budgets</strong>
-    <span class="recurring-badge">Jul 2026</span>
+  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem">
+    <strong style="font-size:1.05rem">What's new this week</strong>
+    <span class="recurring-badge">Jul 2, 2026</span>
   </div>
-  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-    <li><strong>One review pass:</strong> On the Budgets page, hit "Review" and Budget Buddy
-        looks at your last six months of spending — where you consistently run over, where a
-        budget sits well above real life — and proposes a right-sized monthly amount for each
-        category, with a plain-English reason.</li>
-    <li><strong>You stay in control:</strong> Proposals come back as a checklist — edit any
-        amount, uncheck anything you don't want, then confirm. Nothing is ever applied
-        automatically.</li>
-    <li><strong>Grounded in your numbers:</strong> Every figure starts from your own history,
-        and each proposal is kept within a sensible range of what you actually spend.</li>
-  </ul>
-</div>
 
-<div class="card">
-  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-    <strong>A fresh new look</strong>
-    <span class="recurring-badge">Jun 2026</span>
+  {# ── One block per feature shipped this week. Add / remove blocks to match. ── #}
+  <div>
+    <strong style="display:block;margin-bottom:0.35rem">A weekly recap in your inbox</strong>
+    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
+      <li><strong>Budget Buddy comes to you:</strong> Turn on the weekly email digest and get a
+          Sunday-evening recap — how your spending compares to budget, where your net position
+          stands this month, and what's scheduled to come in or go out over the next 7 days.</li>
+      <li><strong>You choose to receive it:</strong> It's off until you opt in on your Profile
+          page with your email address — set it once and the digest arrives every week.</li>
+      <li><strong>Plain-English, grounded in your numbers:</strong> Every figure is your own;
+          Budget Buddy just writes it up in a friendly recap with a tip or two.</li>
+    </ul>
   </div>
-  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-    <li><strong>A redesigned dashboard:</strong> The Dashboard now opens with an
-        at-a-glance summary of where you stand — your net position for the month, with
-        income and expenses right beside it — above cleaner, easier-to-read charts.</li>
-    <li><strong>Clearer navigation:</strong> The sidebar has icons and a tidier layout, so
-        finding your way around is quicker, and everything shares a more polished, consistent
-        style throughout.</li>
-    <li><strong>Same app, more refined:</strong> Nothing moved or changed how it works —
-        it just looks and feels sharper, in both light and dark mode.</li>
-  </ul>
-</div>
 
-<div class="card">
-  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-    <strong>Clean up uncategorized transactions</strong>
-    <span class="recurring-badge">Jun 2026</span>
+  {# Second+ features this week go here, each separated by the divider below:
+  <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
+    <strong style="display:block;margin-bottom:0.35rem">Next feature title</strong>
+    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
+      <li>…</li>
+    </ul>
   </div>
-  <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-    <li><strong>Suggested categories, in one pass:</strong> When transactions land without a
-        category, your History page shows a "Review" button — Budget Buddy reads them and
-        proposes the best-fitting category for each, from your own category list.</li>
-    <li><strong>You stay in control:</strong> Suggestions come back as a checklist with a
-        confidence note — change any category, uncheck anything you don't want, then confirm.
-        Nothing is ever applied automatically.</li>
-    <li><strong>Catches the odd ones too:</strong> It also flags the occasional
-        already-categorized transaction that looks mis-filed, so your spending breakdowns
-        stay accurate.</li>
-  </ul>
+  #}
 </div>
 
 {% endblock %}

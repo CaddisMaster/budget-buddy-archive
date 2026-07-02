@@ -18,3 +18,5 @@ Flask-Login
 Flask-Bcrypt
 Flask-WTF
 anthropic
+APScheduler
+resend

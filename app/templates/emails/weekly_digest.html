@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+{#
+  Weekly Email Digest (v10.8). Standalone, inline-styled HTML — email clients
+  ignore <style> blocks and the app's base.html, so everything is inline and
+  table-based. `narrative` = {summary, tips} from ai.generate_digest (the model's
+  prose); `facts` = the deterministic dict from compute_digest_facts (every
+  number). Same "app-built facts beside model prose" split as the dashboard cards.
+#}
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2430;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr><td style="background:#4f46e5;padding:20px 28px;">
+          <div style="color:#ffffff;font-size:18px;font-weight:700;">Budget Buddy</div>
+          <div style="color:#c7d2fe;font-size:13px;margin-top:2px;">Your weekly digest · {{ facts.month_name }} {{ facts.year }}</div>
+        </td></tr>
+
+        <!-- Narrative summary -->
+        <tr><td style="padding:24px 28px 8px 28px;">
+          <p style="margin:0;font-size:15px;line-height:1.6;color:#1f2430;">{{ narrative.summary }}</p>
+        </td></tr>
+
+        <!-- Month-to-date figures -->
+        <tr><td style="padding:16px 28px 4px 28px;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:#8a8f9c;font-weight:600;">This month so far</div>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;">
+            <tr>
+              <td width="33%" style="padding:10px;background:#f4f4f7;border-radius:8px;text-align:center;">
+                <div style="font-size:12px;color:#8a8f9c;">Income</div>
+                <div style="font-size:18px;font-weight:700;color:#1f2430;">${{ "{:,.2f}".format(facts.income) }}</div>
+              </td>
+              <td width="8">&nbsp;</td>
+              <td width="33%" style="padding:10px;background:#f4f4f7;border-radius:8px;text-align:center;">
+                <div style="font-size:12px;color:#8a8f9c;">Expenses</div>
+                <div style="font-size:18px;font-weight:700;color:#1f2430;">${{ "{:,.2f}".format(facts.expenses) }}</div>
+              </td>
+              <td width="8">&nbsp;</td>
+              <td width="33%" style="padding:10px;background:#f4f4f7;border-radius:8px;text-align:center;">
+                <div style="font-size:12px;color:#8a8f9c;">Net</div>
+                <div style="font-size:18px;font-weight:700;color:{{ '#16a34a' if facts.net >= 0 else '#dc2626' }};">${{ "{:,.2f}".format(facts.net) }}</div>
+              </td>
+            </tr>
+          </table>
+          {% if facts.top_categories %}
+          <p style="margin:12px 0 0 0;font-size:13px;color:#4b5162;">Top category this month:
+            <strong>{{ facts.top_categories[0].name }}</strong> (${{ "{:,.2f}".format(facts.top_categories[0].amount) }}).</p>
+          {% endif %}
+          {% if facts.overruns %}
+          <p style="margin:6px 0 0 0;font-size:13px;color:#b45309;">Over budget in {{ facts.overruns|length }}
+            categor{{ 'y' if facts.overruns|length == 1 else 'ies' }}:
+            {{ facts.overruns | map(attribute='category') | join(', ') }}.</p>
+          {% else %}
+          <p style="margin:6px 0 0 0;font-size:13px;color:#16a34a;">No budgets exceeded so far this month.</p>
+          {% endif %}
+        </td></tr>
+
+        <!-- Coming up (next 7 days) -->
+        <tr><td style="padding:20px 28px 4px 28px;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:#8a8f9c;font-weight:600;">Coming up · next 7 days</div>
+          {% if facts.upcoming %}
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+            {% for item in facts.upcoming %}
+            <tr>
+              <td style="padding:6px 0;border-bottom:1px solid #eceef2;font-size:14px;color:#1f2430;">
+                {{ item.description or item.type|capitalize }}
+                <span style="color:#8a8f9c;font-size:12px;">· {{ item.due }}</span>
+              </td>
+              <td style="padding:6px 0;border-bottom:1px solid #eceef2;font-size:14px;font-weight:600;text-align:right;color:{% if item.type == 'income' %}#16a34a{% elif item.type == 'expense' %}#dc2626{% else %}#4b5162{% endif %};">
+                {% if item.type == 'income' %}+{% elif item.type == 'expense' %}−{% endif %}${{ "{:,.2f}".format(item.amount) }}
+              </td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% else %}
+          <p style="margin:8px 0 0 0;font-size:13px;color:#8a8f9c;">Nothing scheduled in the next 7 days.</p>
+          {% endif %}
+        </td></tr>
+
+        <!-- Tips -->
+        {% if narrative.tips %}
+        <tr><td style="padding:20px 28px 4px 28px;">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:#8a8f9c;font-weight:600;">Tips</div>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+            {% for tip in narrative.tips %}
+            <tr><td style="padding:6px 0;font-size:14px;line-height:1.5;color:#4b5162;">• {{ tip }}</td></tr>
+            {% endfor %}
+          </table>
+        </td></tr>
+        {% endif %}
+
+        <!-- CTA -->
+        <tr><td style="padding:24px 28px;">
+          <a href="https://budget.seandesmet.com" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:8px;">Open Budget Buddy</a>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:16px 28px 24px 28px;border-top:1px solid #eceef2;">
+          <p style="margin:0;font-size:12px;color:#a0a4b0;line-height:1.5;">
+            You're receiving this because you turned on the weekly digest in Budget Buddy.
+            Manage it on your <a href="https://budget.seandesmet.com/profile" style="color:#4f46e5;">Profile</a> page.
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

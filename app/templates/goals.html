@@ -1,35 +1,58 @@
 {% extends 'base.html' %}
-{% block title %}Savings Goals — Budget Buddy{% endblock %}
+{% block title %}Goals — Budget Buddy{% endblock %}
 {% block content %}
-<h1>Savings goals</h1>
+<h1>Goals</h1>
 {% if ai_enabled and show_coach %}
 {% with facts = coach_facts %}{% include 'partials/_goal_coach_card.html' %}{% endwith %}
 {% endif %}
 <h2>Add goal</h2>
 {% if accounts %}
 <form hx-post="/goals" hx-target="#goal-list" hx-swap="afterbegin"
-      hx-on::after-request="if(event.detail.successful){this.reset();document.getElementById('goal-empty')?.remove();}">
+      hx-on::after-request="if(event.detail.successful){this.reset();toggleGoalType('save');document.getElementById('goal-empty')?.remove();}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Goal type</label>
+    <select name="goal_type" onchange="toggleGoalType(this.value)">
+        <option value="save">Save toward a target</option>
+        <option value="payoff">Pay off a balance</option>
+    </select>
     <label>Name</label>
     <input type="text" name="name" maxlength="80" required>
-    <label>Target amount</label>
-    <input type="number" step="0.01" name="target_amount" required>
+    <div id="goal-save-fields">
+        <label>Target amount</label>
+        <input type="number" step="0.01" name="target_amount" id="goal-target" required>
+    </div>
     <label>Target date (optional)</label>
     <input type="date" name="target_date">
-    <label>Linked account</label>
+    <label id="goal-account-label">Linked account</label>
     <select name="account_id" required>
         <option value="">-- select account --</option>
         {% for account in accounts %}
         <option value="{{ account[0] }}">{{ account[1] }}</option>
         {% endfor %}
     </select>
-    <label>Starting point</label>
-    <select name="baseline_mode">
-        <option value="existing">Count the account's current balance toward this goal</option>
-        <option value="fresh">Start fresh from $0 (ignore the current balance)</option>
-    </select>
+    <div id="goal-baseline-field">
+        <label>Starting point</label>
+        <select name="baseline_mode">
+            <option value="existing">Count the account's current balance toward this goal</option>
+            <option value="fresh">Start fresh from $0 (ignore the current balance)</option>
+        </select>
+    </div>
+    <p id="goal-payoff-hint" style="display:none;color:var(--text-muted);font-size:13px;margin-top:0.5rem">
+        The account's current balance becomes the starting debt — the goal is paying it back to $0.
+    </p>
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add goal</button>
 </form>
+<script>
+function toggleGoalType(v) {
+  const payoff = v === 'payoff';
+  document.getElementById('goal-save-fields').style.display = payoff ? 'none' : '';
+  document.getElementById('goal-baseline-field').style.display = payoff ? 'none' : '';
+  document.getElementById('goal-payoff-hint').style.display = payoff ? '' : 'none';
+  // A hidden required input would silently block submit — required only when shown.
+  document.getElementById('goal-target').required = !payoff;
+  document.getElementById('goal-account-label').textContent = payoff ? 'Account to pay off' : 'Linked account';
+}
+</script>
 {% else %}
 <p style="color:var(--text-muted)">You need at least one <a href="/accounts">account</a> before you can create a goal.</p>
 {% endif %}

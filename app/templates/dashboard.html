@@ -51,14 +51,14 @@
 {% if show_forecast %}{% include 'partials/_forecast_card.html' %}{% endif %}
 {% endif %}
 {% if goals %}
-<h2>Savings goals</h2>
+<h2>Goals</h2>
 {% include 'partials/_goal_summary.html' %}
 <div class="goal-grid">
     {% for g in goals %}
     <div class="card goal-card goal-mini">
         <div class="goal-head">
             <strong class="goal-name">{{ g.name }}</strong>
-            {% if g.complete %}<span class="transfer-badge">✓ Reached</span>
+            {% if g.complete %}<span class="transfer-badge">{{ '✓ Paid off' if g.type == 'payoff' else '✓ Reached' }}</span>
             {% elif g.on_track is true %}<span class="transfer-badge">On track</span>
             {% elif g.on_track is false %}<span class="recurring-badge">Behind</span>{% endif %}
         </div>

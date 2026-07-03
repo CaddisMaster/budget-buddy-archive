@@ -1,6 +1,20 @@
+{# goal tuple: (id, name, target_amount, target_date, account_id, goal_type).
+   A payoff goal's account + target are locked to the creation snapshot — only
+   the name and deadline are editable. The hidden goal_type/account_id keep the
+   shared _validate() happy; the route trusts only the STORED type. #}
 <div class="card editing" id="goal-{{ goal[0] }}" style="margin-bottom:1rem">
     <label>Name</label>
     <input type="text" name="name" maxlength="80" value="{{ goal[1] }}" required>
+    {% if goal[5] == 'payoff' %}
+    <input type="hidden" name="goal_type" value="payoff">
+    <input type="hidden" name="account_id" value="{{ goal[4] }}">
+    <p style="color:var(--text-muted);font-size:13px;margin:0.4rem 0 0">
+        Paying off ${{ goal[2] }} of starting debt — the account and amount are
+        set when the goal is created. To change them, delete and re-create the goal.
+    </p>
+    <label>Target date (optional)</label>
+    <input type="date" name="target_date" value="{{ goal[3] if goal[3] else '' }}">
+    {% else %}
     <label>Target amount</label>
     <input type="number" step="0.01" name="target_amount" value="{{ goal[2] }}" required>
     <label>Target date (optional)</label>
@@ -11,6 +25,7 @@
         <option value="{{ account[0] }}" {% if account[0] == goal[4] %}selected{% endif %}>{{ account[1] }}</option>
         {% endfor %}
     </select>
+    {% endif %}
     <div class="row-actions" style="margin-top:1rem">
         <button type="button" class="btn btn-sm btn-primary"
           hx-post="/goals/{{ goal[0] }}/edit" hx-include="closest .card"

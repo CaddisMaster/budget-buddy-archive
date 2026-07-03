@@ -70,8 +70,25 @@ def test_compute_goal_coach_facts_figures(users):
     assert facts["total_saved"] == 400.0
     assert facts["total_target"] == 1000.0
     assert facts["goals"][0]["name"] == "seed-goal"
+    assert facts["goals"][0]["type"] == "save"
     assert facts["goals"][0]["percent"] == 40.0
     assert facts["goals"][0]["remaining"] == 600.0
+
+
+def test_compute_goal_coach_facts_carries_payoff_type(users):
+    # The coach narrates payoff goals as debt-paydown — the type must reach the
+    # facts payload. Paid 200 of a 500 starting debt → 40%, 300 still owed.
+    a = users["a"]["id"]
+    acct = create_account(a, "gc-card")
+    create_transaction(a, acct, 500, date.today(), "expense")   # the debt
+    create_transaction(a, acct, 200, date.today(), "income")    # a payment
+    create_goal(a, acct, 500, baseline=-500, goal_type="payoff")
+    with db_cursor() as cursor:
+        facts = compute_goal_coach_facts(cursor, a)
+    assert facts["goals"][0]["type"] == "payoff"
+    assert facts["goals"][0]["saved"] == 200.0
+    assert facts["goals"][0]["remaining"] == 300.0
+    assert facts["incomplete_count"] == 1
 
 
 def test_compute_goal_coach_facts_only_sees_own_rows(users):

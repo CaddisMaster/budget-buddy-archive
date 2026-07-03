@@ -342,13 +342,16 @@ def create_transfer(user_id, from_account, to_account, amount, transfer_date):
     return gid
 
 
-def create_goal(user_id, account_id, target_amount, target_date=None, baseline=0):
+def create_goal(user_id, account_id, target_amount, target_date=None, baseline=0,
+                goal_type="save"):
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO goals (name, target_amount, target_date, account_id, "
-        "baseline_amount, user_id) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-        ("seed-goal", target_amount, target_date, account_id, baseline, user_id),
+        "baseline_amount, goal_type, user_id) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        ("seed-goal", target_amount, target_date, account_id, baseline, goal_type,
+         user_id),
     )
     gid = cur.fetchone()[0]
     conn.commit()
@@ -581,11 +584,13 @@ def fetch_goal_coach(user_id, year, month):
 
 
 def fetch_goal(goal_id):
-    """Return (name, target_amount, account_id, user_id) for a goal, or None."""
+    """Return (name, target_amount, account_id, user_id, goal_type,
+    baseline_amount, target_date) for a goal, or None."""
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        "SELECT name, target_amount, account_id, user_id FROM goals WHERE id = %s",
+        "SELECT name, target_amount, account_id, user_id, goal_type, "
+        "baseline_amount, target_date FROM goals WHERE id = %s",
         (goal_id,),
     )
     row = cur.fetchone()

@@ -16,10 +16,16 @@ bp = Blueprint('goals', __name__)
 
 GOAL_SELECT = (
     "SELECT g.id, g.name, g.target_amount, g.target_date, g.account_id, "
-    "g.baseline_amount, a.account_name "
+    "g.baseline_amount, g.goal_type, a.account_name "
     "FROM goals g JOIN account a ON g.account_id = a.account_id "
     "WHERE g.user_id = %s"
 )
+
+# 'save' works toward a positive target; 'payoff' (v10.9) works a negative
+# balance back to $0. A payoff goal snapshots at creation: baseline_amount =
+# the account's balance and target_amount = the starting debt (−balance), so
+# compute_goal_projection() is shared — the type only drives wording/forms.
+GOAL_TYPES = ('save', 'payoff')
 
 # How many recent months feed the "projected completion" pace estimate.
 INFLOW_WINDOW_MONTHS = 3
@@ -124,16 +130,27 @@ def _validate(form, user_account_ids):
     name = form.get('name', '').strip()
     target_date_str = form.get('target_date', '').strip()
     account_id = form.get('account_id') or None
+    goal_type = form.get('goal_type', 'save')
+    if goal_type not in GOAL_TYPES:
+        errors.append('Invalid goal type')
+        goal_type = 'save'
 
     if not name:
         errors.append('Name is required')
     elif len(name) > 80:
         errors.append('Name must be 80 characters or fewer')
-    target_amount, amount_error = parse_positive_amount(
-        form.get('target_amount'), label='Target amount')
-    if amount_error:
-        errors.append(amount_error)
-    if not account_id or int(account_id) not in user_account_ids:
+    target_amount = None
+    if goal_type == 'save':
+        # A payoff goal's target is derived (the starting debt), never typed in.
+        target_amount, amount_error = parse_positive_amount(
+            form.get('target_amount'), label='Target amount')
+        if amount_error:
+            errors.append(amount_error)
+    try:
+        account_ok = account_id and int(account_id) in user_account_ids
+    except (TypeError, ValueError):
+        account_ok = False
+    if not account_ok:
         errors.append('A valid linked account is required')
     target_date = None
     if target_date_str:
@@ -147,15 +164,18 @@ def _validate(form, user_account_ids):
         'target_amount': target_amount,
         'target_date': target_date,
         'account_id': account_id,
+        'goal_type': goal_type,
     }
     return fields, errors
 
 
 def _goal_view(cursor, user_id, row):
     """Turn one goal row (GOAL_SELECT shape) into a view dict with progress +
-    projections."""
+    projections. For a payoff goal the same math reads as: saved = paid off
+    since creation, remaining = the current actual debt (self-correcting if
+    more gets charged), complete = balance back at $0."""
     (gid, name, target_amount, target_date, account_id,
-     baseline, account_name) = row
+     baseline, goal_type, account_name) = row
     balance = _account_balance(cursor, user_id, account_id)
     saved = balance - float(baseline)
     inflow = _recent_monthly_inflow(cursor, user_id, account_id)
@@ -163,6 +183,7 @@ def _goal_view(cursor, user_id, row):
     return {
         'id': gid,
         'name': name,
+        'type': goal_type,
         'target_amount': float(target_amount),
         'target_date': target_date,
         'account_name': account_name,
@@ -204,6 +225,7 @@ def compute_goal_coach_facts(cursor, user_id):
     goals = build_goals_view(cursor, user_id)
     goal_facts = [{
         'name': g['name'],
+        'type': g['type'],
         'target_amount': g['target_amount'],
         'saved': g['saved'],
         'percent': g['percent'],
@@ -257,19 +279,34 @@ def goals():
             for e in errors:
                 flash(e)
             return redirect(url_for('goals.goals'))
+        if fields['goal_type'] == 'payoff':
+            # Snapshot the debt: baseline = the (negative) balance now, target =
+            # what it takes to get back to $0. The projection math then reads
+            # saved as "paid off" and remaining as "still owed".
+            balance = _account_balance(cursor, current_user.id, fields['account_id'])
+            if balance >= 0:
+                cursor.close(); conn.close()
+                msg = "That account's balance is already $0 or positive — nothing to pay off"
+                if is_htmx():
+                    return hx_toast(make_response('', 200), msg, 'error')
+                flash(msg)
+                return redirect(url_for('goals.goals'))
+            baseline = balance
+            fields['target_amount'] = round(-balance, 2)
         # Baseline decides whether the account's existing balance counts toward
-        # the goal: "existing" → 0; "fresh" → current balance (so back-to-back
+        # a SAVE goal: "existing" → 0; "fresh" → current balance (so back-to-back
         # goals on one account start from zero progress).
-        if request.form.get('baseline_mode') == 'fresh':
+        elif request.form.get('baseline_mode') == 'fresh':
             baseline = _account_balance(cursor, current_user.id, fields['account_id'])
         else:
             baseline = 0
         try:
             cursor.execute(
                 "INSERT INTO goals (name, target_amount, target_date, account_id, "
-                "baseline_amount, user_id) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                "baseline_amount, goal_type, user_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
                 (fields['name'], fields['target_amount'], fields['target_date'],
-                 fields['account_id'], baseline, current_user.id),
+                 fields['account_id'], baseline, fields['goal_type'], current_user.id),
             )
             new_id = cursor.fetchone()[0]
             conn.commit()
@@ -366,11 +403,14 @@ def coach_generate():
 def edit_goal(goal_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM goals WHERE id = %s AND user_id = %s",
+    cursor.execute("SELECT goal_type FROM goals WHERE id = %s AND user_id = %s",
                    (goal_id, current_user.id))
-    if cursor.fetchone() is None:
+    row = cursor.fetchone()
+    if row is None:
         cursor.close(); conn.close()
         abort(404)
+    # The STORED type decides what an edit may touch — never the posted one.
+    stored_type = row[0]
     all_accounts = _fetch_accounts(cursor, current_user.id)
     account_ids = {a[0] for a in all_accounts}
 
@@ -378,22 +418,34 @@ def edit_goal(goal_id):
         fields, errors = _validate(request.form, account_ids)
         if errors:
             goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
-                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None)
+                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None,
+                    stored_type)
             cursor.close(); conn.close()
             return render_template('partials/_goal_edit_card.html',
                                    goal=goal, accounts=all_accounts, errors=errors)
         try:
-            cursor.execute(
-                "UPDATE goals SET name=%s, target_amount=%s, target_date=%s, "
-                "account_id=%s WHERE id=%s AND user_id=%s",
-                (fields['name'], fields['target_amount'], fields['target_date'],
-                 fields['account_id'], goal_id, current_user.id),
-            )
+            if stored_type == 'payoff':
+                # Account + target stay locked to the creation snapshot — moving
+                # the goal to another account would need a re-baseline (delete +
+                # recreate covers that). Only the name and deadline move.
+                cursor.execute(
+                    "UPDATE goals SET name=%s, target_date=%s "
+                    "WHERE id=%s AND user_id=%s",
+                    (fields['name'], fields['target_date'], goal_id, current_user.id),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE goals SET name=%s, target_amount=%s, target_date=%s, "
+                    "account_id=%s WHERE id=%s AND user_id=%s",
+                    (fields['name'], fields['target_amount'], fields['target_date'],
+                     fields['account_id'], goal_id, current_user.id),
+                )
             conn.commit()
         except Exception as e:
             conn.rollback()
             goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
-                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None)
+                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None,
+                    stored_type)
             cursor.close(); conn.close()
             return render_template('partials/_goal_edit_card.html',
                                    goal=goal, accounts=all_accounts, errors=[str(e)])
@@ -403,7 +455,7 @@ def edit_goal(goal_id):
         return hx_toast(resp, 'Goal updated')
 
     cursor.execute(
-        "SELECT id, name, target_amount, target_date, account_id "
+        "SELECT id, name, target_amount, target_date, account_id, goal_type "
         "FROM goals WHERE id = %s AND user_id = %s",
         (goal_id, current_user.id),
     )

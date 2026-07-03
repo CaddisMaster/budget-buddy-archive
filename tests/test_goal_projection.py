@@ -62,3 +62,39 @@ def test_negative_inflow_treated_as_no_progress():
     p = compute_goal_projection(500, 100, date(2026, 6, 1), -50, today=TODAY)
     assert p["projected_date"] is None
     assert p["on_track"] is False
+
+
+# --- payoff framing (v10.9) ---------------------------------------------------
+# A payoff goal feeds the SAME function with target = the starting debt and
+# saved = balance − baseline = amount paid off. These prove the readings a
+# payoff goal relies on, with the math untouched.
+
+def test_payoff_partial_paydown():
+    # $3,000 starting debt, $1,200 paid → 40%, $1,800 still owed.
+    p = compute_goal_projection(3000, 1200, None, 0, today=TODAY)
+    assert p["percent"] == 40.0
+    assert p["remaining"] == 1800.0
+    assert p["complete"] is False
+
+
+def test_payoff_charging_more_clamps_percent_and_grows_remaining():
+    # New charges outpaced payments: paid = −200 → 0% (clamped), and remaining
+    # exceeds the starting debt (the current REAL debt, self-correcting).
+    p = compute_goal_projection(3000, -200, None, 0, today=TODAY)
+    assert p["percent"] == 0.0
+    assert p["remaining"] == 3200.0
+    assert p["complete"] is False
+
+
+def test_payoff_complete_at_or_past_zero():
+    # Paid past $0 (balance now positive) → complete, clamped at 100%.
+    p = compute_goal_projection(3000, 3050, date(2026, 6, 1), 0, today=TODAY)
+    assert p["complete"] is True
+    assert p["percent"] == 100.0
+    assert p["on_track"] is True
+
+
+def test_payoff_required_per_month_is_debt_over_months():
+    # $2,400 still owed, 12 months to the date → $200/mo to be debt-free on time.
+    p = compute_goal_projection(3000, 600, date(2027, 1, 1), 0, today=TODAY)
+    assert p["required_per_month"] == 200.0

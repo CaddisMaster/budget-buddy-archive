@@ -80,8 +80,11 @@ CREATE TABLE public.budgets (
 );
 
 -- ------------------------------------------------------------
--- Goals (account-linked savings goals)
+-- Goals (account-linked; save UP toward a target or pay a balance DOWN to $0)
 -- ------------------------------------------------------------
+-- goal_type 'payoff' (v10.9, sql/20) snapshots at creation: baseline_amount =
+-- the account's (negative) balance, target_amount = the starting debt — so the
+-- projection math is shared with 'save' and the type only drives wording.
 CREATE TABLE public.goals (
     id SERIAL PRIMARY KEY,
     name character varying(80) NOT NULL,
@@ -89,6 +92,8 @@ CREATE TABLE public.goals (
     target_date date,
     account_id integer NOT NULL REFERENCES account(account_id) ON DELETE CASCADE,
     baseline_amount numeric(10,2) NOT NULL DEFAULT 0,
+    goal_type VARCHAR(10) NOT NULL DEFAULT 'save'
+        CHECK (goal_type IN ('save', 'payoff')),
     created_at timestamp without time zone DEFAULT now(),
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );

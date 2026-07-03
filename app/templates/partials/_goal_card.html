@@ -4,6 +4,34 @@
         <span class="goal-account">{{ g.account_name }}</span>
     </div>
     <div class="goal-bar"><div class="goal-bar-fill" style="width:{{ g.percent }}%"></div></div>
+    {% if g.type == 'payoff' %}
+    {# Payoff framing: saved = paid off since creation (floored at $0 for
+       display when new charges outpace payments), remaining = current debt. #}
+    <p class="goal-figures">
+        Paid off ${{ "%.2f"|format([g.saved, 0]|max) }} of ${{ "%.2f"|format(g.target_amount) }}
+        <span class="goal-pct">({{ g.percent }}%)</span>
+        {% if g.complete %}
+        <span class="transfer-badge">✓ Paid off</span>
+        {% elif g.on_track is true %}
+        <span class="transfer-badge">On track</span>
+        {% elif g.on_track is false %}
+        <span class="recurring-badge">Behind</span>
+        {% endif %}
+    </p>
+    {% if not g.complete %}
+    <p class="goal-sub">
+        ${{ "%.2f"|format(g.remaining) }} still owed.
+        {% if g.required_per_month is not none and g.target_date %}
+        Set aside ${{ "%.2f"|format(g.required_per_month) }}/mo to hit {{ g.target_date }}.
+        {% endif %}
+        {% if g.projected_date %}
+        At your recent pace (${{ "%.2f"|format(g.monthly_net_inflow) }}/mo) you'll be debt-free around {{ g.projected_date }}.
+        {% elif g.monthly_net_inflow <= 0 %}
+        No recent net paydown on this account yet.
+        {% endif %}
+    </p>
+    {% endif %}
+    {% else %}
     <p class="goal-figures">
         ${{ "%.2f"|format(g.saved) }} of ${{ "%.2f"|format(g.target_amount) }}
         <span class="goal-pct">({{ g.percent }}%)</span>
@@ -27,6 +55,7 @@
         No recent net savings into this account yet.
         {% endif %}
     </p>
+    {% endif %}
     {% endif %}
     <div class="row-actions goal-actions">
         <button type="button" class="btn btn-sm"

@@ -1,25 +1,33 @@
+from datetime import date
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import is_htmx, hx_toast
+from app.helpers import is_htmx, hx_toast, parse_signed_amount
 
 bp = Blueprint('accounts', __name__)
 
 VALID_ACCOUNT_TYPES = ('Credit Card', 'Debit Card', 'Bank Account')
 
+# Days since the last check-in before an account reads as stale on /accounts.
+CHECKIN_STALE_DAYS = 30
+
 ACCOUNT_ROW_SQL = """
     SELECT a.account_id, a.account_name, a.type,
         COALESCE(SUM(CASE WHEN t.transaction_type = 'income'
-            THEN t.amount ELSE -t.amount END), 0) AS balance
+            THEN t.amount ELSE -t.amount END), 0) AS balance,
+        a.last_checked_in,
+        (a.last_checked_in IS NULL
+            OR a.last_checked_in < CURRENT_DATE - {stale_days}) AS checkin_stale
     FROM account a
     LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
     WHERE a.user_id = %s {extra}
-    GROUP BY a.account_id, a.account_name, a.type
+    GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in
     ORDER BY a.account_name
-"""
+""".replace('{stale_days}', str(CHECKIN_STALE_DAYS))
 
 
 def _fetch_account_row(cursor, account_id):
@@ -93,7 +101,7 @@ def edit_account(account_id):
         account_type = request.form.get('type', '').strip()
         error = _validate(name, account_type)
         if error:
-            account = (account[0], name, account_type, account[3])
+            account = (account[0], name, account_type, account[3], account[4], account[5])
             return render_template('partials/_account_edit_row.html', account=account, error=error)
         try:
             with db_cursor(commit=True) as cursor:
@@ -102,7 +110,7 @@ def edit_account(account_id):
                     (name, account_type, account_id, current_user.id),
                 )
         except Exception as e:
-            account = (account[0], name, account_type, account[3])
+            account = (account[0], name, account_type, account[3], account[4], account[5])
             return render_template('partials/_account_edit_row.html', account=account, error=str(e))
         with db_cursor() as cursor:
             account = _fetch_account_row(cursor, account_id)
@@ -110,6 +118,63 @@ def edit_account(account_id):
         return hx_toast(resp, 'Account updated')
 
     return render_template('partials/_account_edit_row.html', account=account)
+
+
+@bp.route('/accounts/<int:account_id>/checkin', methods=['GET', 'POST'])
+@login_required
+def checkin_account(account_id):
+    # Guard ownership up front (404 for missing/other-user).
+    with db_cursor() as cursor:
+        account = _fetch_account_row(cursor, account_id)
+
+    if request.method == 'GET':
+        return render_template('partials/_account_checkin_row.html', account=account)
+
+    actual, error = parse_signed_amount(request.form.get('actual_balance'), 'Bank balance')
+    if error:
+        return render_template('partials/_account_checkin_row.html', account=account, error=error)
+
+    today = date.today()
+    with db_cursor(commit=True) as cursor:
+        # Lock the account row: re-guards ownership inside the write transaction
+        # AND serializes concurrent check-ins, so two tabs posting at once can't
+        # both insert the gap (the due-runner FOR UPDATE lesson).
+        cursor.execute(
+            "SELECT 1 FROM account WHERE account_id = %s AND user_id = %s FOR UPDATE",
+            (account_id, current_user.id),
+        )
+        if cursor.fetchone() is None:
+            abort(404)
+        # Recompute the balance inside the locked transaction — never trust a
+        # posted "app balance".
+        cursor.execute(
+            "SELECT COALESCE(SUM(CASE WHEN transaction_type = 'income' "
+            "THEN amount ELSE -amount END), 0) "
+            "FROM transactions WHERE account_id = %s AND user_id = %s",
+            (account_id, current_user.id),
+        )
+        computed = float(cursor.fetchone()[0])
+        delta = round(actual - computed, 2)
+        if abs(delta) >= 0.01:
+            cursor.execute(
+                "INSERT INTO transactions (amount, description, transaction_date, "
+                "category_id, account_id, transaction_type, is_adjustment, user_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (abs(delta), 'Balance check-in', today, None, account_id,
+                 'income' if delta > 0 else 'expense', True, current_user.id),
+            )
+        cursor.execute(
+            "UPDATE account SET last_checked_in = %s WHERE account_id = %s AND user_id = %s",
+            (today, account_id, current_user.id),
+        )
+
+    with db_cursor() as cursor:
+        account = _fetch_account_row(cursor, account_id)
+    resp = make_response(render_template('partials/_account_row.html', account=account))
+    if abs(delta) >= 0.01:
+        sign = '+' if delta > 0 else '-'
+        return hx_toast(resp, f'Checked in — adjusted by {sign}${abs(delta):,.2f}')
+    return hx_toast(resp, 'Checked in — balances match')
 
 
 @bp.route('/accounts/<int:account_id>/row')

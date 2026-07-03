@@ -7,7 +7,7 @@ every amount-taking form routes through it. Pure tests cover the helper; route
 tests prove a 'nan' post writes nothing to any of the money tables.
 """
 from app.db import get_db_connection
-from app.helpers import parse_positive_amount
+from app.helpers import parse_positive_amount, parse_signed_amount
 from tests.conftest import (
     count_transactions_like,
     count_transfer_schedules,
@@ -65,6 +65,36 @@ def test_label_customizes_messages():
         None, "Target amount is required")
     assert parse_positive_amount("nan", label="Target amount") == (
         None, "Target amount must be a valid number")
+
+
+# --- parse_signed_amount (pure) -----------------------------------------------
+# v10.9 balance check-in: a bank balance is signed (credit cards are negative)
+# and may be exactly zero, so the strictly-positive check doesn't apply — but
+# the NaN/inf guard absolutely still does.
+
+def test_signed_accepts_negative_and_zero():
+    assert parse_signed_amount("-512.10") == (-512.1, None)
+    assert parse_signed_amount("0") == (0.0, None)
+    assert parse_signed_amount("  42.50 ") == (42.5, None)
+
+
+def test_signed_empty_and_none_are_required():
+    assert parse_signed_amount("") == (None, "Amount is required")
+    assert parse_signed_amount(None) == (None, "Amount is required")
+
+
+def test_signed_non_number_and_non_finite_rejected():
+    assert parse_signed_amount("abc") == (None, "Amount must be a valid number")
+    for raw in ("nan", "NaN", "inf", "-inf", "Infinity", "-Infinity"):
+        assert parse_signed_amount(raw) == (
+            None, "Amount must be a valid number"), raw
+
+
+def test_signed_label_customizes_messages():
+    assert parse_signed_amount("", label="Bank balance") == (
+        None, "Bank balance is required")
+    assert parse_signed_amount("nan", label="Bank balance") == (
+        None, "Bank balance must be a valid number")
 
 
 # --- every amount form rejects a NaN post ------------------------------------

@@ -2,7 +2,13 @@
   <td>{{ account[1] }}</td>
   <td>{{ account[2] }}</td>
   <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
+  <td class="{% if account[5] %}checkin-stale{% endif %}" style="{% if not account[5] %}color:var(--text-muted){% endif %}">
+    {{ account[4].strftime('%b %-d, %Y') if account[4] else 'Never' }}
+  </td>
   <td class="row-actions">
+    <button type="button" class="btn btn-sm"
+      hx-get="/accounts/{{ account[0] }}/checkin"
+      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Check in</button>
     <button type="button" class="btn btn-sm"
       hx-get="/accounts/{{ account[0] }}/edit"
       hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Edit</button>

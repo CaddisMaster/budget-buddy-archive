@@ -20,13 +20,13 @@
 <h2>Existing accounts</h2>
 <div class="table-wrapper">
     <table>
-        <thead><tr><th>Name</th><th>Type</th><th>Balance</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Balance</th><th>Last check-in</th><th>Actions</th></tr></thead>
         <tbody id="account-rows">
         {% for account in accounts %}
         {% include 'partials/_account_row.html' %}
         {% endfor %}
         {% if not accounts %}
-        <tr id="acct-empty"><td colspan="4" style="color:var(--text-muted)">No accounts yet. Add one above.</td></tr>
+        <tr id="acct-empty"><td colspan="5" style="color:var(--text-muted)">No accounts yet. Add one above.</td></tr>
         {% endif %}
         </tbody>
     </table>

@@ -122,6 +122,7 @@ tr:hover td { background: var(--surface-2); }
 /* Colour coding */
 .income { color: var(--success); }
 .expense { color: var(--danger); }
+.checkin-stale { color: var(--warning); }  /* /accounts: never / >30d since check-in */
 
 /* Forms */
 label { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; margin-top: 1rem; }

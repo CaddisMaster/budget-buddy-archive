@@ -36,7 +36,8 @@ CREATE TABLE public.account (
     account_name character varying(50) NOT NULL,
     type character varying(50) NOT NULL,
     created_at timestamp without time zone DEFAULT now(),
-    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_checked_in date  -- v10.9 balance check-in; NULL = never reconciled
 );
 
 -- ------------------------------------------------------------

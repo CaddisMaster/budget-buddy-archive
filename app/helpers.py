@@ -14,16 +14,15 @@ def ai_enabled():
     return bool(os.getenv('ANTHROPIC_API_KEY'))
 
 
-def parse_positive_amount(raw, label='Amount'):
-    """Validate a money form field. Returns (amount, error) — exactly one is
-    None. Shared by every amount-taking form (transactions, schedules,
-    transfers, budgets, goals) so they can't drift.
+def parse_signed_amount(raw, label='Amount'):
+    """Validate a signed money form field (a bank balance can be negative —
+    credit cards — or exactly zero). Returns (amount, error) — exactly one is
+    None.
 
-    float() happily parses 'nan' and 'inf', and neither trips an `<= 0` check
-    (NaN compares False to everything; inf is positive) — but Postgres stores
-    NaN in a numeric column, and one NaN row poisons every SUM() the dashboards
-    aggregate. So reject non-finite values along with non-numbers and
-    non-positives.
+    float() happily parses 'nan' and 'inf', and neither trips a naive range
+    check (NaN compares False to everything) — but Postgres stores NaN in a
+    numeric column, and one NaN row poisons every SUM() the dashboards
+    aggregate. So reject non-finite values along with non-numbers.
     """
     raw = (raw or '').strip()
     if not raw:
@@ -34,6 +33,18 @@ def parse_positive_amount(raw, label='Amount'):
         return None, f'{label} must be a valid number'
     if not math.isfinite(amount):
         return None, f'{label} must be a valid number'
+    return amount, None
+
+
+def parse_positive_amount(raw, label='Amount'):
+    """Validate a money form field. Returns (amount, error) — exactly one is
+    None. Shared by every amount-taking form (transactions, schedules,
+    transfers, budgets, goals) so they can't drift. The finite/NaN guard lives
+    in parse_signed_amount; this adds the strictly-positive check.
+    """
+    amount, error = parse_signed_amount(raw, label)
+    if error:
+        return None, error
     if amount <= 0:
         return None, f'{label} must be greater than zero'
     return amount, None

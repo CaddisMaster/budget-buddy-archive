@@ -8,6 +8,7 @@
     </select>
   </td>
   <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
+  <td style="color:var(--text-muted)">{{ account[4].strftime('%b %-d, %Y') if account[4] else 'Never' }}</td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
       hx-post="/accounts/{{ account[0] }}/edit" hx-include="closest tr"

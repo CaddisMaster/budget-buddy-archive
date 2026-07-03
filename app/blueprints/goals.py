@@ -10,7 +10,7 @@ from flask_login import login_required, current_user
 from app import limiter
 from app.ai import generate_goal_coach, ParseError, MODEL
 from app.db import get_db_connection
-from app.helpers import is_htmx, hx_toast, ai_enabled
+from app.helpers import is_htmx, hx_toast, ai_enabled, parse_positive_amount
 
 bp = Blueprint('goals', __name__)
 
@@ -122,24 +122,17 @@ def _fetch_accounts(cursor, user_id):
 def _validate(form, user_account_ids):
     errors = []
     name = form.get('name', '').strip()
-    target_str = form.get('target_amount', '').strip()
     target_date_str = form.get('target_date', '').strip()
     account_id = form.get('account_id') or None
 
-    target_amount = None
     if not name:
         errors.append('Name is required')
     elif len(name) > 80:
         errors.append('Name must be 80 characters or fewer')
-    if not target_str:
-        errors.append('Target amount is required')
-    else:
-        try:
-            target_amount = float(target_str)
-            if target_amount <= 0:
-                errors.append('Target amount must be greater than zero')
-        except ValueError:
-            errors.append('Target amount must be a valid number')
+    target_amount, amount_error = parse_positive_amount(
+        form.get('target_amount'), label='Target amount')
+    if amount_error:
+        errors.append(amount_error)
     if not account_id or int(account_id) not in user_account_ids:
         errors.append('A valid linked account is required')
     target_date = None

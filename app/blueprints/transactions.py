@@ -11,7 +11,9 @@ from flask import (
 from flask_login import login_required, current_user
 from app import limiter
 from app.db import get_db_connection, db_cursor
-from app.helpers import recent_months, is_htmx, hx_toast, ai_enabled
+from app.helpers import (
+    recent_months, is_htmx, hx_toast, ai_enabled, parse_positive_amount
+)
 from app.ai import parse_transaction_text, classify_transactions, ParseError
 
 bp = Blueprint('transactions', __name__)
@@ -104,22 +106,15 @@ def compute_next_due(current, frequency, anchor_day=None, second_day=None):
 @login_required
 def new_transaction():
     if request.method == 'POST':
-        amount_str = request.form['amount'].strip()
         description = request.form['description'].strip()
         transaction_date = request.form['transaction_date'].strip()
         category_id = request.form.get('category_id') or None
         account_id = request.form.get('account_id') or None
         transaction_type = request.form.get('transaction_type', 'expense')
         errors = []
-        if not amount_str:
-            errors.append('Amount is required')
-        else:
-            try:
-                amount = float(amount_str)
-                if amount <= 0:
-                    errors.append('Amount must be greater than zero')
-            except ValueError:
-                errors.append('Amount must be a valid number')
+        amount, amount_error = parse_positive_amount(request.form.get('amount'))
+        if amount_error:
+            errors.append(amount_error)
         if not transaction_date:
             errors.append('Date is required')
         if not account_id:
@@ -338,15 +333,9 @@ def edit_transaction(transaction_id):
         transaction_type = request.form.get('transaction_type', 'expense')
         is_adjustment = request.form.get('is_adjustment') == 'true'
         errors = []
-        if not amount_str:
-            errors.append('Amount is required')
-        else:
-            try:
-                amount = float(amount_str)
-                if amount <= 0:
-                    errors.append('Amount must be greater than zero')
-            except ValueError:
-                errors.append('Amount must be a valid number')
+        amount, amount_error = parse_positive_amount(amount_str)
+        if amount_error:
+            errors.append(amount_error)
         if not transaction_date:
             errors.append('Date is required')
         if transaction_type not in ('income', 'expense'):
@@ -364,7 +353,6 @@ def edit_transaction(transaction_id):
                                    accounts=all_accounts,
                                    filter_qs=request.query_string.decode(),
                                    errors=errors)
-        amount = float(amount_str)
         try:
             cursor.execute(
                 "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s, is_adjustment=%s WHERE id=%s AND user_id=%s",

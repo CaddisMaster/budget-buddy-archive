@@ -1,5 +1,6 @@
 """Small shared, DB-free helpers used across blueprints."""
 import json
+import math
 import os
 from datetime import datetime
 
@@ -11,6 +12,31 @@ def ai_enabled():
     is present. Templates gate the quick-add box on this so the feature stays
     invisible until the key is set."""
     return bool(os.getenv('ANTHROPIC_API_KEY'))
+
+
+def parse_positive_amount(raw, label='Amount'):
+    """Validate a money form field. Returns (amount, error) — exactly one is
+    None. Shared by every amount-taking form (transactions, schedules,
+    transfers, budgets, goals) so they can't drift.
+
+    float() happily parses 'nan' and 'inf', and neither trips an `<= 0` check
+    (NaN compares False to everything; inf is positive) — but Postgres stores
+    NaN in a numeric column, and one NaN row poisons every SUM() the dashboards
+    aggregate. So reject non-finite values along with non-numbers and
+    non-positives.
+    """
+    raw = (raw or '').strip()
+    if not raw:
+        return None, f'{label} is required'
+    try:
+        amount = float(raw)
+    except ValueError:
+        return None, f'{label} must be a valid number'
+    if not math.isfinite(amount):
+        return None, f'{label} must be a valid number'
+    if amount <= 0:
+        return None, f'{label} must be greater than zero'
+    return amount, None
 
 
 def is_htmx():

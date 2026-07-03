@@ -5,6 +5,7 @@ active/future gates, user isolation) and the inline-CRUD routes (fragment shape,
 validation, ownership 404s). Route tests hit the dev DB via the shared fixtures;
 CSRF + rate limiter are disabled under test.
 """
+import threading
 from datetime import date, timedelta
 
 from app.db import get_db_connection
@@ -95,6 +96,39 @@ def test_inactive_transfer_generates_nothing(users):
                              yesterday, is_active=False)
     run_due_transfers(a["id"])
     assert len(_transfer_legs(a["id"], LABEL)) == 0
+
+
+def test_concurrent_runs_post_exactly_one_pair(users):
+    # The transfer twin of the schedules concurrency test: multiple threads
+    # (gunicorn serves requests concurrently) running run_due_transfers on the
+    # same due row must post ONE paired transfer, not one per thread — the
+    # FOR UPDATE row lock serializes them.
+    uid = users["a"]["id"]
+    to_acct = _second_account(users["a"])
+    yesterday = date.today() - timedelta(days=1)
+    tsid = create_transfer_schedule(uid, users["a"]["account_id"], to_acct,
+                                    200, "monthly", yesterday)
+
+    barrier = threading.Barrier(4)
+    errors = []
+
+    def run():
+        barrier.wait()  # line all threads up on the same race window
+        try:
+            run_due_transfers(uid)
+        except Exception as e:  # pragma: no cover - surfaced via the assert
+            errors.append(e)
+
+    threads = [threading.Thread(target=run) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    legs = _transfer_legs(uid, LABEL)
+    assert len(legs) == 2  # exactly one pair, no duplicates
+    assert fetch_transfer_schedule(tsid)[2] > date.today()
 
 
 def test_run_due_transfers_is_user_scoped(users):

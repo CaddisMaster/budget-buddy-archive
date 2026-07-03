@@ -12,7 +12,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from app.db import db_cursor
-from app.helpers import is_htmx, hx_toast
+from app.helpers import is_htmx, hx_toast, parse_positive_amount
 from app.blueprints.transactions import (
     compute_next_due, _clamp_to_month, VALID_FREQUENCIES, FREQUENCY_LABELS,
     validate_category_account,
@@ -53,11 +53,18 @@ def run_due_schedules(user_id):
     next_due past today. Scoped to the given user."""
     today = date.today()
     with db_cursor(commit=True) as cursor:
+        # FOR UPDATE serializes concurrent runs (gunicorn serves requests on
+        # multiple threads — e.g. two tabs loading /dashboard and /transactions
+        # at once). Without it, both runs read next_due before either advances
+        # it and each materializes the same occurrence. The second run blocks
+        # here until the first commits, re-evaluates next_due <= today against
+        # the updated row, and finds nothing due.
         cursor.execute("""
             SELECT id, amount, description, category_id, account_id,
                    transaction_type, frequency, anchor_day, second_day, next_due
             FROM schedules
             WHERE is_active = true AND next_due <= %s AND user_id = %s
+            FOR UPDATE
         """, (today, user_id))
         due = cursor.fetchall()
         for (sid, amount, desc, cat_id, acc_id, ttype, freq,
@@ -95,17 +102,9 @@ def _parse_form(form):
     if transaction_type not in ('income', 'expense'):
         errors.append('Type must be income or expense')
 
-    amount = None
-    amount_str = form.get('amount', '').strip()
-    if not amount_str:
-        errors.append('Amount is required')
-    else:
-        try:
-            amount = float(amount_str)
-            if amount <= 0:
-                errors.append('Amount must be greater than zero')
-        except ValueError:
-            errors.append('Amount must be a valid number')
+    amount, amount_error = parse_positive_amount(form.get('amount'))
+    if amount_error:
+        errors.append(amount_error)
 
     description = form.get('description', '').strip()
     category_id = form.get('category_id') or None

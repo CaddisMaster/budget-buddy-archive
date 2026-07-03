@@ -5,7 +5,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import hx_toast, is_htmx
+from app.helpers import hx_toast, is_htmx, parse_positive_amount
 from app.blueprints.transactions import (
     compute_next_due, VALID_FREQUENCIES, FREQUENCY_LABELS,
 )
@@ -42,20 +42,12 @@ def _validate(form, user_account_ids):
     errors = []
     from_account = form.get('from_account') or None
     to_account = form.get('to_account') or None
-    amount_str = form.get('amount', '').strip()
     transfer_date = form.get('transfer_date', '').strip()
     description = form.get('description', '').strip()
 
-    amount = None
-    if not amount_str:
-        errors.append('Amount is required')
-    else:
-        try:
-            amount = float(amount_str)
-            if amount <= 0:
-                errors.append('Amount must be greater than zero')
-        except ValueError:
-            errors.append('Amount must be a valid number')
+    amount, amount_error = parse_positive_amount(form.get('amount'))
+    if amount_error:
+        errors.append(amount_error)
     if not transfer_date:
         errors.append('Date is required')
     if not from_account or not to_account:
@@ -266,11 +258,16 @@ def run_due_transfers(user_id):
     run_due_schedules()."""
     today = date.today()
     with db_cursor(commit=True) as cursor:
+        # FOR UPDATE serializes concurrent runs (same race as run_due_schedules:
+        # two threads read next_due before either advances it and each posts the
+        # same paired transfer). The second run blocks until the first commits,
+        # re-evaluates next_due <= today, and finds nothing due.
         cursor.execute("""
             SELECT id, amount, description, from_account_id, to_account_id,
                    frequency, anchor_day, second_day, next_due
             FROM transfer_schedules
             WHERE is_active = true AND next_due <= %s AND user_id = %s
+            FOR UPDATE
         """, (today, user_id))
         due = cursor.fetchall()
         for (tsid, amount, desc, from_acc, to_acc, freq,
@@ -308,17 +305,9 @@ def _parse_transfer_schedule_form(form, user_account_ids):
     to_account = form.get('to_account') or None
     description = form.get('description', '').strip()
 
-    amount = None
-    amount_str = form.get('amount', '').strip()
-    if not amount_str:
-        errors.append('Amount is required')
-    else:
-        try:
-            amount = float(amount_str)
-            if amount <= 0:
-                errors.append('Amount must be greater than zero')
-        except ValueError:
-            errors.append('Amount must be a valid number')
+    amount, amount_error = parse_positive_amount(form.get('amount'))
+    if amount_error:
+        errors.append(amount_error)
 
     if not from_account or not to_account:
         errors.append('Both a From and a To account are required')

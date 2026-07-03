@@ -6,7 +6,7 @@ from flask import (
 from flask_login import login_required, current_user
 from app import limiter
 from app.db import get_db_connection, db_cursor
-from app.helpers import is_htmx, hx_toast, ai_enabled
+from app.helpers import is_htmx, hx_toast, ai_enabled, parse_positive_amount
 from app.ai import propose_budgets, ParseError
 
 bp = Blueprint('budgets', __name__)
@@ -246,19 +246,12 @@ def budgets():
 def set_budget():
     """Upsert one category's monthly budget amount (the override that sticks)."""
     category_id = request.form.get('category_id')
-    amount_str = request.form.get('amount', '').strip()
     errors = []
     if not category_id:
         errors.append('Category is required')
-    if not amount_str:
-        errors.append('Amount is required')
-    else:
-        try:
-            amount = float(amount_str)
-            if amount <= 0:
-                errors.append('Amount must be greater than zero')
-        except ValueError:
-            errors.append('Amount must be a valid number')
+    amount, amount_error = parse_positive_amount(request.form.get('amount'))
+    if amount_error:
+        errors.append(amount_error)
     if errors:
         if is_htmx():
             return hx_toast(make_response('', 200), '; '.join(errors), 'error')
@@ -278,7 +271,7 @@ def set_budget():
             INSERT INTO budgets (category_id, amount, user_id)
             VALUES (%s, %s, %s)
             ON CONFLICT (user_id, category_id) DO UPDATE SET amount = EXCLUDED.amount
-        """, (category_id, round(float(amount_str)), current_user.id))
+        """, (category_id, round(amount), current_user.id))
         conn.commit()
     except Exception as e:
         conn.rollback()

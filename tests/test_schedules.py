@@ -1,10 +1,11 @@
 """v10.0 Scheduled — recurring income/expense schedules.
 
 Covers the pure next-due math, the run_due_schedules generator (materialize +
-catch-up + isolation + active gate), and the inline-CRUD routes (fragment shape,
-persistence, ownership 404s). The route tests rely on the dev DB via the shared
-fixtures; CSRF + rate limiter are disabled under test.
+catch-up + isolation + active gate + concurrent-run locking), and the inline-CRUD
+routes (fragment shape, persistence, ownership 404s). The route tests rely on the
+dev DB via the shared fixtures; CSRF + rate limiter are disabled under test.
 """
+import threading
 from datetime import date, timedelta
 
 from app.db import get_db_connection
@@ -94,6 +95,37 @@ def test_inactive_schedule_generates_nothing(users):
                     is_active=False)
     run_due_schedules(uid)
     assert count_transactions_like(uid, "seed-schedule") == 0
+
+
+def test_concurrent_runs_materialize_exactly_once(users):
+    # gunicorn serves requests on multiple threads, so two page loads can run
+    # run_due_schedules at the same time. The FOR UPDATE row lock must serialize
+    # them: exactly one occurrence gets materialized, never a duplicate. Each
+    # call opens its own connection (db_cursor), so real thread interleaving is
+    # exercised here.
+    uid = users["a"]["id"]
+    yesterday = date.today() - timedelta(days=1)
+    sid = create_schedule(uid, users["a"]["account_id"], 50, "monthly", yesterday)
+
+    barrier = threading.Barrier(4)
+    errors = []
+
+    def run():
+        barrier.wait()  # line all threads up on the same race window
+        try:
+            run_due_schedules(uid)
+        except Exception as e:  # pragma: no cover - surfaced via the assert
+            errors.append(e)
+
+    threads = [threading.Thread(target=run) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert count_transactions_like(uid, "seed-schedule") == 1
+    assert fetch_schedule(sid)[2] > date.today()
 
 
 def test_run_due_schedules_is_user_scoped(users):

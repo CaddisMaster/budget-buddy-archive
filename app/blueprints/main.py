@@ -1,15 +1,173 @@
+import calendar
 import json
-from datetime import datetime
+from datetime import date, datetime
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
-from app.db import get_db_connection
+from app.db import get_db_connection, db_cursor
 from app.helpers import ai_enabled
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
 from app.blueprints.insights import load_insight, compute_month_facts, _prev_month
 from app.blueprints.forecasts import load_forecast, compute_forecast
+from app.blueprints.transactions import compute_next_due
 
 bp = Blueprint('main', __name__)
+
+# Account types whose balance is spendable cash (a subset of accounts.py
+# VALID_ACCOUNT_TYPES). Credit Card is excluded — its balance is debt, and
+# paying it down shows up as a scheduled transfer out of a liquid account.
+LIQUID_ACCOUNT_TYPES = ('Bank Account', 'Debit Card')
+
+
+def _advance_past(occ, frequency, anchor_day, second_day, day, guard=500):
+    """First occurrence strictly after `day`, walking from `occ` with
+    compute_next_due. Pure. The guard caps runaway walks on bad data."""
+    steps = 0
+    while occ <= day and steps < guard:
+        occ = compute_next_due(occ, frequency, anchor_day=anchor_day,
+                               second_day=second_day)
+        steps += 1
+    return occ
+
+
+def upcoming_occurrences(next_due, frequency, anchor_day, second_day,
+                         window_start, window_end, guard=500):
+    """All occurrence dates with window_start < occ <= window_end. Pure.
+
+    Start is exclusive (anything due today was already materialized by the
+    due-runners); end is INCLUSIVE — a bill due on payday still has to be paid
+    out of this check. Each phase gets its own guard budget so a long catch-up
+    can't starve the collection loop (the forecasts._remaining_scheduled
+    precedent)."""
+    occ = _advance_past(next_due, frequency, anchor_day, second_day,
+                        window_start, guard)
+    out = []
+    steps = 0
+    while occ <= window_end and steps < guard:
+        out.append(occ)
+        occ = compute_next_due(occ, frequency, anchor_day=anchor_day,
+                               second_day=second_day)
+        steps += 1
+    return out
+
+
+def compute_safe_to_spend(user_id, today=None):
+    """Deterministic "can I afford this right now?" figure — always for NOW,
+    independent of the dashboard month filter (the AI-card precedent below).
+
+        safe_to_spend = liquid_balance − upcoming_bills
+                        − upcoming_transfers_out − budget_room
+
+    liquid_balance sums the canonical balances of Bank/Debit accounts only.
+    The window runs from today (exclusive) through the next paycheck date
+    INCLUSIVE — the soonest upcoming occurrence across active income
+    schedules — falling back to the last day of the current month when no
+    income schedule exists. Bills count only on liquid accounts (a bill on a
+    credit card doesn't drain cash; the card's payment transfer does) and only
+    in UNbudgeted categories — budgeted categories are covered by budget_room,
+    so each dollar is reserved once. Transfers count only liquid → non-liquid
+    (liquid → liquid nets to zero inside liquid_balance). budget_room is
+    max(0, budget − spent) summed over this calendar month's budgets — a
+    full-month term by design, budgets being monthly commitments. The result
+    may be negative; that's the point.
+    """
+    today = today or date.today()
+
+    with db_cursor() as cursor:
+        # Liquid balances — the ACCOUNT_ROW_SQL balance formula (accounts.py),
+        # transfers/adjustments included, filtered to liquid types.
+        cursor.execute("""
+            SELECT a.account_id,
+                COALESCE(SUM(CASE WHEN t.transaction_type = 'income'
+                    THEN t.amount ELSE -t.amount END), 0) AS balance
+            FROM account a
+            LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
+            WHERE a.user_id = %s AND a.type IN %s
+            GROUP BY a.account_id
+        """, (user_id, LIQUID_ACCOUNT_TYPES))
+        rows = cursor.fetchall()
+        liquid_ids = {r[0] for r in rows}
+        liquid_balance = round(sum(float(r[1]) for r in rows), 2)
+
+        cursor.execute("""
+            SELECT frequency, anchor_day, second_day, next_due
+            FROM schedules
+            WHERE is_active = true AND user_id = %s AND transaction_type = 'income'
+        """, (user_id,))
+        income_rows = cursor.fetchall()
+        if income_rows:
+            window_end = min(_advance_past(nd, freq, anchor, second, today)
+                             for freq, anchor, second, nd in income_rows)
+            window_is_paycheck = True
+        else:
+            window_end = date(today.year, today.month,
+                              calendar.monthrange(today.year, today.month)[1])
+            window_is_paycheck = False
+
+        cursor.execute("SELECT category_id FROM budgets WHERE user_id = %s",
+                       (user_id,))
+        budgeted_ids = {r[0] for r in cursor.fetchall()}
+
+        cursor.execute("""
+            SELECT description, amount, frequency, anchor_day, second_day,
+                   next_due, account_id, category_id
+            FROM schedules
+            WHERE is_active = true AND user_id = %s AND transaction_type = 'expense'
+        """, (user_id,))
+        bill_items = []
+        for desc, amount, freq, anchor, second, nd, account_id, category_id in cursor.fetchall():
+            if account_id not in liquid_ids or category_id in budgeted_ids:
+                continue
+            for due in upcoming_occurrences(nd, freq, anchor, second,
+                                            today, window_end):
+                bill_items.append({
+                    'description': (desc or '').strip() or 'Scheduled bill',
+                    'amount': float(amount), 'due': due,
+                })
+        bill_items.sort(key=lambda i: i['due'])
+
+        cursor.execute("""
+            SELECT ts.description, ts.amount, ts.frequency, ts.anchor_day,
+                   ts.second_day, ts.next_due, ts.from_account_id,
+                   ts.to_account_id, af.account_name, at.account_name
+            FROM transfer_schedules ts
+            JOIN account af ON ts.from_account_id = af.account_id
+            JOIN account at ON ts.to_account_id = at.account_id
+            WHERE ts.is_active = true AND ts.user_id = %s
+        """, (user_id,))
+        transfer_items = []
+        for (desc, amount, freq, anchor, second, nd, from_id, to_id,
+             from_name, to_name) in cursor.fetchall():
+            if from_id not in liquid_ids or to_id in liquid_ids:
+                continue
+            label = (desc or '').strip() or f'Transfer {from_name} → {to_name}'
+            for due in upcoming_occurrences(nd, freq, anchor, second,
+                                            today, window_end):
+                transfer_items.append({
+                    'description': label, 'amount': float(amount), 'due': due,
+                })
+        transfer_items.sort(key=lambda i: i['due'])
+
+    # Opens its own connection, so it sits outside the cursor block.
+    budget_rows = compute_budget_vs_actual(user_id, today.year, today.month)
+    budget_room = round(sum(max(0.0, float(remaining))
+                            for _, _, _, remaining in budget_rows), 2)
+
+    upcoming_bills = round(sum(i['amount'] for i in bill_items), 2)
+    upcoming_transfers_out = round(sum(i['amount'] for i in transfer_items), 2)
+
+    return {
+        'liquid_balance': liquid_balance,
+        'upcoming_bills': upcoming_bills,
+        'upcoming_transfers_out': upcoming_transfers_out,
+        'budget_room': budget_room,
+        'safe_to_spend': round(liquid_balance - upcoming_bills
+                               - upcoming_transfers_out - budget_room, 2),
+        'window_end': window_end,
+        'window_is_paycheck': window_is_paycheck,
+        'bill_items': bill_items,
+        'transfer_items': transfer_items,
+    }
 
 
 @bp.route('/')
@@ -175,8 +333,14 @@ def dashboard():
         'label': selected_month if selected_month else 'All time',
     }
 
+    # Safe to spend (v10.9) — always "now", independent of the month filter
+    # (like the AI cards). The due-runners at the top of this route already
+    # advanced next_due past today.
+    safe = compute_safe_to_spend(current_user.id)
+
     return render_template('dashboard.html',
         summary=summary,
+        safe=safe,
         spending_json=spending_json,
         cash_flow_json=cash_flow_json,
         net_balance_json=net_balance_json,

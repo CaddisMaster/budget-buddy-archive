@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response
@@ -6,7 +6,9 @@ from flask import (
 from flask_login import login_required, current_user
 from app import limiter
 from app.db import get_db_connection, db_cursor
-from app.helpers import is_htmx, hx_toast, ai_enabled, parse_positive_amount
+from app.helpers import (
+    is_htmx, hx_toast, ai_enabled, parse_positive_amount, recent_months
+)
 from app.ai import propose_budgets, ParseError
 
 bp = Blueprint('budgets', __name__)
@@ -230,15 +232,124 @@ def compute_budget_review_facts(user_id, cap=BUDGET_REVIEW_CAP):
     }
 
 
+def _report_months(today=None):
+    """The last 6 COMPLETE calendar months as 'YYYY-MM', oldest -> newest.
+    recent_months() is newest-first and includes the current partial month,
+    so take 7, drop the current, and reverse into display order."""
+    return list(reversed(recent_months(7, today)[1:]))
+
+
+def build_budget_report(months, spend_rows, saved_budgets):
+    """Derive the budget-report grid: per category, a dense cell per month
+    (zero-filled), a hit/miss verdict against the CURRENT saved budget (budgets
+    keep no history), a streak of consecutive recent verdicts, and a 3-vs-3
+    month trend. Pure — no DB, no clock.
+
+    months:        ['YYYY-MM', ...] oldest -> newest.
+    spend_rows:    iterable of (category_id, name, 'YYYY-MM', total) — sparse.
+    saved_budgets: {category_id: amount}.
+
+    Only categories with spend in the window appear: grading against a saved
+    budget nobody spent against is vacuous, and only explicitly saved budgets
+    grade at all (the suggested budget IS the window's average — grading
+    against it would be circular).
+    """
+    by_cat = {}
+    for cid, name, month, total in spend_rows:
+        entry = by_cat.setdefault(cid, {"name": name, "spent": {}})
+        entry["spent"][month] = float(total)
+
+    rows = []
+    for cid, entry in by_cat.items():
+        budget = saved_budgets.get(cid)
+        budget = float(budget) if budget is not None else None
+        cells = []
+        for month in months:
+            spent = round(entry["spent"].get(month, 0.0), 2)
+            verdict = None
+            if budget is not None:
+                verdict = 'hit' if spent <= budget else 'miss'
+            cells.append({"month": month, "spent": spent, "verdict": verdict})
+
+        streak = None
+        if budget is not None:
+            newest = cells[-1]["verdict"]
+            length = 0
+            for cell in reversed(cells):
+                if cell["verdict"] != newest:
+                    break
+                length += 1
+            streak = {"kind": 'under' if newest == 'hit' else 'over',
+                      "length": length}
+
+        half = len(cells) // 2
+        prior_avg = round(sum(c["spent"] for c in cells[:half]) / half, 2)
+        recent_avg = round(sum(c["spent"] for c in cells[half:]) / (len(cells) - half), 2)
+        # A zero prior half falls out naturally: any recent spend reads rising,
+        # both halves zero read steady.
+        if recent_avg > prior_avg * 1.10:
+            direction = 'rising'
+        elif recent_avg < prior_avg * 0.90:
+            direction = 'easing'
+        else:
+            direction = 'steady'
+
+        rows.append({
+            "category_id": cid,
+            "name": entry["name"],
+            "budget": budget,
+            "total": round(sum(c["spent"] for c in cells), 2),
+            "cells": cells,
+            "streak": streak,
+            "trend": {"direction": direction,
+                      "recent_avg": recent_avg, "prior_avg": prior_avg},
+        })
+
+    rows.sort(key=lambda r: (r["budget"] is None, -r["total"], r["name"].lower()))
+    return {
+        "months": months,
+        "month_labels": [datetime.strptime(m, '%Y-%m').strftime('%b') for m in months],
+        "rows": rows,
+    }
+
+
+def load_budget_report(user_id, today=None):
+    """Gather the report's inputs over an explicit calendar window (unlike the
+    review facts' rolling NOW() - 6 months, which includes the partial current
+    month) and delegate to build_budget_report(). rows == [] hides the section."""
+    months = _report_months(today)
+    start = datetime.strptime(months[0], '%Y-%m').date()
+    end = (today or date.today()).replace(day=1)
+    with db_cursor() as cursor:
+        cursor.execute("""
+            SELECT t.category_id, c.name,
+                   TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM') AS month,
+                   SUM(t.amount) AS monthly_total
+            FROM transactions t
+            JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = %s AND t.transaction_type = 'expense'
+            AND t.is_adjustment = false AND t.is_transfer = false
+            AND t.transaction_date >= %s AND t.transaction_date < %s
+            GROUP BY t.category_id, c.name, DATE_TRUNC('month', t.transaction_date)
+        """, (user_id, start, end))
+        spend_rows = cursor.fetchall()
+        cursor.execute("SELECT category_id, amount FROM budgets WHERE user_id = %s",
+                       (user_id,))
+        saved = {cid: float(amount) for cid, amount in cursor.fetchall()}
+    return build_budget_report(months, spend_rows, saved)
+
+
 @bp.route('/budgets')
 @login_required
 def budgets():
     """The budgets cockpit: one row per category showing the monthly target
     (saved override, else suggested average) alongside this month's actual."""
     rows, all_categories = load_budget_rows(current_user.id)
+    report = load_budget_report(current_user.id)
     return render_template('budgets.html', budget_rows=rows,
                            has_categories=bool(all_categories),
-                           review_enabled=ai_enabled())
+                           review_enabled=ai_enabled(),
+                           report=report)
 
 
 @bp.route('/budgets/set', methods=['POST'])

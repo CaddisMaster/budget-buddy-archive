@@ -1,0 +1,35 @@
+{# Budget report (v10.9): last 6 COMPLETE months, per category. Self-gating —
+   renders nothing when there's no qualifying spend in the window. Rows are
+   dicts (not tuples): see build_budget_report() in blueprints/budgets.py. #}
+{% if report.rows %}
+<h2 style="margin-top:2rem;font-size:1.1rem">Budget report</h2>
+<p style="font-size:13px;color:var(--text-muted);margin-bottom:1rem">
+    Your last 6 complete months, judged <strong>vs each category's current budget</strong>
+    (budgets don't keep history). Green = stayed under, red = went over.
+</p>
+<div class="table-wrapper">
+    <table class="budget-report">
+        <thead><tr>
+            <th>Category</th><th>Budget</th>
+            {% for label in report.month_labels %}<th>{{ label }}</th>{% endfor %}
+            <th>Streak</th><th>Trend</th>
+        </tr></thead>
+        <tbody>
+        {% for row in report.rows %}
+        <tr>
+            <td>{{ row.name }}</td>
+            <td>{% if row.budget is not none %}${{ '%.0f'|format(row.budget) }}{% else %}<span style="color:var(--text-muted)">—</span>{% endif %}</td>
+            {% for cell in row.cells %}
+            <td class="{% if cell.verdict == 'hit' %}report-hit{% elif cell.verdict == 'miss' %}report-miss{% endif %}"
+                {% if cell.verdict %}title="${{ '%.2f'|format(cell.spent) }} spent vs ${{ '%.0f'|format(row.budget) }} budget"{% endif %}>
+                ${{ '%.2f'|format(cell.spent) }}</td>
+            {% endfor %}
+            <td>{% if row.streak %}{{ row.streak.length }} mo {{ row.streak.kind }}{% else %}<span style="color:var(--text-muted)">— no budget —</span>{% endif %}</td>
+            <td class="trend-{{ row.trend.direction }}">
+                {% if row.trend.direction == 'rising' %}&#9650; rising{% elif row.trend.direction == 'easing' %}&#9660; easing{% else %}&#8594; steady{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

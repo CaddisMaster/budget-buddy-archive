@@ -27,6 +27,7 @@
         {% include 'partials/_budget_rows.html' %}
     </table>
 </div>
+{% include 'partials/_budget_report.html' %}
 {% else %}
 <p style="color:var(--text-muted)">You need at least one <a href="/categories">category</a> before you can set a budget.</p>
 {% endif %}

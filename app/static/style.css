@@ -326,3 +326,13 @@ tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
 .insight-tips li { margin: 0.25rem 0; }
 .insight-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
 .insight-ts { font-size: 12px; color: var(--text-muted); }
+/* Budget report (v10.9): hit/miss month cells + trend words. The tr:hover
+   overrides keep the verdict tint from being wiped by the global hover rule. */
+.budget-report td { white-space: nowrap; }
+td.report-hit  { background: var(--success-soft); color: var(--success); }
+td.report-miss { background: var(--danger-soft);  color: var(--danger); font-weight: 600; }
+tr:hover td.report-hit  { background: var(--success-soft); }
+tr:hover td.report-miss { background: var(--danger-soft); }
+.trend-rising { color: var(--danger); }
+.trend-easing { color: var(--success); }
+.trend-steady { color: var(--text-muted); }

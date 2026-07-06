@@ -15,6 +15,9 @@
         <option value="Debit Card">Debit Card</option>
         <option value="Bank Account">Bank Account</option>
     </select>
+    <label>Credit limit</label>
+    <input type="number" name="credit_limit" step="0.01" min="0.01"
+           placeholder="Optional — credit cards only">
     <label style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem">
         <input type="checkbox" name="spendable" checked style="width:auto">
         Count in Safe to spend
@@ -23,6 +26,13 @@
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add account</button>
 </form>
 <h2>Existing accounts</h2>
+{% if credit_summary %}
+<p style="margin:0 0 0.75rem;color:var(--text-muted);font-size:14px">
+  Available credit across cards:
+  <strong>${{ "%.2f"|format(credit_summary.available) }}</strong>
+  of ${{ "%.0f"|format(credit_summary.limit) }} in limits
+</p>
+{% endif %}
 <div class="table-wrapper">
     <table>
         <thead><tr><th>Name</th><th>Type</th><th>Balance</th><th>Last check-in</th><th>Actions</th></tr></thead>

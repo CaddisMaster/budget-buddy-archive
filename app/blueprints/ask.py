@@ -30,7 +30,7 @@ from app.db import db_cursor
 from app.helpers import hx_toast
 from app.blueprints.insights import compute_month_facts, category_spending
 from app.blueprints.budgets import compute_budget_vs_actual
-from app.blueprints.accounts import ACCOUNT_ROW_SQL
+from app.blueprints.accounts import ACCOUNT_ROW_SQL, credit_utilization
 
 bp = Blueprint('ask', __name__)
 
@@ -213,15 +213,23 @@ def _t_upcoming_scheduled(user_id, args):
 
 def _t_account_balances(user_id, args):
     # Reuse the Accounts page's balance query (the single source of the balance
-    # formula) → rows are (account_id, name, type, balance). Present highest
-    # balance first.
+    # formula). Credit cards with a limit set also report limit / available /
+    # utilization (v10.10 — same shared math as the /accounts bar). Present
+    # highest balance first.
     with db_cursor() as cursor:
         cursor.execute(ACCOUNT_ROW_SQL.format(extra=""), (user_id,))
         rows = cursor.fetchall()
-    accts = sorted(
-        ({"account": r[1], "balance": _money(r[3])} for r in rows),
-        key=lambda a: a["balance"], reverse=True,
-    )
+    accts = []
+    for r in rows:
+        entry = {"account": r[1], "balance": _money(r[3])}
+        if r[2] == 'Credit Card':
+            cu = credit_utilization(r[3], r[7])
+            if cu:
+                entry.update({"credit_limit": cu['limit'],
+                              "available_credit": cu['available'],
+                              "utilization_pct": cu['pct']})
+        accts.append(entry)
+    accts.sort(key=lambda a: a["balance"], reverse=True)
     return {"accounts": accts}
 
 
@@ -321,8 +329,11 @@ ASK_TOOLS = [
      _t_upcoming_scheduled),
 
     ({"name": "account_balances",
-      "description": "Current balance of each of the user's accounts. Use for "
-                     "'how much do I have' / 'account balance' questions.",
+      "description": "Current balance of each of the user's accounts. For "
+                     "credit cards with a limit set, also returns the credit "
+                     "limit, available credit, and utilization percent. Use for "
+                     "'how much do I have' / 'account balance' / 'how much room "
+                     "is left on my card' questions.",
       "strict": True, "input_schema": _no_args()},
      _t_account_balances),
 ]

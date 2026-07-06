@@ -205,7 +205,12 @@ def _call_insight_model(facts, today, api_key):
         "figures as ground truth and only describe them. Write a warm 2-3 "
         "sentence plain-English recap of how the month is going (income vs "
         "spending, net, notable categories or budget overruns), then 1-2 short, "
-        "specific, actionable tips. Be supportive, not preachy. Today is "
+        "specific, actionable tips. Be supportive, not preachy. If the "
+        "credit_cards list has entries, you may note a card's utilization — "
+        "these are CURRENT balances against each card's limit (e.g. 'your "
+        "Discover is at 72% of its limit'), not month-specific figures. If the "
+        "credit_cards list is empty, do not mention credit cards, limits, or "
+        "utilization at all. Today is "
         f"{today.isoformat()} and the month may still be in progress."
     )
     try:
@@ -790,8 +795,12 @@ def _call_digest_model(facts, today, api_key):
         "figures as ground truth and only describe them. Write a warm 2-3 "
         "sentence recap of where the month stands and what's coming this week, "
         "then 1-2 short, specific, practical tips. Be supportive, not preachy. "
-        "Write plain text only, with NO Markdown, asterisks, bullet syntax, or "
-        "other formatting. Today is "
+        "If the credit_cards list has entries, you may note a card's "
+        "utilization — these are CURRENT balances against each card's limit "
+        "(e.g. 'your Discover is at 72% of its limit'). If the credit_cards "
+        "list is empty, do not mention credit cards, limits, or utilization at "
+        "all. Write plain text only, with NO Markdown, asterisks, bullet "
+        "syntax, or other formatting. Today is "
         f"{today.isoformat()} and the month is still in progress, so treat its "
         "totals as partial."
     )

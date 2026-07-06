@@ -25,6 +25,7 @@ from app.ai import generate_insight, ParseError, MODEL
 from app.db import db_cursor
 from app.helpers import hx_toast
 from app.blueprints.budgets import compute_budget_vs_actual
+from app.blueprints.accounts import credit_card_utilization_facts
 
 bp = Blueprint('insights', __name__)
 
@@ -83,7 +84,10 @@ def compute_month_facts(user_id, year, month):
         {year, month, income, expenses, net, savings_rate,
          prev: {income, expenses, net},
          top_categories: [{name, amount}, ...],   # this month's top expenses
-         overruns: [{category, budget, actual, over}, ...]}  # actual > budget
+         overruns: [{category, budget, actual, over}, ...],  # actual > budget
+         credit_cards: [{name, limit, debt, available, utilization_pct}, ...]}
+           # v10.10 — CURRENT card utilization snapshot (cards with a limit
+           # set only; always present, [] when none)
     """
     year, month = int(year), int(month)
     with db_cursor() as cursor:
@@ -122,6 +126,7 @@ def compute_month_facts(user_id, year, month):
         },
         'top_categories': top_categories,
         'overruns': overruns,
+        'credit_cards': credit_card_utilization_facts(user_id),
     }
 
 

@@ -236,6 +236,12 @@ tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
 .goal-bar { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; height: 18px; margin: 0.5rem 0; overflow: hidden; }
 .goal-bar-fill { background: var(--accent); height: 100%; }
 
+/* Credit-card utilization (v10.10) — reuses the goal bar, compact */
+.credit-bar { height: 8px; margin: 0.4rem 0 0.15rem; max-width: 170px; }
+.goal-bar-fill.warn { background: var(--warning); }
+.goal-bar-fill.danger { background: var(--danger); }
+.credit-meta { font-size: 12px; color: var(--text-muted); display: block; white-space: nowrap; }
+
 /* Goals — cards, grid, and overall summary strip (v10.8 glow-up) */
 .goal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
 .goal-card .goal-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; }

@@ -81,6 +81,7 @@ def compute_digest_facts(user_id, *, today=None):
          income, expenses, net, savings_rate,
          top_categories: [{name, amount}, ...],
          overruns: [{category, budget, actual, over}, ...],
+         credit_cards: [{name, limit, debt, available, utilization_pct}, ...],
          upcoming: [{description, amount, type, due}, ...],
          upcoming_income, upcoming_expense}
     """
@@ -101,6 +102,7 @@ def compute_digest_facts(user_id, *, today=None):
         'savings_rate': month_facts['savings_rate'],
         'top_categories': month_facts['top_categories'],
         'overruns': month_facts['overruns'],
+        'credit_cards': month_facts['credit_cards'],
         'upcoming': upcoming,
         'upcoming_income': up_income,
         'upcoming_expense': up_expense,

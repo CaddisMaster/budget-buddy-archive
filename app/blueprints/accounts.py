@@ -6,7 +6,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import is_htmx, hx_toast, parse_signed_amount
+from app.helpers import is_htmx, hx_toast, parse_signed_amount, parse_positive_amount
 
 bp = Blueprint('accounts', __name__)
 
@@ -22,13 +22,78 @@ ACCOUNT_ROW_SQL = """
         a.last_checked_in,
         (a.last_checked_in IS NULL
             OR a.last_checked_in < CURRENT_DATE - {stale_days}) AS checkin_stale,
-        a.spendable
+        a.spendable,
+        a.credit_limit
     FROM account a
     LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
     WHERE a.user_id = %s {extra}
-    GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in, a.spendable
+    GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in, a.spendable,
+        a.credit_limit
     ORDER BY a.account_name
 """.replace('{stale_days}', str(CHECKIN_STALE_DAYS))
+
+# Utilization tinting thresholds (v10.10 Credit limits): amber from 30% (the
+# classic keep-utilization-under-30% guidance), red from 80% (nearly maxed).
+CREDIT_WARN_PCT = 30
+CREDIT_DANGER_PCT = 80
+
+
+@bp.app_template_global('credit_utilization')
+def credit_utilization(balance, credit_limit):
+    """Pure utilization math for a credit card — the single source of truth
+    shared by the /accounts templates (registered as a Jinja global so all five
+    row-render sites get it), the ask tool, and the digest/insight facts.
+
+    `balance` is the signed account balance (credit cards run negative);
+    `credit_limit` may be None. Returns None when there is no usable limit,
+    else {limit, debt, available, pct, bar_pct, tier}. `pct` is uncapped (an
+    over-limit card reads e.g. 104%); `bar_pct` caps at 100 for the bar width;
+    `available` goes negative when over limit.
+    """
+    if credit_limit is None:
+        return None
+    # psycopg2 hands numeric back as Decimal; coerce both so mixed
+    # Decimal/float arithmetic can't raise.
+    limit = float(credit_limit)
+    if limit <= 0:
+        return None
+    debt = max(0.0, -float(balance))
+    pct = round(debt / limit * 100, 1)
+    tier = ('danger' if pct >= CREDIT_DANGER_PCT
+            else 'warn' if pct >= CREDIT_WARN_PCT else 'ok')
+    return {'limit': round(limit, 2), 'debt': round(debt, 2),
+            'available': round(limit - debt, 2), 'pct': pct,
+            'bar_pct': min(pct, 100.0), 'tier': tier}
+
+
+def credit_card_utilization_facts(user_id):
+    """[{name, limit, debt, available, utilization_pct}] for the user's Credit
+    Card accounts with a usable limit set, name order; [] otherwise.
+    Deterministic — the only source of utilization figures the AI narrates.
+    Reports positive `debt` rather than the signed balance so the narration
+    can't misread a minus sign."""
+    with db_cursor() as cursor:
+        cursor.execute(ACCOUNT_ROW_SQL.format(extra=""), (user_id,))
+        rows = cursor.fetchall()
+    facts = []
+    for r in rows:
+        if r[2] != 'Credit Card':
+            continue
+        cu = credit_utilization(r[3], r[7])
+        if cu is None:
+            continue
+        facts.append({'name': r[1], 'limit': cu['limit'], 'debt': cu['debt'],
+                      'available': cu['available'], 'utilization_pct': cu['pct']})
+    return facts
+
+
+def _parse_credit_limit(raw):
+    """Optional credit-limit field: blank → (None, None) = not set; otherwise
+    the shared positive-amount validation (rejects nan/inf/zero/negative)."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None, None
+    return parse_positive_amount(raw, 'Credit limit')
 
 
 def _fetch_account_row(cursor, account_id):
@@ -59,6 +124,8 @@ def accounts():
         account_type = request.form.get('type', '').strip()
         spendable = 'spendable' in request.form
         error = _validate(name, account_type)
+        if not error:
+            credit_limit, error = _parse_credit_limit(request.form.get('credit_limit'))
         if error:
             if is_htmx():
                 return hx_toast(make_response('', 200), error, 'error')
@@ -67,9 +134,9 @@ def accounts():
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "INSERT INTO account (account_name, type, spendable, user_id) "
-                    "VALUES (%s, %s, %s, %s) RETURNING account_id",
-                    (name, account_type, spendable, current_user.id),
+                    "INSERT INTO account (account_name, type, spendable, credit_limit, user_id) "
+                    "VALUES (%s, %s, %s, %s, %s) RETURNING account_id",
+                    (name, account_type, spendable, credit_limit, current_user.id),
                 )
                 new_id = cursor.fetchone()[0]
         except Exception as e:
@@ -88,7 +155,15 @@ def accounts():
     with db_cursor() as cursor:
         cursor.execute(ACCOUNT_ROW_SQL.format(extra=""), (current_user.id,))
         all_accounts = cursor.fetchall()
-    return render_template('accounts.html', accounts=all_accounts)
+    # Total available credit across cards with a limit set (None = no line).
+    cards = [cu for a in all_accounts if a[2] == 'Credit Card'
+             for cu in [credit_utilization(a[3], a[7])] if cu]
+    credit_summary = None
+    if cards:
+        credit_summary = {'available': round(sum(c['available'] for c in cards), 2),
+                          'limit': round(sum(c['limit'] for c in cards), 2)}
+    return render_template('accounts.html', accounts=all_accounts,
+                           credit_summary=credit_summary)
 
 
 @bp.route('/accounts/<int:account_id>/edit', methods=['GET', 'POST'])
@@ -102,19 +177,25 @@ def edit_account(account_id):
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
         spendable = 'spendable' in request.form
+        # Error paths re-render the edit row with the RAW posted limit string
+        # (so the user sees what they typed); happy path stores the parsed value.
+        raw_limit = request.form.get('credit_limit', '')
         error = _validate(name, account_type)
+        credit_limit = None
+        if not error:
+            credit_limit, error = _parse_credit_limit(raw_limit)
         if error:
-            account = (account[0], name, account_type, account[3], account[4], account[5], spendable)
+            account = (account[0], name, account_type, account[3], account[4], account[5], spendable, raw_limit)
             return render_template('partials/_account_edit_row.html', account=account, error=error)
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "UPDATE account SET account_name=%s, type=%s, spendable=%s "
+                    "UPDATE account SET account_name=%s, type=%s, spendable=%s, credit_limit=%s "
                     "WHERE account_id=%s AND user_id=%s",
-                    (name, account_type, spendable, account_id, current_user.id),
+                    (name, account_type, spendable, credit_limit, account_id, current_user.id),
                 )
         except Exception as e:
-            account = (account[0], name, account_type, account[3], account[4], account[5], spendable)
+            account = (account[0], name, account_type, account[3], account[4], account[5], spendable, raw_limit)
             return render_template('partials/_account_edit_row.html', account=account, error=str(e))
         with db_cursor() as cursor:
             account = _fetch_account_row(cursor, account_id)

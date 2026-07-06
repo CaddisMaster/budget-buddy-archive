@@ -3,7 +3,13 @@
     <span style="display:block;color:var(--text-muted);font-size:0.8em">not in Safe to spend</span>
   {% endif %}</td>
   <td>{{ account[2] }}</td>
-  <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
+  <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}
+    {% set cu = credit_utilization(account[3], account[7]) if account[2] == 'Credit Card' else none %}
+    {% if cu %}
+    <div class="goal-bar credit-bar"><div class="goal-bar-fill {{ cu.tier }}" style="width:{{ cu.bar_pct }}%"></div></div>
+    <span class="credit-meta">{{ cu.pct }}% of ${{ "%.0f"|format(cu.limit) }} · ${{ "%.2f"|format(cu.available) }} available</span>
+    {% endif %}
+  </td>
   <td class="{% if account[5] %}checkin-stale{% endif %}" style="{% if not account[5] %}color:var(--text-muted){% endif %}">
     {{ account[4].strftime('%b %-d, %Y') if account[4] else 'Never' }}
   </td>

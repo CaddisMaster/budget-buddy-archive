@@ -110,6 +110,38 @@ def test_account_spendable_toggle_persists(client_a, users):
     assert _fetch_spendable(aid) is True
 
 
+def _fetch_credit_limit(account_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT credit_limit FROM account WHERE account_id = %s",
+                (account_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else None
+
+
+def test_account_credit_limit_persists(client_a, users):
+    # v10.10: set on create.
+    client_a.post("/accounts", data={"name": "Limity", "type": "Credit Card",
+                                     "credit_limit": "5000"},
+                  follow_redirects=True)
+    aid = _find_account_id(users["a"]["id"], "Limity")
+    assert float(_fetch_credit_limit(aid)) == 5000.00
+    # Blanked on edit → NULL (not set).
+    client_a.post(f"/accounts/{aid}/edit",
+                  data={"name": "Limity", "type": "Credit Card",
+                        "credit_limit": ""},
+                  follow_redirects=True)
+    assert _fetch_credit_limit(aid) is None
+    # Set again on edit → updated.
+    client_a.post(f"/accounts/{aid}/edit",
+                  data={"name": "Limity", "type": "Credit Card",
+                        "credit_limit": "7500.50"},
+                  follow_redirects=True)
+    assert float(_fetch_credit_limit(aid)) == 7500.50
+
+
 def test_delete_account(client_a, users):
     client_a.post("/accounts", data={"name": "ToDelete", "type": "Bank Account"},
                   follow_redirects=True)

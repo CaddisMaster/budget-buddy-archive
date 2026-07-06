@@ -11,6 +11,10 @@
       <input type="checkbox" name="spendable" {% if account[6] %}checked{% endif %} style="width:auto">
       Safe to spend
     </label>
+    <input type="number" name="credit_limit" step="0.01" min="0.01"
+           value="{{ account[7] if account[7] is not none else '' }}"
+           placeholder="Credit limit" title="Optional — credit cards only"
+           style="margin-top:0.35rem">
   </td>
   <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
   <td style="color:var(--text-muted)">{{ account[4].strftime('%b %-d, %Y') if account[4] else 'Never' }}</td>

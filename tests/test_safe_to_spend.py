@@ -7,10 +7,12 @@ The figure is fully deterministic (no AI, no cache):
 
 Pure tests cover the occurrence walkers (window semantics: start exclusive,
 end inclusive); DB-backed tests cover compute_safe_to_spend()'s term
-definitions — liquid = Bank Account + Debit Card only, bills only on liquid
-accounts in UNbudgeted categories (the dedupe), transfers only liquid →
-non-liquid, budget_room = positive remainings for the current calendar
-month — plus window fallback, isolation, and the dashboard band.
+definitions — liquid = Bank Account + Debit Card marked spendable (v10.10:
+the per-account toggle), bills on liquid accounts OR credit cards with no
+scheduled payment transfer (v10.10), always in UNbudgeted categories (the
+dedupe), transfers only liquid → non-liquid, budget_room = positive
+remainings for the current calendar month — plus window fallback, isolation,
+and the dashboard band.
 
 Note: the `users` fixture seeds each user an account of type 'bank' (not a
 VALID_ACCOUNT_TYPE), so fixture data never enters the liquid balance and a
@@ -143,7 +145,9 @@ def test_debit_card_counts_as_liquid(users):
     assert safe["liquid_balance"] == 75.0
 
 
-def test_bill_on_credit_card_account_excluded(users):
+def test_bill_on_credit_card_counts_without_payment_schedule(users):
+    # v10.10: a card-billed bill still has to be paid in cash — with no
+    # scheduled payment transfer covering the card, the bill reserves cash.
     a = users["a"]["id"]
     today = date.today()
     checking = create_account(a, "Checking", "Bank Account")
@@ -152,6 +156,105 @@ def test_bill_on_credit_card_account_excluded(users):
     create_schedule(a, checking, 1000, "monthly", today + timedelta(days=20),
                     transaction_type="income")
     create_schedule(a, credit, 60, "monthly", today + timedelta(days=3))
+
+    safe = compute_safe_to_spend(a, today=today)
+    assert safe["upcoming_bills"] == 60.0
+    assert len(safe["bill_items"]) == 1
+
+
+def test_bill_on_credit_card_excluded_when_payment_scheduled(users):
+    # v10.10: an active transfer schedule paying the card already reserves the
+    # cash — its bills must not count too (no double reservation).
+    a = users["a"]["id"]
+    today = date.today()
+    checking = create_account(a, "Checking", "Bank Account")
+    credit = create_account(a, "Visa", "Credit Card")
+    create_schedule(a, checking, 1000, "monthly", today + timedelta(days=20),
+                    transaction_type="income")
+    create_schedule(a, credit, 60, "monthly", today + timedelta(days=3))
+    create_transfer_schedule(a, checking, credit, 150, "monthly",
+                             today + timedelta(days=9))
+
+    safe = compute_safe_to_spend(a, today=today)
+    assert safe["upcoming_bills"] == 0.0
+    assert safe["bill_items"] == []
+    assert safe["upcoming_transfers_out"] == 150.0
+
+
+def test_bill_on_credit_card_inactive_payment_schedule_still_counts(users):
+    # Only an ACTIVE payment schedule covers the card.
+    a = users["a"]["id"]
+    today = date.today()
+    checking = create_account(a, "Checking", "Bank Account")
+    credit = create_account(a, "Visa", "Credit Card")
+    create_schedule(a, checking, 1000, "monthly", today + timedelta(days=20),
+                    transaction_type="income")
+    create_schedule(a, credit, 60, "monthly", today + timedelta(days=3))
+    create_transfer_schedule(a, checking, credit, 150, "monthly",
+                             today + timedelta(days=9), is_active=False)
+
+    safe = compute_safe_to_spend(a, today=today)
+    assert safe["upcoming_bills"] == 60.0
+    assert safe["upcoming_transfers_out"] == 0.0
+
+
+def test_credit_card_bill_in_budgeted_category_still_deduped(users):
+    # The v10.10 card-bill rule doesn't reopen the dedupe: a budgeted-category
+    # bill is covered by budget_room wherever it's billed.
+    a = users["a"]["id"]
+    today = date.today()
+    checking = create_account(a, "Checking", "Bank Account")
+    credit = create_account(a, "Visa", "Credit Card")
+    create_schedule(a, checking, 1000, "monthly", today + timedelta(days=20),
+                    transaction_type="income")
+    cat = create_category(a, "Insurance")
+    create_budget(a, cat, 120)
+    create_schedule(a, credit, 110, "monthly", today + timedelta(days=3),
+                    category_id=cat)
+
+    safe = compute_safe_to_spend(a, today=today)
+    assert safe["upcoming_bills"] == 0.0
+    assert safe["budget_room"] == 120.0
+
+
+def test_non_spendable_account_excluded_from_liquid(users):
+    # v10.10: the toggle pulls a savings-style Bank account out of the pool.
+    a = users["a"]["id"]
+    today = date.today()
+    checking = create_account(a, "Checking", "Bank Account")
+    create_transaction(a, checking, 100, today, "income")
+    savings = create_account(a, "Savings", "Bank Account", spendable=False)
+    create_transaction(a, savings, 1000, today, "income")
+
+    safe = compute_safe_to_spend(a, today=today)
+    assert safe["liquid_balance"] == 100.0
+
+
+def test_transfer_into_non_spendable_account_counts(users):
+    # Money scheduled into an excluded account leaves the spendable pool.
+    a = users["a"]["id"]
+    today = date.today()
+    checking = create_account(a, "Checking", "Bank Account")
+    savings = create_account(a, "Savings", "Bank Account", spendable=False)
+    create_schedule(a, checking, 1000, "monthly", today + timedelta(days=20),
+                    transaction_type="income")
+    create_transfer_schedule(a, checking, savings, 50, "monthly",
+                             today + timedelta(days=5))
+
+    safe = compute_safe_to_spend(a, today=today)
+    assert safe["upcoming_transfers_out"] == 50.0
+    assert len(safe["transfer_items"]) == 1
+
+
+def test_bill_on_non_spendable_account_excluded(users):
+    # A bill paid from an excluded account doesn't drain spendable cash.
+    a = users["a"]["id"]
+    today = date.today()
+    checking = create_account(a, "Checking", "Bank Account")
+    savings = create_account(a, "Savings", "Bank Account", spendable=False)
+    create_schedule(a, checking, 1000, "monthly", today + timedelta(days=20),
+                    transaction_type="income")
+    create_schedule(a, savings, 200, "monthly", today + timedelta(days=3))
 
     safe = compute_safe_to_spend(a, today=today)
     assert safe["upcoming_bills"] == 0.0

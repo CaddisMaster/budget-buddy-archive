@@ -10,84 +10,34 @@
 
 <h2 style="margin-top:1.5rem;font-size:1.1rem">What's new</h2>
 
-{# ONE card per WEEKLY release (ships Thursdays). Each release day, REPLACE the whole
-   card's contents with THIS week's changes — the RELEASE VERSION as the title, the
-   release date in the badge, and one feature block (bold sub-heading + plain-English
-   bullets) per feature shipped that week. Weekly bundle, not one card per feature;
-   only ever one card here at a time. #}
+{# ONE card per release (released whenever Sean calls it). On the first feature commit
+   after a release ships, REPLACE the whole card's contents with the CURRENT release —
+   the RELEASE VERSION as the title, the release date in the badge (set/corrected at
+   ship), and one feature block (bold sub-heading + plain-English bullets) per feature
+   in the release. One bundle per card; only ever one card here at a time. #}
 <div class="card">
   <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem">
-    <strong style="font-size:1.05rem">v10.9.0</strong>
-    <span class="recurring-badge">Jul 5, 2026</span>
+    <strong style="font-size:1.05rem">v10.10.0</strong>
+    <span class="recurring-badge">In progress</span>
   </div>
 
-  {# ── One block per feature shipped this week. Add / remove blocks to match. ── #}
+  {# ── One block per feature in this release. Add / remove blocks to match. ── #}
   <div>
-    <strong style="display:block;margin-bottom:0.35rem">Goals can now pay off debt</strong>
+    <strong style="display:block;margin-bottom:0.35rem">A more honest Safe to spend</strong>
     <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>Pay a balance down to $0:</strong> A goal can now target clearing a debt — pick
-          "Pay off a balance", choose the account (say, a credit card), and Budget Buddy tracks
-          your progress from what you owed down to zero.</li>
-      <li><strong>Know your monthly number:</strong> Give the goal a date and it tells you exactly
-          how much to set aside each month to be debt-free on time — and, from your recent
-          payments, when you're actually on pace to get there.</li>
-      <li><strong>Honest progress:</strong> "Still owed" always reflects the account's real
-          balance — if new charges land, the goal adjusts instead of pretending it didn't see them.</li>
+      <li><strong>Keep savings out of it:</strong> Every account now has a "Count in Safe to
+          spend" toggle — untick your savings account and that money stops looking spendable.
+          Scheduled transfers into it count as money leaving your pool, too.</li>
+      <li><strong>Card bills count now:</strong> Bills that charge to a credit card used to
+          reserve nothing. Now they're counted like any other upcoming bill — unless you have
+          a recurring payment transfer already covering that card.</li>
+      <li><strong>Same promise, better math:</strong> The number still means "cash you can
+          spend before your next paycheck" — it's just no longer flattered by savings balances
+          and invisible card charges.</li>
     </ul>
   </div>
 
-  <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
-    <strong style="display:block;margin-bottom:0.35rem">Balance check-in</strong>
-    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>Match the bank in one click:</strong> On the Accounts page, hit "Check in",
-          type what the bank actually says, and Budget Buddy posts the one adjustment that
-          brings its balance in line with reality.</li>
-      <li><strong>Charts stay honest:</strong> The adjustment fixes the balance without
-          polluting your spending analytics — it's marked as a correction, not a purchase.</li>
-      <li><strong>See what's gone stale:</strong> Every account now shows when it was last
-          checked in, so you know which balances you can trust at a glance.</li>
-    </ul>
-  </div>
-
-  <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
-    <strong style="display:block;margin-bottom:0.35rem">Safe to spend</strong>
-    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>One honest number:</strong> The dashboard now answers "can I afford this
-          right now?" — your cash minus the bills, transfers, and budget room already
-          spoken for between now and your next paycheck.</li>
-      <li><strong>See the math:</strong> Expand the breakdown to see exactly what's coming
-          out and when — every upcoming bill and transfer, each with its date.</li>
-      <li><strong>Red means stop:</strong> If what's committed outruns your cash, the number
-          goes negative and shows it — no wishful rounding.</li>
-    </ul>
-  </div>
-
-  <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
-    <strong style="display:block;margin-bottom:0.35rem">Budget report</strong>
-    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>Budgets get memory:</strong> The Budgets page now shows your last six complete
-          months per category — green where you stayed under budget, red where you went over.</li>
-      <li><strong>Streaks and trends:</strong> See how many months in a row you've stayed under
-          (or over), and whether each category's spending is rising, easing, or steady.</li>
-      <li><strong>Honest grading:</strong> Past months are judged against each category's current
-          budget, and only budgets you've actually set get a verdict.</li>
-    </ul>
-  </div>
-
-  <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
-    <strong style="display:block;margin-bottom:0.35rem">One dashboard</strong>
-    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>Analytics moved in:</strong> Everything the Analytics page did now lives on the
-          Dashboard — one page for all your numbers. Old Analytics bookmarks land there
-          automatically.</li>
-      <li><strong>Ask from the front page:</strong> The "Ask your finances" box sits right under
-          your net position, so plain-English questions are one scroll from the answer.</li>
-      <li><strong>Two new views:</strong> A spending-by-day-of-week chart joins the grid, and
-          picking a month shows how it compares to the same month last year.</li>
-    </ul>
-  </div>
-
-  {# Fifth+ features this week go here, each separated by the divider below:
+  {# Second+ features this release go here, each separated by the divider below:
   <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
     <strong style="display:block;margin-bottom:0.35rem">Next feature title</strong>
     <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">

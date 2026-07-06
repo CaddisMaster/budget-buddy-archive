@@ -21,11 +21,12 @@ ACCOUNT_ROW_SQL = """
             THEN t.amount ELSE -t.amount END), 0) AS balance,
         a.last_checked_in,
         (a.last_checked_in IS NULL
-            OR a.last_checked_in < CURRENT_DATE - {stale_days}) AS checkin_stale
+            OR a.last_checked_in < CURRENT_DATE - {stale_days}) AS checkin_stale,
+        a.spendable
     FROM account a
     LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
     WHERE a.user_id = %s {extra}
-    GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in
+    GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in, a.spendable
     ORDER BY a.account_name
 """.replace('{stale_days}', str(CHECKIN_STALE_DAYS))
 
@@ -56,6 +57,7 @@ def accounts():
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
+        spendable = 'spendable' in request.form
         error = _validate(name, account_type)
         if error:
             if is_htmx():
@@ -65,9 +67,9 @@ def accounts():
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "INSERT INTO account (account_name, type, user_id) "
-                    "VALUES (%s, %s, %s) RETURNING account_id",
-                    (name, account_type, current_user.id),
+                    "INSERT INTO account (account_name, type, spendable, user_id) "
+                    "VALUES (%s, %s, %s, %s) RETURNING account_id",
+                    (name, account_type, spendable, current_user.id),
                 )
                 new_id = cursor.fetchone()[0]
         except Exception as e:
@@ -99,18 +101,20 @@ def edit_account(account_id):
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
+        spendable = 'spendable' in request.form
         error = _validate(name, account_type)
         if error:
-            account = (account[0], name, account_type, account[3], account[4], account[5])
+            account = (account[0], name, account_type, account[3], account[4], account[5], spendable)
             return render_template('partials/_account_edit_row.html', account=account, error=error)
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "UPDATE account SET account_name=%s, type=%s WHERE account_id=%s AND user_id=%s",
-                    (name, account_type, account_id, current_user.id),
+                    "UPDATE account SET account_name=%s, type=%s, spendable=%s "
+                    "WHERE account_id=%s AND user_id=%s",
+                    (name, account_type, spendable, account_id, current_user.id),
                 )
         except Exception as e:
-            account = (account[0], name, account_type, account[3], account[4], account[5])
+            account = (account[0], name, account_type, account[3], account[4], account[5], spendable)
             return render_template('partials/_account_edit_row.html', account=account, error=str(e))
         with db_cursor() as cursor:
             account = _fetch_account_row(cursor, account_id)

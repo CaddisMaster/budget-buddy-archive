@@ -37,7 +37,8 @@ CREATE TABLE public.account (
     type character varying(50) NOT NULL,
     created_at timestamp without time zone DEFAULT now(),
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    last_checked_in date  -- v10.9 balance check-in; NULL = never reconciled
+    last_checked_in date,  -- v10.9 balance check-in; NULL = never reconciled
+    spendable boolean NOT NULL DEFAULT true  -- v10.10 safe-to-spend toggle; false = excluded from the liquid set
 );
 
 -- ------------------------------------------------------------

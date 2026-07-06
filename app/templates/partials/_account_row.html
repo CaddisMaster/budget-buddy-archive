@@ -1,5 +1,7 @@
 <tr id="account-{{ account[0] }}">
-  <td>{{ account[1] }}</td>
+  <td>{{ account[1] }}{% if not account[6] %}
+    <span style="display:block;color:var(--text-muted);font-size:0.8em">not in Safe to spend</span>
+  {% endif %}</td>
   <td>{{ account[2] }}</td>
   <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
   <td class="{% if account[5] %}checkin-stale{% endif %}" style="{% if not account[5] %}color:var(--text-muted){% endif %}">

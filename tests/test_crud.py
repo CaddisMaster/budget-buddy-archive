@@ -81,6 +81,35 @@ def test_edit_account(client_a, users):
     assert acct_type == "Credit Card"
 
 
+def _fetch_spendable(account_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT spendable FROM account WHERE account_id = %s",
+                (account_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else None
+
+
+def test_account_spendable_toggle_persists(client_a, users):
+    # v10.10: ticked on create → true.
+    client_a.post("/accounts", data={"name": "Toggly", "type": "Bank Account",
+                                     "spendable": "on"}, follow_redirects=True)
+    aid = _find_account_id(users["a"]["id"], "Toggly")
+    assert _fetch_spendable(aid) is True
+    # Unticked on edit (checkbox absent from the post) → false.
+    client_a.post(f"/accounts/{aid}/edit",
+                  data={"name": "Toggly", "type": "Bank Account"},
+                  follow_redirects=True)
+    assert _fetch_spendable(aid) is False
+    # Re-ticked on edit → true again.
+    client_a.post(f"/accounts/{aid}/edit",
+                  data={"name": "Toggly", "type": "Bank Account",
+                        "spendable": "on"}, follow_redirects=True)
+    assert _fetch_spendable(aid) is True
+
+
 def test_delete_account(client_a, users):
     client_a.post("/accounts", data={"name": "ToDelete", "type": "Bank Account"},
                   follow_redirects=True)

@@ -57,18 +57,23 @@ def compute_safe_to_spend(user_id, today=None):
         safe_to_spend = liquid_balance − upcoming_bills
                         − upcoming_transfers_out − budget_room
 
-    liquid_balance sums the canonical balances of Bank/Debit accounts only.
+    liquid_balance sums the canonical balances of Bank/Debit accounts marked
+    spendable (v10.10: the per-account toggle EXCLUDES a savings-style account
+    from the pool; it can't pull a credit card IN — liquid stays type-gated).
     The window runs from today (exclusive) through the next paycheck date
     INCLUSIVE — the soonest upcoming occurrence across active income
     schedules — falling back to the last day of the current month when no
-    income schedule exists. Bills count only on liquid accounts (a bill on a
-    credit card doesn't drain cash; the card's payment transfer does) and only
-    in UNbudgeted categories — budgeted categories are covered by budget_room,
-    so each dollar is reserved once. Transfers count only liquid → non-liquid
-    (liquid → liquid nets to zero inside liquid_balance). budget_room is
-    max(0, budget − spent) summed over this calendar month's budgets — a
-    full-month term by design, budgets being monthly commitments. The result
-    may be negative; that's the point.
+    income schedule exists. Bills count on liquid accounts, plus (v10.10) on
+    credit cards with NO active transfer schedule paying that card — a
+    card-billed bill still has to be paid in cash, unless the scheduled
+    payment transfer already reserves it. Bills count only in UNbudgeted
+    categories — budgeted categories are covered by budget_room, so each
+    dollar is reserved once. Transfers count only liquid → non-liquid
+    (liquid → liquid nets to zero inside liquid_balance; a transfer INTO a
+    non-spendable account is money leaving the pool, so it counts).
+    budget_room is max(0, budget − spent) summed over this calendar month's
+    budgets — a full-month term by design, budgets being monthly commitments.
+    The result may be negative; that's the point.
     """
     today = today or date.today()
 
@@ -81,7 +86,7 @@ def compute_safe_to_spend(user_id, today=None):
                     THEN t.amount ELSE -t.amount END), 0) AS balance
             FROM account a
             LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
-            WHERE a.user_id = %s AND a.type IN %s
+            WHERE a.user_id = %s AND a.type IN %s AND a.spendable = true
             GROUP BY a.account_id
         """, (user_id, LIQUID_ACCOUNT_TYPES))
         rows = cursor.fetchall()
@@ -108,6 +113,20 @@ def compute_safe_to_spend(user_id, today=None):
         budgeted_ids = {r[0] for r in cursor.fetchall()}
 
         cursor.execute("""
+            SELECT account_id FROM account
+            WHERE user_id = %s AND type = 'Credit Card'
+        """, (user_id,))
+        credit_ids = {r[0] for r in cursor.fetchall()}
+
+        # Cards already covered by a scheduled payment transfer — their bills
+        # must NOT also count, or the payment would be reserved twice.
+        cursor.execute("""
+            SELECT DISTINCT to_account_id FROM transfer_schedules
+            WHERE user_id = %s AND is_active = true
+        """, (user_id,))
+        paid_card_ids = {r[0] for r in cursor.fetchall()}
+
+        cursor.execute("""
             SELECT description, amount, frequency, anchor_day, second_day,
                    next_due, account_id, category_id
             FROM schedules
@@ -115,7 +134,10 @@ def compute_safe_to_spend(user_id, today=None):
         """, (user_id,))
         bill_items = []
         for desc, amount, freq, anchor, second, nd, account_id, category_id in cursor.fetchall():
-            if account_id not in liquid_ids or category_id in budgeted_ids:
+            drains_cash = (account_id in liquid_ids
+                           or (account_id in credit_ids
+                               and account_id not in paid_card_ids))
+            if not drains_cash or category_id in budgeted_ids:
                 continue
             for due in upcoming_occurrences(nd, freq, anchor, second,
                                             today, window_end):

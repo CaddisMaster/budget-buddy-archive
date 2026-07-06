@@ -6,6 +6,11 @@
       <option value="Debit Card" {% if account[2] == 'Debit Card' %}selected{% endif %}>Debit Card</option>
       <option value="Bank Account" {% if account[2] == 'Bank Account' %}selected{% endif %}>Bank Account</option>
     </select>
+    <label style="display:flex;align-items:center;gap:0.35rem;margin-top:0.35rem;font-size:0.85em;color:var(--text-muted)"
+           title="Untick to exclude this account from the Safe to spend number (e.g. savings). Only affects Bank/Debit accounts.">
+      <input type="checkbox" name="spendable" {% if account[6] %}checked{% endif %} style="width:auto">
+      Safe to spend
+    </label>
   </td>
   <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
   <td style="color:var(--text-muted)">{{ account[4].strftime('%b %-d, %Y') if account[4] else 'Never' }}</td>

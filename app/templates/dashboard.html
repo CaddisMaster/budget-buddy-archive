@@ -91,9 +91,29 @@
     </div>
 </div>
 {% endif %}
-{% if ai_enabled %}
-{% if show_insight %}{% include 'partials/_insight_card.html' %}{% endif %}
-{% if show_forecast %}{% include 'partials/_forecast_card.html' %}{% endif %}
+{% include 'partials/_ask.html' %}
+{% if ai_enabled and (show_insight or show_forecast) %}
+<div class="ai-row">
+    {% if show_insight %}{% include 'partials/_insight_card.html' %}{% endif %}
+    {% if show_forecast %}{% include 'partials/_forecast_card.html' %}{% endif %}
+</div>
+{% endif %}
+{% if yoy %}
+<h2>Year over year</h2>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">{{ selected_month }} spending</div>
+        <div class="stat-value {% if yoy.this_year <= yoy.last_year %}income{% else %}expense{% endif %}">${{ "%.2f"|format(yoy.this_year) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Same month last year</div>
+        <div class="stat-value">${{ "%.2f"|format(yoy.last_year) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Change</div>
+        <div class="stat-value {% if yoy.change <= 0 %}income{% else %}expense{% endif %}">{{ '+' if yoy.change > 0 }}{{ yoy.change }}%</div>
+    </div>
+</div>
 {% endif %}
 {% if goals %}
 <h2>Goals</h2>
@@ -128,6 +148,10 @@
         <h3>Account balances</h3>
         <canvas id="accountBar"></canvas>
     </div>
+    <div class="chart-card">
+        <h3>Spending by day of week</h3>
+        <canvas id="dowBar"></canvas>
+    </div>
     <div class="chart-card wide">
         <h3>Income vs expenses by month</h3>
         <canvas id="cashFlowBar"></canvas>
@@ -143,11 +167,12 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-const spendingData = {{ spending_json | safe }};
-const cashFlowData = {{ cash_flow_json | safe }};
-const netBalanceData = {{ net_balance_json | safe }};
-const accountData = {{ account_json | safe }};
-const budgetData = {{ budget_json | safe }};
+const spendingData = {{ spending_data | tojson }};
+const cashFlowData = {{ cash_flow_data | tojson }};
+const netBalanceData = {{ net_balance_data | tojson }};
+const accountData = {{ account_data | tojson }};
+const budgetData = {{ budget_chart_data | tojson }};
+const dowData = {{ day_of_week_data | tojson }};
 
 // Theme Chart.js from the CSS design tokens so charts match the app (incl. dark mode).
 const _css = getComputedStyle(document.documentElement);
@@ -210,6 +235,14 @@ new Chart(document.getElementById('accountBar'), {
         }]
     },
     options: { aspectRatio: 1.6, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, grid: { color: gridColor } }, y: { grid: { color: gridColor } } } }
+});
+new Chart(document.getElementById('dowBar'), {
+    type: 'bar',
+    data: {
+        labels: dowData.map(d => d.day),
+        datasets: [{ label: 'Spent', data: dowData.map(d => d.total), backgroundColor: '#378ADD', borderRadius: 4 }]
+    },
+    options: { aspectRatio: 1.6, plugins: { legend: { display: false } }, scales: gridScales }
 });
 new Chart(document.getElementById('budgetBar'), {
     type: 'bar',

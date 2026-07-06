@@ -336,3 +336,8 @@ tr:hover td.report-miss { background: var(--danger-soft); }
 .trend-rising { color: var(--danger); }
 .trend-easing { color: var(--success); }
 .trend-steady { color: var(--text-muted); }
+
+/* v10.9 merged dashboard — Insight + Forecast share a row on wide screens;
+   a lone card (only one of the two showing) stretches full width. */
+.ai-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; align-items: start; margin-bottom: 1rem; }
+.ai-row .card { margin-bottom: 0; height: 100%; }

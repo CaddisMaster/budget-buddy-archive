@@ -66,7 +66,7 @@ def hx_toast(response, message, kind='success'):
 def recent_months(count=12, today=None):
     """Return the last `count` months as 'YYYY-MM' labels, newest first.
 
-    Used by the History and Analytics month filters so the two stay in sync.
+    Used by the History and Dashboard month filters so the two stay in sync.
     """
     today = today or datetime.today()
     months = []

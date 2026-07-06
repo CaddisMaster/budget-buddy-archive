@@ -1,10 +1,9 @@
 import calendar
-import json
 from datetime import date, datetime
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import ai_enabled
+from app.helpers import ai_enabled, recent_months
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
 from app.blueprints.insights import load_insight, compute_month_facts, _prev_month
@@ -184,15 +183,8 @@ def dashboard():
     run_due_schedules(current_user.id)
     run_due_transfers(current_user.id)
     selected_month = request.args.get('month')
-    months = []
+    months = recent_months()
     today = datetime.today()
-    for i in range(12):
-        month = today.month - i
-        year = today.year
-        if month <= 0:
-            month += 12
-            year -= 1
-        months.append(f'{year}-{month:02d}')
     filter_year = None
     filter_month = None
     if selected_month:
@@ -273,8 +265,51 @@ def dashboard():
     """, (current_user.id,))
     account_balances = cursor.fetchall()
 
-    # Monthly budget vs this-month (or selected-month) actual — same helper the
-    # analytics page uses. Returns (category, budget, actual, remaining).
+    # Spending by day of week (merged from /analytics, v10.9) — expense totals
+    # grouped Sunday-first by Postgres DOW.
+    if selected_month:
+        cursor.execute("""
+            SELECT
+                EXTRACT(DOW FROM transaction_date) AS dow,
+                TO_CHAR(transaction_date, 'Day') AS day_name,
+                SUM(amount) AS total
+            FROM transactions
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
+            AND EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+            GROUP BY dow, day_name
+            ORDER BY dow
+        """, (current_user.id, filter_year, filter_month))
+    else:
+        cursor.execute("""
+            SELECT
+                EXTRACT(DOW FROM transaction_date) AS dow,
+                TO_CHAR(transaction_date, 'Day') AS day_name,
+                SUM(amount) AS total
+            FROM transactions
+            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
+            GROUP BY dow, day_name
+            ORDER BY dow
+        """, (current_user.id,))
+    spending_by_day = cursor.fetchall()
+
+    # Year over year (merged from /analytics, v10.9) — expenses for the same
+    # month last year. Only meaningful when a single month is selected; the
+    # this-year side reuses the hero's expense total (same filters), computed
+    # after the cursor closes.
+    last_year_expenses = None
+    if selected_month:
+        cursor.execute("""
+            SELECT SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
+            FROM transactions
+            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
+            AND EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+        """, (current_user.id, int(filter_year) - 1, filter_month))
+        last_year_expenses = float(cursor.fetchone()[0] or 0)
+
+    # Monthly budget vs this-month (or selected-month) actual.
+    # Returns (category, budget, actual, remaining).
     budget_data = compute_budget_vs_actual(current_user.id, filter_year, filter_month)
 
     goals_view = build_goals_view(cursor, current_user.id)
@@ -313,11 +348,15 @@ def dashboard():
     cursor.close()
     conn.close()
 
-    spending_json = json.dumps([{'category': r[0], 'total': float(r[1])} for r in spending])
-    cash_flow_json = json.dumps([{'month': r[0], 'income': float(r[1]), 'expenses': float(r[2])} for r in cash_flow])
-    net_balance_json = json.dumps([{'month': r[0], 'balance': float(r[1])} for r in net_balance_trend])
-    account_json = json.dumps([{'account': r[0], 'balance': float(r[1])} for r in account_balances])
-    budget_json = json.dumps([{'category': r[0], 'budget': float(r[1]), 'actual': float(r[2])} for r in budget_data])
+    # Chart payloads — plain lists the template renders with |tojson, which
+    # HTML-escapes into the script block (the old json.dumps + |safe let a
+    # </script> in a category/account name break out of it).
+    spending_data = [{'category': r[0], 'total': float(r[1])} for r in spending]
+    cash_flow_data = [{'month': r[0], 'income': float(r[1]), 'expenses': float(r[2])} for r in cash_flow]
+    net_balance_data = [{'month': r[0], 'balance': float(r[1])} for r in net_balance_trend]
+    account_data = [{'account': r[0], 'balance': float(r[1])} for r in account_balances]
+    budget_chart_data = [{'category': r[0], 'budget': float(r[1]), 'actual': float(r[2])} for r in budget_data]
+    day_of_week_data = [{'day': r[1].strip(), 'total': float(r[2])} for r in spending_by_day]
 
     has_transactions = bool(cash_flow) or bool(spending)
 
@@ -333,6 +372,17 @@ def dashboard():
         'label': selected_month if selected_month else 'All time',
     }
 
+    # Year over year — only when a month is selected AND last year has data;
+    # hero_expenses is the same-filtered this-year total.
+    yoy = None
+    if last_year_expenses:
+        yoy = {
+            'last_year': last_year_expenses,
+            'this_year': hero_expenses,
+            'change': round((hero_expenses - last_year_expenses)
+                            / last_year_expenses * 100, 1),
+        }
+
     # Safe to spend (v10.9) — always "now", independent of the month filter
     # (like the AI cards). The due-runners at the top of this route already
     # advanced next_due past today.
@@ -341,11 +391,13 @@ def dashboard():
     return render_template('dashboard.html',
         summary=summary,
         safe=safe,
-        spending_json=spending_json,
-        cash_flow_json=cash_flow_json,
-        net_balance_json=net_balance_json,
-        account_json=account_json,
-        budget_json=budget_json,
+        yoy=yoy,
+        spending_data=spending_data,
+        cash_flow_data=cash_flow_data,
+        net_balance_data=net_balance_data,
+        account_data=account_data,
+        budget_chart_data=budget_chart_data,
+        day_of_week_data=day_of_week_data,
         months=months,
         selected_month=selected_month,
         has_transactions=has_transactions,

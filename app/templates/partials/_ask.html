@@ -1,6 +1,6 @@
 {# v10.3 "Ask your finances" box. Posts a plain-English question to /ask and
-   swaps the answer into #ask-answer. Self-gated on ai_enabled so the analytics
-   page just includes it. CSRF is covered by the hx-headers on <body> in
+   swaps the answer into #ask-answer. Self-gated on ai_enabled so the dashboard
+   just includes it. CSRF is covered by the hx-headers on <body> in
    base.html. #}
 {% if ai_enabled %}
 <div class="card ai-card" style="margin-bottom:1.5rem">

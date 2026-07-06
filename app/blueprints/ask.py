@@ -1,6 +1,7 @@
 """v10.3 — "Ask your finances" (tool-use, Budget Buddy's fourth AI feature).
 
-A plain-English question box (on /analytics) answered from the user's REAL data.
+A plain-English question box (on /dashboard, v10.9 — formerly /analytics)
+answered from the user's REAL data.
 The model orchestrates; the app computes. This module is the **security
 boundary**: it defines a small set of read-only, per-user-scoped, fixed-
 parameterized query tools and a `dispatch` that validates every argument before
@@ -189,7 +190,7 @@ def _t_search_transactions(user_id, args):
 
 def _t_upcoming_scheduled(user_id, args):
     # Only genuinely upcoming items (due today or later). run_due_schedules()
-    # doesn't fire on /analytics or /ask, so an active schedule can still carry a
+    # doesn't fire on /ask itself, so an active schedule can still carry a
     # past next_due here — without this filter the model would report an already-
     # overdue date as "upcoming".
     today = date.today()
@@ -356,7 +357,7 @@ def dispatch(user_id, name, raw_input):
 def ask():
     """Answer a free-text finance question from the user's own data.
 
-    Page-agnostic HTMX endpoint — the box on /analytics posts here and swaps the
+    Page-agnostic HTMX endpoint — the box on /dashboard posts here and swaps the
     answer into #ask-answer. Any failure falls back to a graceful decline + an
     error toast, so the page never breaks."""
     question = request.form.get('question', '').strip()

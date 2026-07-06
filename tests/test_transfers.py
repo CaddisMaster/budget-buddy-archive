@@ -61,17 +61,20 @@ def test_transfer_to_same_account_rejected(client_a, users):
 
 def test_transfer_excluded_from_analytics_but_kept_in_balance(client_a, users):
     # A's only real activity is the seeded 42.50 expense. A 500 transfer must
-    # not inflate analytics income/expense, but must move account balances.
+    # not inflate the income/expense figures, but must move account balances.
+    # (v10.9: analytics merged into the dashboard — the hero shows the same
+    # income/expense totals the old analytics summary did. Balances may
+    # legitimately show the 500, so only the flow figures are asserted.)
     from_acct = users["a"]["account_id"]
     to_acct = create_account(users["a"]["id"], "acct-A-savings")
     create_transfer(users["a"]["id"], from_acct, to_acct, 500.00, TODAY)
 
-    response = client_a.get("/analytics")
+    response = client_a.get("/dashboard")
     assert response.status_code == 200
     # Real expense total stays 42.50, not 542.50; real income stays 0.
     assert b">$42.50<" in response.data
     assert b"542.50" not in response.data
-    assert b"500.00" not in response.data
+    assert b">$0.00<" in response.data  # hero income untouched by the transfer
     # But the money really moved between accounts.
     assert account_balance(to_acct) == 500.00
 

@@ -145,6 +145,23 @@ ALTER TABLE budgets
     ON DELETE RESTRICT;
 
 -- ------------------------------------------------------------
+-- Budget history (v10.9, sql/22 — append-only log of budget changes)
+-- The budgets row upserts in place, so this log is the ONLY record of past
+-- amounts. Written on every set/clear/review-apply (record_budget_change in
+-- budgets.py); nothing reads it yet — a future budget report will grade past
+-- months against the amount actually in effect. amount NULL = cleared.
+-- category FK CASCADEs (RESTRICT would forever block deleting any category
+-- that ever had a budget).
+-- ------------------------------------------------------------
+CREATE TABLE public.budget_history (
+    id SERIAL PRIMARY KEY,
+    category_id integer NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    amount numeric(10,2),
+    changed_at timestamp without time zone NOT NULL DEFAULT now(),
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
 -- Insights (v10.1 — cached monthly AI digest, one row per user per month)
 -- content is narrative JSON {"summary": ..., "tips": [...]}; the figures it
 -- describes are recomputed deterministically server-side, never stored here.

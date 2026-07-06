@@ -97,6 +97,7 @@ def _delete_user(username):
     if row:
         user_id = row[0]
         cur.execute("DELETE FROM transactions WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM budget_history WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM budgets WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM goals WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM schedules WHERE user_id = %s", (user_id,))
@@ -266,6 +267,22 @@ def create_budget(user_id, category_id, amount):
     cur.close()
     conn.close()
     return bid
+
+
+def fetch_budget_history(user_id, category_id):
+    """Return [(amount, changed_at), ...] oldest-first from the v10.9
+    append-only budget_history log (amount None = a recorded clear)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT amount, changed_at FROM budget_history "
+        "WHERE user_id = %s AND category_id = %s ORDER BY id",
+        (user_id, category_id),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
 
 
 def fetch_budget_by_category(user_id, category_id):

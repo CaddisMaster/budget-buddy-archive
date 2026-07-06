@@ -17,6 +17,30 @@ bp = Blueprint('budgets', __name__)
 BUDGET_REVIEW_CAP = 50
 
 
+def record_budget_change(cursor, user_id, category_id, amount):
+    """Append to budget_history (v10.9) — the only record of past budget
+    amounts, since the budgets row upserts in place. amount None = cleared.
+    Nothing reads the log yet; a future budget report will grade past months
+    against the amount actually in effect.
+
+    Call BEFORE the upsert/delete, inside the same transaction, so the log
+    can't drift from the table. Skips no-ops (re-saving the current amount,
+    clearing a budget that isn't set) so it stays a log of CHANGES.
+    """
+    cursor.execute("SELECT amount FROM budgets WHERE category_id = %s AND user_id = %s",
+                   (category_id, user_id))
+    row = cursor.fetchone()
+    if amount is None:
+        if row is None:
+            return
+    elif row is not None and float(row[0]) == float(amount):
+        return
+    cursor.execute("""
+        INSERT INTO budget_history (category_id, amount, user_id)
+        VALUES (%s, %s, %s)
+    """, (category_id, amount, user_id))
+
+
 def build_budget_row(cursor, user_id, category_id):
     """Rebuild one cockpit row tuple after a set/clear, mirroring budgets():
     (category_id, name, effective, is_set, suggested, actual_this_month).
@@ -378,6 +402,7 @@ def set_budget():
         abort(404)
     try:
         # Budgets are whole-dollar targets — cents read oddly, so round on save.
+        record_budget_change(cursor, current_user.id, category_id, round(amount))
         cursor.execute("""
             INSERT INTO budgets (category_id, amount, user_id)
             VALUES (%s, %s, %s)
@@ -416,6 +441,7 @@ def clear_budget():
         cursor.close(); conn.close()
         abort(404)
     try:
+        record_budget_change(cursor, current_user.id, category_id, None)
         cursor.execute("DELETE FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
         conn.commit()
     except Exception as e:
@@ -524,6 +550,7 @@ def budget_review_apply():
                 continue
             if amount <= 0:
                 continue
+            record_budget_change(cursor, current_user.id, category_id, amount)
             cursor.execute("""
                 INSERT INTO budgets (category_id, amount, user_id)
                 VALUES (%s, %s, %s)

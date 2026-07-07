@@ -226,6 +226,14 @@ tr.transfer td { background: var(--accent-soft); }
 /* Inline-edit (HTMX) */
 .btn-sm { padding: 3px 10px; font-size: 12px; border-radius: 6px; }
 .row-actions { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; white-space: nowrap; }
+/* On a <td>, display:flex replaces the table-cell box — the cell stops
+   stretching to the row height, so its border-bottom hugs the buttons and
+   drifts off the row line whenever a sibling cell is taller (v10.10's
+   utilization bar made this visible). Cells stay cells; the flex gap becomes
+   button margins. The flex rule above still serves the non-table uses
+   (goal cards). */
+td.row-actions { display: table-cell; }
+td.row-actions .btn + .btn { margin-left: 0.4rem; }
 tr.editing td { background: var(--bg); vertical-align: middle; }
 tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
 .inline-error { color: var(--danger); font-size: 12px; }

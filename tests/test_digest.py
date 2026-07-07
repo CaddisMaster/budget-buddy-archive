@@ -19,9 +19,10 @@ import app.mailer as mailer
 from app.ai import _Digest, ParseError
 from app.mailer import MailError
 from app.blueprints.digests import (
-    compute_digest_facts, _upcoming_scheduled, _recipients, _most_recent_sunday,
+    compute_digest_facts, _upcoming_scheduled, _recipients,
     send_weekly_digests,
 )
+from app.helpers import most_recent_sunday as _most_recent_sunday
 from app.db import get_db_connection
 from tests.conftest import (
     create_account, create_category, create_transaction, create_schedule,
@@ -170,10 +171,18 @@ def test_recipients_excludes_already_sent_this_week(users):
 
 # --- send_weekly_digests (end-to-end, seams stubbed) ------------------------
 
+def _no_agent(*a, **k):
+    raise ParseError("agent offline in digest tests")
+
+
 @pytest.fixture
 def _keys(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setenv("RESEND_API_KEY", "test-resend-key")
+    # v10.10: the send also runs the money agent per recipient. Keep these
+    # tests offline — the digest must go out regardless (its own try/except
+    # covers the agent); the with-agent paths live in test_money_agent.py.
+    monkeypatch.setattr(ai, "_call_agent_model", _no_agent)
 
 
 def test_send_delivers_to_opted_in_and_sets_marker(users, monkeypatch, _keys):

@@ -64,7 +64,7 @@ def load_user(user_id):
 
 from app.blueprints import (
   auth, main, transactions, categories, accounts, budgets, analytics, admin,
-  transfers, goals, schedules, insights, forecasts, ask, digests
+  transfers, goals, schedules, insights, forecasts, ask, digests, agent
 )
 
 app.register_blueprint(auth.bp)
@@ -82,6 +82,7 @@ app.register_blueprint(insights.bp)
 app.register_blueprint(forecasts.bp)
 app.register_blueprint(ask.bp)
 app.register_blueprint(digests.bp)
+app.register_blueprint(agent.bp)
 
 # `flask send-digests` — run the weekly digest send manually (local/testing).
 app.cli.add_command(digests.send_digests_command)

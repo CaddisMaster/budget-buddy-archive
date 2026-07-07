@@ -8,6 +8,7 @@ from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
 from app.blueprints.insights import load_insight, compute_month_facts, _prev_month
 from app.blueprints.forecasts import load_forecast, compute_forecast
+from app.blueprints.agent import load_agent_run
 from app.blueprints.transactions import compute_next_due
 
 bp = Blueprint('main', __name__)
@@ -353,6 +354,7 @@ def dashboard():
     forecast = None
     forecast_facts = None
     show_forecast = False
+    agent_run = None
     insight_year, insight_month = _prev_month(today.year, today.month)
     if ai_on:
         insight_facts = compute_month_facts(current_user.id, insight_year, insight_month)
@@ -366,6 +368,11 @@ def dashboard():
                              and not forecast_facts['remaining_items'])
         if show_forecast:
             forecast = load_forecast(cursor, current_user.id, today.year, today.month)
+
+        # Money agent (v10.10) — the latest cached weekly run. Unlike the two
+        # cards above there's no not-enough-data gate: the empty state IS the
+        # card (it carries the Run-now button), so it shows whenever AI is on.
+        agent_run = load_agent_run(cursor, current_user.id)
 
     cursor.close()
     conn.close()
@@ -434,5 +441,6 @@ def dashboard():
         forecast=forecast,
         forecast_facts=forecast_facts,
         forecast_year=today.year,
-        forecast_month=today.month
+        forecast_month=today.month,
+        agent_run=agent_run
     )

@@ -23,7 +23,9 @@ from flask.cli import with_appcontext
 from app.db import db_cursor
 from app.ai import generate_digest, ParseError
 from app import mailer
+from app.helpers import most_recent_sunday
 from app.blueprints.insights import compute_month_facts
+from app.blueprints.agent import load_agent_run, run_money_agent
 
 bp = Blueprint('digests', __name__)
 
@@ -109,12 +111,6 @@ def compute_digest_facts(user_id, *, today=None):
     }
 
 
-def _most_recent_sunday(today):
-    """The date of the most recent Sunday on or before `today` — the weekly
-    period boundary for the idempotency guard. (weekday(): Mon=0 … Sun=6.)"""
-    return today - timedelta(days=(today.weekday() + 1) % 7)
-
-
 def _recipients(cursor, period_start):
     """Users due a digest: opted in, with an email, and not already sent for the
     current week (last_digest_sent_on before this week's Sunday). → [(id, email)]."""
@@ -136,7 +132,7 @@ def send_weekly_digests(*, today=None):
     """
     from app import app  # local import to avoid an import cycle at module load
     today = today or date.today()
-    period_start = _most_recent_sunday(today)
+    period_start = most_recent_sunday(today)
     reply_to = os.getenv('DIGEST_REPLY_TO') or None
 
     with db_cursor() as cursor:
@@ -147,9 +143,27 @@ def send_weekly_digests(*, today=None):
         try:
             facts = compute_digest_facts(user_id, today=today)
             narrative = generate_digest(facts)
+
+            # Money agent (v10.10) — this week's findings, as their own email
+            # section. Reuse the week's cached run if the user already triggered
+            # one from the dashboard (don't re-pay Sonnet); otherwise run it now.
+            # Its own try/except: one flaky investigation must not cost the user
+            # their digest — the email just goes out without the section.
+            agent_run = None
+            try:
+                with db_cursor() as cursor:
+                    agent_run = load_agent_run(cursor, user_id,
+                                               period_start=period_start)
+                if agent_run is None:
+                    agent_run = run_money_agent(user_id, today=today)
+            except ParseError as e:
+                app.logger.warning('Money agent skipped for user %s: %s',
+                                   user_id, e)
+
             with app.app_context():
                 html = render_template('emails/weekly_digest.html',
-                                       narrative=narrative, facts=facts)
+                                       narrative=narrative, facts=facts,
+                                       agent_run=agent_run)
             mailer.send_email(email, DIGEST_SUBJECT, html, reply_to=reply_to)
             with db_cursor(commit=True) as cursor:
                 cursor.execute(

@@ -204,6 +204,19 @@ CREATE TABLE public.goal_coach (
     CONSTRAINT uq_goal_coach_user_period UNIQUE (user_id, year, month)
 );
 
+-- Money agent — cached weekly investigation runs, one row per (user, week)
+-- (see sql/25). The insights pattern keyed by the week's Sunday; content is
+-- the narrative JSON {summary, findings:[{title, detail, evidence}]}.
+CREATE TABLE public.agent_runs (
+    id SERIAL PRIMARY KEY,
+    user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    period_start date NOT NULL,
+    content text NOT NULL,
+    model character varying(50),
+    created_at timestamp without time zone DEFAULT now(),
+    CONSTRAINT uq_agent_run_user_period UNIQUE (user_id, period_start)
+);
+
 -- ------------------------------------------------------------
 -- Transfer schedules (v10.4 — recurring transfers; see sql/17)
 -- The transfer-tab twin of `schedules`: run_due_transfers() materializes a

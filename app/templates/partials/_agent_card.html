@@ -1,0 +1,39 @@
+{# Money agent card (v10.10). `agent_run` is the cached weekly run
+   {summary, findings:[{title, detail, evidence}], tools_used, period_start,
+   created_at} or None (never run yet — the empty state carries the Run-now
+   button). POST /agent/run swaps this whole card. #}
+<div id="agent-card" class="card ai-card agent-card">
+  <div class="ai-head">
+    {% include 'partials/_ai_spark.html' %}
+    <h2>Money agent — weekly check</h2>
+    <span class="ai-badge">AI</span>
+    <span id="agent-spinner" class="htmx-indicator insight-spinner">Investigating…</span>
+  </div>
+  {% if agent_run %}
+  {% if agent_run.findings %}
+  <ul class="agent-findings">
+    {% for f in agent_run.findings %}
+    <li class="agent-finding">
+      <strong>{{ f.title }}</strong>
+      <p class="agent-detail">{{ f.detail }}</p>
+      <p class="agent-evidence">Evidence: {{ f.evidence }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="insight-summary">{{ agent_run.summary }}</p>
+  {% else %}
+  <p class="insight-summary">{{ agent_run.summary }}</p>
+  {% endif %}
+  <div class="insight-foot">
+    <span class="insight-ts">Week of {{ agent_run.period_start.strftime('%b %d') }}{% if agent_run.created_at %} · ran {{ agent_run.created_at.strftime('%b %d, %Y %H:%M') }}{% endif %}{% if agent_run.tools_used %} · checked via {{ agent_run.tools_used | length }} data quer{{ 'y' if agent_run.tools_used | length == 1 else 'ies' }}{% endif %}</span>
+    <button class="btn-sm" hx-post="/agent/run"
+            hx-target="#agent-card" hx-swap="outerHTML"
+            hx-indicator="#agent-spinner">Re-run</button>
+  </div>
+  {% else %}
+  <p class="insight-intro">Once a week, an AI investigator combs your recent activity for duplicate charges, bills that changed, rising card utilization, and budgets on pace to blow — and reports at most three findings, each backed by your own numbers. Most weeks the right answer is "nothing notable."</p>
+  <button class="btn-sm" hx-post="/agent/run"
+          hx-target="#agent-card" hx-swap="outerHTML"
+          hx-indicator="#agent-spinner">Run now</button>
+  {% endif %}
+</div>

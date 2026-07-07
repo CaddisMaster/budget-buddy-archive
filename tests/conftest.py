@@ -105,6 +105,7 @@ def _delete_user(username):
         cur.execute("DELETE FROM insights WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM forecasts WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM goal_coach WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM agent_runs WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM categories WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM account WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
@@ -599,6 +600,39 @@ def fetch_goal_coach(user_id, year, month):
     cur.close()
     conn.close()
     return row
+
+
+def create_agent_run(user_id, period_start, content, model="claude-sonnet-4-6"):
+    """Insert a cached money-agent run directly (bypassing the model/route)."""
+    import json
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO agent_runs (user_id, period_start, content, model) "
+        "VALUES (%s, %s, %s, %s) RETURNING id",
+        (user_id, period_start, json.dumps(content), model),
+    )
+    rid = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return rid
+
+
+def fetch_agent_runs(user_id):
+    """Return [(period_start, content, model), ...] for a user's cached runs,
+    oldest week first."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT period_start, content, model FROM agent_runs "
+        "WHERE user_id = %s ORDER BY period_start",
+        (user_id,),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
 
 
 def fetch_goal(goal_id):

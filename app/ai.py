@@ -404,20 +404,21 @@ _ASK_SYSTEM = (
     "bullet syntax, or other formatting. Today's date is {today}."
 )
 
-# One client per api_key, reused across the up-to-6 turns of a question (and
-# across questions) so the loop keeps the httpx keep-alive pool warm instead of
-# re-doing the TLS handshake to api.anthropic.com on every turn.
+# One client per (api_key, timeout), reused across the turns of a tool-use loop
+# (and across requests) so the loop keeps the httpx keep-alive pool warm instead
+# of re-doing the TLS handshake to api.anthropic.com on every turn. Shared by
+# the ask loop (30s) and the money-agent loop (60s — Sonnet turns run longer).
 _ask_clients = {}
 
 
-def _get_ask_client(api_key):
-    client = _ask_clients.get(api_key)
+def _get_ask_client(api_key, timeout=30.0):
+    client = _ask_clients.get((api_key, timeout))
     if client is None:
         import anthropic
         # Bound each call so a stuck request fails fast into the graceful fallback
         # rather than hanging the loop toward the gunicorn worker timeout.
-        client = anthropic.Anthropic(api_key=api_key, timeout=30.0)
-        _ask_clients[api_key] = client
+        client = anthropic.Anthropic(api_key=api_key, timeout=timeout)
+        _ask_clients[(api_key, timeout)] = client
     return client
 
 
@@ -895,5 +896,225 @@ def _call_coach_model(facts, today, api_key):
             output_format=_Coach,
         )
         return response.parsed_output
+    except Exception as e:  # network, auth, malformed output, missing package
+        raise ParseError(str(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# v10.10 — the "Money agent" (autonomous weekly investigation).
+#
+# Budget Buddy's ninth AI feature and its first AUTONOMOUS tool-use: nobody
+# types a question — once a week (or on demand) the model free-hunts the user's
+# recent activity through the same read-only, user-scoped ask-tools the v10.3
+# loop uses, dismisses what's explicable, and submits at most 3 findings, each
+# citing the tool-returned figures as evidence. Still assist-not-autopilot: the
+# tools are read-only, dispatch forces user_id, and everything the model writes
+# is narrative — no figure it returns is ever used as a number.
+#
+# Because there is no deterministic pre-screen (Sean's free-hunt call,
+# 2026-07-06), noise control lives in hard guardrails instead:
+#   * the system prompt names the signal classes and demands verification;
+#   * the run must end via the submit_findings tool (strict schema);
+#   * a submit before ANY successful data-tool call is rejected as un-grounded;
+#   * _normalize_findings() caps findings at 3 and drops any without evidence;
+#   * AGENT_MAX_TURNS bounds the loop, ParseError degrades gracefully.
+# Sonnet, not Haiku — the Auto-Categorize accuracy-over-pennies precedent:
+# judging "explicable vs notable" unsupervised is the most judgment-heavy call
+# in the app, and it runs once a week.
+# ---------------------------------------------------------------------------
+
+AGENT_MODEL = "claude-sonnet-4-6"
+AGENT_MAX_TURNS = 12       # investigation needs more room than ASK_MAX_TURNS
+AGENT_MAX_FINDINGS = 3
+AGENT_TITLE_MAX = 120
+AGENT_TEXT_MAX = 500
+
+# The finish protocol: the model ends the run by "calling" this tool. The loop
+# intercepts it locally (it is never dispatched to the app's tool handlers) —
+# the strict schema makes the API validate the findings shape for us.
+SUBMIT_FINDINGS_TOOL = {
+    "name": "submit_findings",
+    "description": "Submit your final report and end the investigation. Call "
+                   "this exactly once, after you have verified your findings "
+                   "with the data tools. An empty findings list is a normal, "
+                   "expected result when nothing notable happened.",
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "summary": {
+                "type": "string",
+                "description": "One or two plain-text sentences on the week "
+                               "overall (or 'nothing notable' when the "
+                               "findings list is empty).",
+            },
+            "findings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string",
+                                  "description": "Short plain-text headline"},
+                        "detail": {"type": "string",
+                                   "description": "What was found and why it "
+                                                  "matters, 1-3 sentences"},
+                        "evidence": {"type": "string",
+                                     "description": "The specific tool-returned "
+                                                    "dates/amounts this rests "
+                                                    "on"},
+                    },
+                    "required": ["title", "detail", "evidence"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["summary", "findings"],
+        "additionalProperties": False,
+    },
+}
+
+_AGENT_SYSTEM = (
+    "You are a careful, read-only financial investigator reviewing one user's "
+    "personal-finance data for the past week. You can ONLY learn about their "
+    "finances by calling the provided data tools — never estimate, recompute, "
+    "or invent a figure. Investigate the last 7 days in the context of the "
+    "month: look for duplicate charges (same amount and payee close together), "
+    "a recurring bill whose latest amount differs from its history, credit-card "
+    "utilization that is high or newly crossed 30% or 80%, and budget "
+    "categories on pace to be blown — plus anything else genuinely odd. "
+    "VERIFY before you report: a 'duplicate' that matches an active schedule's "
+    "cadence, a transfer leg, or a balance-adjustment row is explicable and "
+    "must be dismissed, not reported (recent_transactions flags transfers and "
+    "adjustments; upcoming_scheduled shows the schedules). When you are done, "
+    "you MUST end by calling submit_findings exactly once: at most "
+    f"{AGENT_MAX_FINDINGS} findings, each with evidence quoting the specific "
+    "dates and amounts a tool returned. Most weeks nothing is wrong — an empty "
+    "findings list with a one-line summary is the expected outcome, and a "
+    "finding you could not verify is worse than no finding. Write plain text "
+    "only, with NO Markdown, asterisks, bullet syntax, or other formatting. "
+    "Today's date is {today}."
+)
+
+
+def investigate_finances(tool_specs, dispatch, *, today=None):
+    """Run one autonomous investigation over the user's data via the ask-tools.
+
+    `tool_specs` is the read-only tool list (blueprints/ask.py TOOL_SPECS);
+    `dispatch(name, raw_input)` is the blueprint's per-user callback, exactly as
+    in answer_question — this module never sees a user id. Returns
+
+        {"summary": str,
+         "findings": [{"title", "detail", "evidence"}, ...],   # capped at 3
+         "tools_used": [name, ...]}
+
+    Raises ParseError on any failure (no key/package, API error, the model
+    never calling submit_findings, submitting without having looked at any
+    data, or exceeding the turn cap) so callers degrade gracefully.
+    """
+    today = today or date.today()
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ParseError("ANTHROPIC_API_KEY is not set")
+
+    kickoff = (
+        f"Please investigate my finances for the week ending {today.isoformat()} "
+        "and submit your findings."
+    )
+    messages = [{"role": "user", "content": kickoff}]
+    specs = list(tool_specs) + [SUBMIT_FINDINGS_TOOL]
+    tools_used = []
+    nudged = False
+
+    for _ in range(AGENT_MAX_TURNS):
+        response = _call_agent_model(messages, specs, today, api_key)
+        if response is None:
+            raise ParseError("Model returned no response")
+
+        blocks = list(response.content or [])
+        tool_uses = [b for b in blocks if getattr(b, "type", None) == "tool_use"]
+
+        submits = [tu for tu in tool_uses if tu.name == "submit_findings"]
+        if submits:
+            # The grounding guard: a report from a model that never successfully
+            # read any data is noise by construction — reject the whole run.
+            if not tools_used:
+                raise ParseError("Model submitted findings without using any tool")
+            result = _normalize_findings(submits[0].input or {})
+            result["tools_used"] = tools_used
+            return result
+
+        if not tool_uses:
+            # The model chatted instead of finishing. Remind it of the protocol
+            # once; a second text-only turn means it isn't going to comply.
+            if nudged:
+                raise ParseError("Model ended without calling submit_findings")
+            nudged = True
+            messages.append({"role": "assistant", "content": blocks})
+            messages.append({
+                "role": "user",
+                "content": "When you have finished investigating, call the "
+                           "submit_findings tool with your summary and findings.",
+            })
+            continue
+
+        # Data tools: same contract as answer_question — echo the assistant
+        # turn, run each tool, return ALL results in one user message.
+        messages.append({"role": "assistant", "content": blocks})
+        results = []
+        for tu in tool_uses:
+            content, is_error = dispatch(tu.name, tu.input)
+            if not is_error:
+                tools_used.append(tu.name)
+            results.append({
+                "type": "tool_result",
+                "tool_use_id": tu.id,
+                "content": content,
+                "is_error": is_error,
+            })
+        messages.append({"role": "user", "content": results})
+
+    raise ParseError("Exceeded tool-use turn limit")
+
+
+def _normalize_findings(raw):
+    """Coerce/validate a submit_findings payload into the safe cached shape.
+    Pure — no API, so the guard logic is directly unit-testable. Requires a
+    non-empty summary (else ParseError); drops findings missing a title,
+    detail, or evidence (an unevidenced finding is exactly the noise the
+    guardrails exist to stop); trims lengths; caps at AGENT_MAX_FINDINGS."""
+    summary = str(raw.get("summary") or "").strip()
+    if not summary:
+        raise ParseError("Model submitted an empty summary")
+
+    findings = []
+    for f in (raw.get("findings") or []):
+        if not isinstance(f, dict):
+            continue
+        title = str(f.get("title") or "").strip()[:AGENT_TITLE_MAX]
+        detail = str(f.get("detail") or "").strip()[:AGENT_TEXT_MAX]
+        evidence = str(f.get("evidence") or "").strip()[:AGENT_TEXT_MAX]
+        if not (title and detail and evidence):
+            continue
+        findings.append({"title": title, "detail": detail, "evidence": evidence})
+        if len(findings) == AGENT_MAX_FINDINGS:
+            break
+
+    return {"summary": summary[:AGENT_TEXT_MAX], "findings": findings}
+
+
+def _call_agent_model(messages, tool_specs, today, api_key):
+    """The single network call for the money agent — isolated so tests can stub
+    it without hitting the API (feeding canned tool_use/text blocks, like the
+    ask seam). Returns the raw Message; wraps any SDK, network, or
+    missing-package error in ParseError."""
+    try:
+        client = _get_ask_client(api_key, timeout=60.0)
+        return client.messages.create(
+            model=AGENT_MODEL,
+            max_tokens=2048,
+            system=_AGENT_SYSTEM.format(today=today.isoformat()),
+            tools=tool_specs,
+            messages=messages,
+        )
     except Exception as e:  # network, auth, malformed output, missing package
         raise ParseError(str(e)) from e

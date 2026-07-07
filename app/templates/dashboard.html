@@ -98,6 +98,9 @@
     {% if show_forecast %}{% include 'partials/_forecast_card.html' %}{% endif %}
 </div>
 {% endif %}
+{% if ai_enabled %}
+{% include 'partials/_agent_card.html' %}
+{% endif %}
 {% if yoy %}
 <h2>Year over year</h2>
 <div class="stats-grid">

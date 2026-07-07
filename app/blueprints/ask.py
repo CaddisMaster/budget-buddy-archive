@@ -188,6 +188,38 @@ def _t_search_transactions(user_id, args):
     return {"matches": txns, "count": len(txns)}
 
 
+def _t_recent_transactions(user_id, args):
+    # The no-text-filter sibling of search_transactions (v10.10, added for the
+    # money agent's free hunt — "show me the week's activity" has no search
+    # term). Same fixed query shape; carries the transfer/adjustment flags so
+    # the model can recognize and dismiss transfer legs and balance check-ins
+    # instead of flagging them as odd charges.
+    start = _parse_date(args, 'start_date')
+    end = _parse_date(args, 'end_date')
+    limit = _clamp_limit(args)
+    with db_cursor() as cursor:
+        cursor.execute("""
+            SELECT t.transaction_date, t.description, t.amount, t.transaction_type,
+                   c.name, t.is_transfer, t.is_adjustment
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            WHERE t.user_id = %s
+            AND t.transaction_date >= %s AND t.transaction_date <= %s
+            ORDER BY t.transaction_date DESC, t.id DESC
+            LIMIT %s
+        """, (user_id, start, end, limit))
+        txns = [{
+            "date": r[0].isoformat() if r[0] else None,
+            "description": r[1],
+            "amount": _money(r[2]),
+            "type": r[3],
+            "category": r[4],
+            "is_transfer": r[5],
+            "is_adjustment": r[6],
+        } for r in cursor.fetchall()]
+    return {"transactions": txns, "count": len(txns)}
+
+
 def _t_upcoming_scheduled(user_id, args):
     # Only genuinely upcoming items (due today or later). run_due_schedules()
     # doesn't fire on /ask itself, so an active schedule can still carry a
@@ -320,6 +352,24 @@ ASK_TOOLS = [
           "additionalProperties": False,
       }},
      _t_search_transactions),
+
+    ({"name": "recent_transactions",
+      "description": "List ALL the user's transactions in a date range, newest "
+                     "first (capped), with no text filter — including transfer "
+                     "legs and balance-adjustment rows, which are flagged. Use "
+                     "for 'what happened this week' / recent-activity questions.",
+      "strict": True, "input_schema": {
+          "type": "object",
+          "properties": {
+              "start_date": _date_arg(),
+              "end_date": _date_arg(),
+              "limit": {"type": "integer",
+                        "description": f"Max rows (1-{MAX_LIMIT})"},
+          },
+          "required": ["start_date", "end_date"],
+          "additionalProperties": False,
+      }},
+     _t_recent_transactions),
 
     ({"name": "upcoming_scheduled",
       "description": "List the user's active recurring schedules (income & bills) "

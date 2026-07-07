@@ -2,7 +2,7 @@
 import json
 import math
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import request
 
@@ -61,6 +61,14 @@ def hx_toast(response, message, kind='success'):
         {'showToast': {'message': message, 'kind': kind}}
     )
     return response
+
+
+def most_recent_sunday(today):
+    """The date of the most recent Sunday on or before `today` — the weekly
+    period boundary shared by the digest's idempotency guard and the money
+    agent's run key. (weekday(): Mon=0 … Sun=6.) Lives here so digests.py and
+    agent.py can both use it without importing each other."""
+    return today - timedelta(days=(today.weekday() + 1) % 7)
 
 
 def recent_months(count=12, today=None):

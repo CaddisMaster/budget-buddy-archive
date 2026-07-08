@@ -12,6 +12,10 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
+if not app.secret_key:
+    # Fail fast: without it the app boots fine and then 500s confusingly at the
+    # first session/CSRF use. Set SECRET_KEY in .env.
+    raise RuntimeError('SECRET_KEY is not set — add it to .env')
 
 # v10.1.1 hardening. Secure cookies + HSTS are gated on COOKIE_SECURE=1 (set in
 # the Droplet .env) so local HTTP dev and the Werkzeug test client — both plain

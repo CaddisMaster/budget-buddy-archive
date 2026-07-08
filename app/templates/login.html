@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login — Budget Buddy</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {# Keep the ?v= in lockstep with base.html — test_param_hardening enforces it. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=12">
 </head>
 <body style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)">
   <div style="width:100%;max-width:380px;padding:2rem">

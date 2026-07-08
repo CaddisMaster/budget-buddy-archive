@@ -2,11 +2,13 @@ from datetime import date
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
-    make_response
+    make_response, current_app
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import is_htmx, hx_toast, parse_signed_amount, parse_positive_amount
+from app.helpers import (
+    is_htmx, hx_toast, parse_signed_amount, parse_positive_amount, GENERIC_ERROR
+)
 
 bp = Blueprint('accounts', __name__)
 
@@ -139,10 +141,11 @@ def accounts():
                     (name, account_type, spendable, credit_limit, current_user.id),
                 )
                 new_id = cursor.fetchone()[0]
-        except Exception as e:
+        except Exception:
+            current_app.logger.exception('create account failed')
             if is_htmx():
-                return hx_toast(make_response('', 200), f'Error: {e}', 'error')
-            flash(f'Error: {e}')
+                return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
+            flash(GENERIC_ERROR)
             return redirect(url_for('accounts.accounts'))
         if is_htmx():
             with db_cursor() as cursor:
@@ -194,9 +197,10 @@ def edit_account(account_id):
                     "WHERE account_id=%s AND user_id=%s",
                     (name, account_type, spendable, credit_limit, account_id, current_user.id),
                 )
-        except Exception as e:
+        except Exception:
+            current_app.logger.exception('edit account failed')
             account = (account[0], name, account_type, account[3], account[4], account[5], spendable, raw_limit)
-            return render_template('partials/_account_edit_row.html', account=account, error=str(e))
+            return render_template('partials/_account_edit_row.html', account=account, error=GENERIC_ERROR)
         with db_cursor() as cursor:
             account = _fetch_account_row(cursor, account_id)
         resp = make_response(render_template('partials/_account_row.html', account=account))
@@ -282,8 +286,9 @@ def delete_account(account_id):
                 (account_id, current_user.id),
             )
     except Exception as e:
+        current_app.logger.exception('delete account failed')
         msg = ('Cannot delete — this account is used by existing transactions'
-               if 'foreign key' in str(e).lower() else f'Error: {e}')
+               if 'foreign key' in str(e).lower() else GENERIC_ERROR)
         resp = make_response(render_template('partials/_account_row.html', account=account))
         return hx_toast(resp, msg, 'error')
     return hx_toast(make_response('', 200), 'Account deleted')

@@ -4,13 +4,15 @@ from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
-    make_response
+    make_response, current_app
 )
 from flask_login import login_required, current_user
 from app import limiter
 from app.ai import generate_goal_coach, ParseError, MODEL
 from app.db import get_db_connection
-from app.helpers import is_htmx, hx_toast, ai_enabled, parse_positive_amount
+from app.helpers import (
+    is_htmx, hx_toast, ai_enabled, parse_positive_amount, GENERIC_ERROR
+)
 
 bp = Blueprint('goals', __name__)
 
@@ -310,12 +312,13 @@ def goals():
             )
             new_id = cursor.fetchone()[0]
             conn.commit()
-        except Exception as e:
+        except Exception:
             conn.rollback()
             cursor.close(); conn.close()
+            current_app.logger.exception('create goal failed')
             if is_htmx():
-                return hx_toast(make_response('', 200), f'Error: {e}', 'error')
-            flash(f'Error: {e}')
+                return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
+            flash(GENERIC_ERROR)
             return redirect(url_for('goals.goals'))
         if is_htmx():
             g = build_single_goal_view(cursor, current_user.id, new_id)
@@ -441,14 +444,15 @@ def edit_goal(goal_id):
                      fields['account_id'], goal_id, current_user.id),
                 )
             conn.commit()
-        except Exception as e:
+        except Exception:
             conn.rollback()
+            current_app.logger.exception('edit goal failed')
             goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
                     fields['target_date'], int(fields['account_id']) if fields['account_id'] else None,
                     stored_type)
             cursor.close(); conn.close()
             return render_template('partials/_goal_edit_card.html',
-                                   goal=goal, accounts=all_accounts, errors=[str(e)])
+                                   goal=goal, accounts=all_accounts, errors=[GENERIC_ERROR])
         g = build_single_goal_view(cursor, current_user.id, goal_id)
         cursor.close(); conn.close()
         resp = make_response(render_template('partials/_goal_card.html', g=g))
@@ -492,12 +496,13 @@ def delete_goal(goal_id):
         cursor.execute("DELETE FROM goals WHERE id = %s AND user_id = %s",
                        (goal_id, current_user.id))
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
+        current_app.logger.exception('delete goal failed')
         g = build_single_goal_view(cursor, current_user.id, goal_id)
         cursor.close(); conn.close()
         resp = make_response(render_template('partials/_goal_card.html', g=g))
-        return hx_toast(resp, f'Error: {e}', 'error')
+        return hx_toast(resp, GENERIC_ERROR, 'error')
     cursor.close()
     conn.close()
     return hx_toast(make_response('', 200), 'Goal deleted')

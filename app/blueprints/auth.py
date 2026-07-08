@@ -40,9 +40,11 @@ def login():
     return render_template('login.html')
 
 
-@bp.route('/logout')
+@bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
+    # POST-only: a GET logout is CSRF-able (any <img src="/logout"> logs the
+    # user out). The nav renders a tiny form; CSRFProtect covers the POST.
     logout_user()
     return redirect(url_for('auth.login'))
 
@@ -115,6 +117,10 @@ def change_password():
             return redirect(url_for('auth.change_password'))
         if len(new_password) < 8:
             flash('New password must be at least 8 characters')
+            return redirect(url_for('auth.change_password'))
+        if len(new_password.encode('utf-8')) > 72:
+            # bcrypt silently truncates beyond 72 BYTES — reject instead.
+            flash('New password must be 72 bytes or fewer')
             return redirect(url_for('auth.change_password'))
         new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
         conn = get_db_connection()

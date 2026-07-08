@@ -1,11 +1,14 @@
 import os
 import subprocess
 from datetime import date
-from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, abort
+from flask import (
+    Blueprint, render_template, request, redirect, url_for, flash, make_response,
+    abort, current_app
+)
 from flask_login import login_required, current_user
 from app import bcrypt
 from app.db import get_db_connection
-from app.helpers import is_htmx, hx_toast
+from app.helpers import is_htmx, hx_toast, GENERIC_ERROR
 
 bp = Blueprint('admin', __name__)
 
@@ -31,6 +34,9 @@ def create_user():
             errors.append('Password is required')
         elif len(password) < 8:
             errors.append('Password must be at least 8 characters')
+        elif len(password.encode('utf-8')) > 72:
+            # bcrypt silently truncates beyond 72 BYTES — reject instead.
+            errors.append('Password must be 72 bytes or fewer')
         if errors:
             for e in errors:
                 flash(e)
@@ -62,8 +68,9 @@ def create_user():
                 )
             conn.commit()
             flash(f'Account created for {username}')
-        except Exception as e:
-            flash(f'Error: {e}')
+        except Exception:
+            current_app.logger.exception('create user failed')
+            flash(GENERIC_ERROR)
             conn.rollback()
         finally:
             cursor.close()
@@ -142,11 +149,12 @@ def delete_user(user_id):
     try:
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
         cursor.close(); conn.close()
+        current_app.logger.exception('delete user failed')
         resp = make_response(render_template('partials/_user_row.html', u=user))
-        return hx_toast(resp, f'Error: {e}', 'error')
+        return hx_toast(resp, GENERIC_ERROR, 'error')
     cursor.close()
     conn.close()
     return hx_toast(make_response('', 200), f'User {user[1]} deleted')

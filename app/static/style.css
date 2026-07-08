@@ -102,6 +102,12 @@ h2 { font-size: var(--fs-md); font-weight: 600; letter-spacing: -0.01em; margin:
 .sidebar nav a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .sidebar nav a.active svg { opacity: 1; }
 .nav-sep { height: 1px; background: var(--border); margin: 0.5rem 0.7rem; border: none; }
+/* Logout is a POST (CSRF-proof) so it's a tiny form — the button must render
+   exactly like the sibling nav <a> links. */
+.sidebar nav .nav-logout { margin: 0; }
+.sidebar nav .nav-logout button { display: flex; align-items: center; gap: 11px; width: 100%; padding: 0.55rem 0.7rem; margin: 1px 0; border-radius: var(--radius-sm); color: var(--text-muted); font-size: 14px; font-weight: 500; font-family: inherit; text-align: left; background: none; border: none; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.sidebar nav .nav-logout button svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.85; }
+.sidebar nav .nav-logout button:hover { background: var(--surface-2); color: var(--text); }
 
 /* Main content */
 .main-content { flex: 1; margin-left: var(--sidebar-width); padding: 2rem; transition: margin-left 0.25s ease; }

@@ -1,10 +1,10 @@
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
-    make_response
+    make_response, current_app
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import is_htmx, hx_toast
+from app.helpers import is_htmx, hx_toast, GENERIC_ERROR
 
 bp = Blueprint('categories', __name__)
 
@@ -44,10 +44,11 @@ def categories():
                     (name, description, current_user.id),
                 )
                 cat = cursor.fetchone()
-        except Exception as e:
+        except Exception:
+            current_app.logger.exception('create category failed')
             if is_htmx():
-                return hx_toast(make_response('', 200), f'Error: {e}', 'error')
-            flash(f'Error: {e}')
+                return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
+            flash(GENERIC_ERROR)
             return redirect(url_for('categories.categories'))
         if is_htmx():
             resp = make_response(render_template('partials/_category_row.html', cat=cat))
@@ -89,9 +90,10 @@ def edit_category(category_id):
                     "UPDATE categories SET name=%s, description=%s WHERE id=%s AND user_id=%s",
                     (name, description, category_id, current_user.id),
                 )
-        except Exception as e:
+        except Exception:
+            current_app.logger.exception('edit category failed')
             return render_template('partials/_category_edit_row.html',
-                                   cat=(category_id, name, description), error=str(e))
+                                   cat=(category_id, name, description), error=GENERIC_ERROR)
         resp = make_response(render_template('partials/_category_row.html',
                                              cat=(category_id, name, description)))
         return hx_toast(resp, 'Category updated')
@@ -119,8 +121,9 @@ def delete_category(category_id):
                 (category_id, current_user.id),
             )
     except Exception as e:
+        current_app.logger.exception('delete category failed')
         msg = ('Cannot delete — this category is used by existing transactions or budgets'
-               if 'foreign key' in str(e).lower() else f'Error: {e}')
+               if 'foreign key' in str(e).lower() else GENERIC_ERROR)
         resp = make_response(render_template('partials/_category_row.html', cat=cat))
         return hx_toast(resp, msg, 'error')
     return hx_toast(make_response('', 200), 'Category deleted')

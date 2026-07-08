@@ -129,6 +129,23 @@ def test_upcoming_scheduled_window_and_transfers(users):
     assert 200.0 not in amounts                              # 15 days out excluded
 
 
+def test_upcoming_scheduled_counts_every_occurrence_in_window(users):
+    """v10.10.1 undercount fix: a weekly bill due today lands TWICE inside the
+    7-day window (today and today+7) — the old next_due-only read counted one."""
+    a = users["a"]["id"]
+    acct = create_account(a, "up-weekly")
+    create_schedule(a, acct, 60, "weekly", TODAY, transaction_type="expense")
+
+    items = _upcoming_scheduled(a, TODAY, days=7)
+    weekly = [i for i in items if i["amount"] == 60.0]
+    assert len(weekly) == 2
+    assert {i["due"] for i in weekly} == {
+        TODAY.isoformat(), (TODAY + timedelta(days=7)).isoformat()}
+
+    facts = compute_digest_facts(a, today=TODAY)
+    assert facts["upcoming_expense"] == 120.0                # both occurrences sum
+
+
 # --- recipient selection + idempotency guard --------------------------------
 
 def test_recipients_selects_only_opted_in_with_email_not_yet_sent(users):

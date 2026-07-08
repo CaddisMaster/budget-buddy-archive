@@ -3,7 +3,7 @@ from datetime import date, datetime
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import ai_enabled, recent_months
+from app.helpers import ai_enabled, parse_month_param, recent_months
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
 from app.blueprints.insights import load_insight, compute_month_facts, _prev_month
@@ -205,13 +205,13 @@ def dashboard():
     from app.blueprints.transfers import run_due_transfers
     run_due_schedules(current_user.id)
     run_due_transfers(current_user.id)
-    selected_month = request.args.get('month')
+    selected_month = parse_month_param(request.args.get('month'))
     months = recent_months()
     today = datetime.today()
     filter_year = None
     filter_month = None
     if selected_month:
-        filter_year, filter_month = selected_month.split('-')
+        filter_year, filter_month = (int(p) for p in selected_month.split('-'))
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -328,7 +328,7 @@ def dashboard():
             WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
             AND EXTRACT(YEAR FROM transaction_date) = %s
             AND EXTRACT(MONTH FROM transaction_date) = %s
-        """, (current_user.id, int(filter_year) - 1, filter_month))
+        """, (current_user.id, filter_year - 1, filter_month))
         last_year_expenses = float(cursor.fetchone()[0] or 0)
 
     # Monthly budget vs this-month (or selected-month) actual.

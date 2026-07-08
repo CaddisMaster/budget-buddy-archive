@@ -68,6 +68,13 @@ def test_dashboard_shows_hero_summary(client_a):
 
 
 def test_logout_redirects_to_login(client_a):
-    response = client_a.get("/logout")
+    response = client_a.post("/logout")
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
+
+
+def test_logout_rejects_get(client_a):
+    """v10.10.1 — a GET logout is CSRF-able (any cross-site <img src="/logout">
+    would log the user out), so the route is POST-only."""
+    response = client_a.get("/logout")
+    assert response.status_code == 405

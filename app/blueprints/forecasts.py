@@ -242,6 +242,10 @@ def generate():
     today = datetime.today()
     year = request.form.get('year', type=int) or today.year
     month = request.form.get('month', type=int) or today.month
+    if not (1 <= month <= 12 and 1 <= year <= 9999):
+        # The card posts hidden year/month, but they're tamperable — month=13
+        # would blow up in calendar.monthrange. Fall back to now.
+        year, month = today.year, today.month
     facts = compute_forecast(current_user.id, year, month)
 
     def _card(forecast):

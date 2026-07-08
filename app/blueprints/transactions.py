@@ -6,13 +6,15 @@ from datetime import datetime, date, timedelta
 from urllib.parse import urlencode
 from dateutil.relativedelta import relativedelta
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash, make_response, abort
+    Blueprint, render_template, request, redirect, url_for, flash, make_response,
+    abort, current_app
 )
 from flask_login import login_required, current_user
 from app import limiter
 from app.db import get_db_connection, db_cursor
 from app.helpers import (
-    recent_months, is_htmx, hx_toast, ai_enabled, parse_positive_amount
+    recent_months, is_htmx, hx_toast, ai_enabled, parse_positive_amount,
+    parse_month_param, parse_page_param, parse_int_param, GENERIC_ERROR
 )
 from app.ai import parse_transaction_text, classify_transactions, ParseError
 
@@ -108,8 +110,8 @@ def new_transaction():
     if request.method == 'POST':
         description = request.form['description'].strip()
         transaction_date = request.form['transaction_date'].strip()
-        category_id = request.form.get('category_id') or None
-        account_id = request.form.get('account_id') or None
+        category_id = parse_int_param(request.form.get('category_id'))
+        account_id = parse_int_param(request.form.get('account_id'))
         transaction_type = request.form.get('transaction_type', 'expense')
         errors = []
         amount, amount_error = parse_positive_amount(request.form.get('amount'))
@@ -117,6 +119,11 @@ def new_transaction():
             errors.append(amount_error)
         if not transaction_date:
             errors.append('Date is required')
+        else:
+            try:
+                datetime.strptime(transaction_date, '%Y-%m-%d')
+            except ValueError:
+                errors.append('Date must be a valid date')
         if not account_id:
             errors.append('Account is required')
         if transaction_type not in ('income', 'expense'):
@@ -140,8 +147,9 @@ def new_transaction():
             )
             conn.commit()
             flash('Transaction added successfully')
-        except Exception as e:
-            flash(f'Error: {e}')
+        except Exception:
+            current_app.logger.exception('new_transaction failed')
+            flash(GENERIC_ERROR)
             if conn:
                 conn.rollback()
         finally:
@@ -210,9 +218,9 @@ def _filter_qs(selected_month, search, page):
 def _current_filters():
     """Read the History filters off the current request (query string)."""
     return (
-        request.args.get('month'),
+        parse_month_param(request.args.get('month')),
         request.args.get('search', '').strip(),
-        int(request.args.get('page', 1) or 1),
+        parse_page_param(request.args.get('page', 1)),
     )
 
 
@@ -281,9 +289,7 @@ def transactions():
     from app.blueprints.transfers import run_due_transfers
     run_due_schedules(current_user.id)
     run_due_transfers(current_user.id)
-    selected_month = request.args.get('month')
-    search = request.args.get('search', '').strip()
-    page = int(request.args.get('page', 1))
+    selected_month, search, page = _current_filters()
     months = recent_months()
     rows, total, total_pages = _load_history(current_user.id, selected_month, search, page)
     cleanup_enabled = ai_enabled()
@@ -328,8 +334,8 @@ def edit_transaction(transaction_id):
         amount_str = request.form['amount'].strip()
         description = request.form['description'].strip()
         transaction_date = request.form['transaction_date'].strip()
-        category_id = request.form.get('category_id') or None
-        account_id = request.form.get('account_id') or None
+        category_id = parse_int_param(request.form.get('category_id'))
+        account_id = parse_int_param(request.form.get('account_id'))
         transaction_type = request.form.get('transaction_type', 'expense')
         is_adjustment = request.form.get('is_adjustment') == 'true'
         errors = []
@@ -338,6 +344,11 @@ def edit_transaction(transaction_id):
             errors.append(amount_error)
         if not transaction_date:
             errors.append('Date is required')
+        else:
+            try:
+                datetime.strptime(transaction_date, '%Y-%m-%d')
+            except ValueError:
+                errors.append('Date must be a valid date')
         if transaction_type not in ('income', 'expense'):
             errors.append('Transaction type must be income or expense')
         if not errors:
@@ -345,9 +356,7 @@ def edit_transaction(transaction_id):
         if errors:
             cursor.close(); conn.close()
             txn = (transaction_id, amount_str, description, transaction_date,
-                   int(category_id) if category_id else None,
-                   int(account_id) if account_id else None,
-                   transaction_type, is_adjustment)
+                   category_id, account_id, transaction_type, is_adjustment)
             return render_template('partials/_transaction_edit_row.html',
                                    txn=txn, categories=all_categories,
                                    accounts=all_accounts,
@@ -359,18 +368,17 @@ def edit_transaction(transaction_id):
                 (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, transaction_id, current_user.id)
             )
             conn.commit()
-        except Exception as e:
+        except Exception:
             conn.rollback()
             cursor.close(); conn.close()
+            current_app.logger.exception('edit_transaction failed')
             txn = (transaction_id, amount_str, description, transaction_date,
-                   int(category_id) if category_id else None,
-                   int(account_id) if account_id else None,
-                   transaction_type, is_adjustment)
+                   category_id, account_id, transaction_type, is_adjustment)
             return render_template('partials/_transaction_edit_row.html',
                                    txn=txn, categories=all_categories,
                                    accounts=all_accounts,
                                    filter_qs=request.query_string.decode(),
-                                   errors=[str(e)])
+                                   errors=[GENERIC_ERROR])
         cursor.close(); conn.close()
         return hx_toast(make_response(render_history_tbody()), 'Transaction updated')
 
@@ -395,10 +403,11 @@ def delete_transaction(transaction_id):
     try:
         cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
         cursor.close(); conn.close()
-        return hx_toast(make_response(render_history_tbody()), f'Error: {e}', 'error')
+        current_app.logger.exception('delete transaction failed')
+        return hx_toast(make_response(render_history_tbody()), GENERIC_ERROR, 'error')
     cursor.close()
     conn.close()
     return hx_toast(make_response(render_history_tbody()), 'Transaction deleted')
@@ -407,7 +416,7 @@ def delete_transaction(transaction_id):
 @bp.route('/transactions/export')
 @login_required
 def export_transactions():
-    selected_month = request.args.get('month')
+    selected_month = parse_month_param(request.args.get('month'))
     search = request.args.get('search', '').strip()
     conn = get_db_connection()
     cursor = conn.cursor()

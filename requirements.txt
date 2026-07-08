@@ -1,22 +1,22 @@
+anthropic==0.116.0
+APScheduler==3.11.3
 blinker==1.9.0
 click==8.3.3
 Flask==3.1.3
+Flask-Bcrypt==1.0.1
+Flask-Limiter==4.1.1
+Flask-Login==0.6.3
+Flask-WTF==1.3.0
+gunicorn==26.0.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
 MarkupSafe==3.0.3
-numpy==2.4.4
-pandas==3.0.3
 psycopg2-binary==2.9.12
+# pydantic is imported directly (app/ai.py) — declared here so an anthropic-SDK
+# bump can't silently drop it out from under us.
+pydantic==2.13.4
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
+resend==2.32.2
 six==1.17.0
 Werkzeug==3.1.8
-gunicorn
-Flask-Limiter
-python-dateutil
-Flask-Login
-Flask-Bcrypt
-Flask-WTF
-anthropic
-APScheduler
-resend

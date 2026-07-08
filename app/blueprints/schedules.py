@@ -8,11 +8,13 @@ from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
-    make_response
+    make_response, current_app
 )
 from flask_login import login_required, current_user
 from app.db import db_cursor
-from app.helpers import is_htmx, hx_toast, parse_positive_amount
+from app.helpers import (
+    is_htmx, hx_toast, parse_positive_amount, parse_int_param, GENERIC_ERROR
+)
 from app.blueprints.transactions import (
     compute_next_due, _clamp_to_month, VALID_FREQUENCIES, FREQUENCY_LABELS,
     validate_category_account,
@@ -107,8 +109,8 @@ def _parse_form(form):
         errors.append(amount_error)
 
     description = form.get('description', '').strip()
-    category_id = form.get('category_id') or None
-    account_id = form.get('account_id') or None
+    category_id = parse_int_param(form.get('category_id'))
+    account_id = parse_int_param(form.get('account_id'))
     if not account_id:
         errors.append('Account is required')
 
@@ -188,10 +190,11 @@ def scheduled():
                       f['transaction_type'], f['frequency'], f['anchor_day'],
                       f['second_day'], f['next_due'], current_user.id))
                 new_id = cursor.fetchone()[0]
-        except Exception as e:
+        except Exception:
+            current_app.logger.exception('create schedule failed')
             if is_htmx():
-                return hx_toast(make_response('', 200), f'Error: {e}', 'error')
-            flash(f'Error: {e}')
+                return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
+            flash(GENERIC_ERROR)
             return redirect(url_for('schedules.scheduled'))
         if is_htmx():
             with db_cursor() as cursor:
@@ -240,10 +243,11 @@ def edit_schedule(schedule_id):
                 """, (f['amount'], f['description'], f['category_id'], f['account_id'],
                       f['transaction_type'], f['frequency'], f['anchor_day'],
                       f['second_day'], f['next_due'], schedule_id, current_user.id))
-        except Exception as e:
+        except Exception:
+            current_app.logger.exception('edit schedule failed')
             return render_template('partials/_schedule_edit_row.html',
                                    schedule=schedule, categories=categories,
-                                   accounts=accounts, error=str(e))
+                                   accounts=accounts, error=GENERIC_ERROR)
         with db_cursor() as cursor:
             schedule = _fetch_schedule_row(cursor, schedule_id)
         resp = make_response(render_template(

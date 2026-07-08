@@ -37,37 +37,46 @@ _MONTHS = ('', 'January', 'February', 'March', 'April', 'May', 'June', 'July',
 
 
 def _upcoming_scheduled(user_id, today, days=UPCOMING_DAYS):
-    """Scheduled income/expense (schedules) and transfers (transfer_schedules)
-    whose next_due falls in [today, today+days] — the bills/paychecks/transfers
-    coming up this week. Projection only (no materialization). User-scoped.
-    Returns [{description, amount, type, due}, ...] sorted by due; type is one of
-    'income' | 'expense' | 'transfer'."""
+    """Every scheduled income/expense (schedules) and transfer
+    (transfer_schedules) occurrence falling in [today, today+days] — the
+    bills/paychecks/transfers coming up this week. Enumerates occurrences with
+    the safe-to-spend walker rather than reading next_due once, so a weekly
+    bill landing twice inside the window is counted twice. Projection only (no
+    materialization). User-scoped. Returns [{description, amount, type, due},
+    ...] sorted by due; type is one of 'income' | 'expense' | 'transfer'."""
+    from app.blueprints.main import upcoming_occurrences  # lazy: avoids import cycle
     window_end = today + timedelta(days=days)
+    # The walker's window is start-EXCLUSIVE; the digest window includes today.
+    window_start = today - timedelta(days=1)
     items = []
     with db_cursor() as cursor:
         cursor.execute("""
-            SELECT description, amount, transaction_type, next_due
+            SELECT description, amount, transaction_type, next_due,
+                   frequency, anchor_day, second_day
             FROM schedules
-            WHERE is_active = true AND user_id = %s
-              AND next_due BETWEEN %s AND %s
-        """, (user_id, today, window_end))
-        for desc, amount, ttype, due in cursor.fetchall():
-            items.append({'description': desc or '', 'amount': float(amount),
-                          'type': ttype, 'due': due.isoformat()})
+            WHERE is_active = true AND user_id = %s AND next_due <= %s
+        """, (user_id, window_end))
+        for desc, amount, ttype, next_due, freq, anchor, second in cursor.fetchall():
+            for due in upcoming_occurrences(next_due, freq, anchor, second,
+                                            window_start, window_end):
+                items.append({'description': desc or '', 'amount': float(amount),
+                              'type': ttype, 'due': due.isoformat()})
 
         cursor.execute("""
             SELECT ts.description, ts.amount, ts.next_due,
+                   ts.frequency, ts.anchor_day, ts.second_day,
                    af.account_name, at.account_name
             FROM transfer_schedules ts
             JOIN account af ON ts.from_account_id = af.account_id
             JOIN account at ON ts.to_account_id = at.account_id
-            WHERE ts.is_active = true AND ts.user_id = %s
-              AND ts.next_due BETWEEN %s AND %s
-        """, (user_id, today, window_end))
-        for desc, amount, due, from_name, to_name in cursor.fetchall():
+            WHERE ts.is_active = true AND ts.user_id = %s AND ts.next_due <= %s
+        """, (user_id, window_end))
+        for desc, amount, next_due, freq, anchor, second, from_name, to_name in cursor.fetchall():
             label = (desc or '').strip() or f'Transfer {from_name} → {to_name}'
-            items.append({'description': label, 'amount': float(amount),
-                          'type': 'transfer', 'due': due.isoformat()})
+            for due in upcoming_occurrences(next_due, freq, anchor, second,
+                                            window_start, window_end):
+                items.append({'description': label, 'amount': float(amount),
+                              'type': 'transfer', 'due': due.isoformat()})
 
     items.sort(key=lambda i: i['due'])
     return items

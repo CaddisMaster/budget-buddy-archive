@@ -1,11 +1,13 @@
 from datetime import date, datetime
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
-    make_response
+    make_response, current_app
 )
 from flask_login import login_required, current_user
 from app.db import get_db_connection, db_cursor
-from app.helpers import hx_toast, is_htmx, parse_positive_amount
+from app.helpers import (
+    hx_toast, is_htmx, parse_positive_amount, parse_int_param, GENERIC_ERROR
+)
 from app.blueprints.transactions import (
     compute_next_due, VALID_FREQUENCIES, FREQUENCY_LABELS,
 )
@@ -40,8 +42,8 @@ def _fetch_accounts(cursor, user_id):
 def _validate(form, user_account_ids):
     """Shared validation for create + edit. Returns (fields, errors)."""
     errors = []
-    from_account = form.get('from_account') or None
-    to_account = form.get('to_account') or None
+    from_account = parse_int_param(form.get('from_account'))
+    to_account = parse_int_param(form.get('to_account'))
     transfer_date = form.get('transfer_date', '').strip()
     description = form.get('description', '').strip()
 
@@ -54,8 +56,8 @@ def _validate(form, user_account_ids):
         errors.append('Both a From and a To account are required')
     elif from_account == to_account:
         errors.append('From and To accounts must be different')
-    elif (int(from_account) not in user_account_ids
-          or int(to_account) not in user_account_ids):
+    elif (from_account not in user_account_ids
+          or to_account not in user_account_ids):
         errors.append('Invalid account')
 
     fields = {
@@ -107,8 +109,9 @@ def transfers():
             )
             conn.commit()
             flash('Transfer added successfully')
-        except Exception as e:
-            flash(f'Error: {e}')
+        except Exception:
+            current_app.logger.exception('create transfer failed')
+            flash(GENERIC_ERROR)
             conn.rollback()
         cursor.close()
         conn.close()
@@ -150,8 +153,8 @@ def edit_transfer(group_id):
                 'amount': request.form.get('amount', ''),
                 'description': request.form.get('description', ''),
                 'transfer_date': fields['transfer_date'],
-                'from_account': int(fields['from_account']) if fields['from_account'] else None,
-                'to_account': int(fields['to_account']) if fields['to_account'] else None,
+                'from_account': fields['from_account'],
+                'to_account': fields['to_account'],
             }
             return render_template('partials/_transfer_edit_row.html',
                                    transfer=transfer, accounts=all_accounts,
@@ -176,21 +179,22 @@ def edit_transfer(group_id):
                  fields['to_account'], group_id, current_user.id),
             )
             conn.commit()
-        except Exception as e:
+        except Exception:
             conn.rollback()
             cursor.close(); conn.close()
+            current_app.logger.exception('edit transfer failed')
             transfer = {
                 'group_id': group_id,
                 'amount': request.form.get('amount', ''),
                 'description': request.form.get('description', ''),
                 'transfer_date': fields['transfer_date'],
-                'from_account': int(fields['from_account']) if fields['from_account'] else None,
-                'to_account': int(fields['to_account']) if fields['to_account'] else None,
+                'from_account': fields['from_account'],
+                'to_account': fields['to_account'],
             }
             return render_template('partials/_transfer_edit_row.html',
                                    transfer=transfer, accounts=all_accounts,
                                    filter_qs=request.query_string.decode(),
-                                   errors=[str(e)])
+                                   errors=[GENERIC_ERROR])
         cursor.close(); conn.close()
         return hx_toast(make_response(render_history_tbody()), 'Transfer updated')
 
@@ -235,10 +239,11 @@ def delete_transfer(group_id):
             (group_id, current_user.id),
         )
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
         cursor.close(); conn.close()
-        return hx_toast(make_response(render_history_tbody()), f'Error: {e}', 'error')
+        current_app.logger.exception('delete transfer failed')
+        return hx_toast(make_response(render_history_tbody()), GENERIC_ERROR, 'error')
     cursor.close()
     conn.close()
     return hx_toast(make_response(render_history_tbody()), 'Transfer deleted')
@@ -301,8 +306,8 @@ def _parse_transfer_schedule_form(form, user_account_ids):
     with the computed next_due/anchor_day/second_day ready to store. No category
     (transfers are category-less); both accounts must be the user's own."""
     errors = []
-    from_account = form.get('from_account') or None
-    to_account = form.get('to_account') or None
+    from_account = parse_int_param(form.get('from_account'))
+    to_account = parse_int_param(form.get('to_account'))
     description = form.get('description', '').strip()
 
     amount, amount_error = parse_positive_amount(form.get('amount'))
@@ -313,8 +318,8 @@ def _parse_transfer_schedule_form(form, user_account_ids):
         errors.append('Both a From and a To account are required')
     elif from_account == to_account:
         errors.append('From and To accounts must be different')
-    elif (int(from_account) not in user_account_ids
-          or int(to_account) not in user_account_ids):
+    elif (from_account not in user_account_ids
+          or to_account not in user_account_ids):
         errors.append('Invalid account')
 
     frequency = form.get('frequency')
@@ -390,10 +395,11 @@ def create_transfer_schedule():
                   f['frequency'], f['anchor_day'], f['second_day'], f['next_due'],
                   current_user.id))
             new_id = cursor.fetchone()[0]
-    except Exception as e:
+    except Exception:
+        current_app.logger.exception('create transfer schedule failed')
         if is_htmx():
-            return hx_toast(make_response('', 200), f'Error: {e}', 'error')
-        flash(f'Error: {e}')
+            return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
+        flash(GENERIC_ERROR)
         return redirect(url_for('transfers.transfers'))
     if is_htmx():
         with db_cursor() as cursor:
@@ -430,9 +436,10 @@ def edit_transfer_schedule(schedule_id):
                 """, (f['amount'], f['description'], f['from_account'],
                       f['to_account'], f['frequency'], f['anchor_day'],
                       f['second_day'], f['next_due'], schedule_id, current_user.id))
-        except Exception as e:
+        except Exception:
+            current_app.logger.exception('edit transfer schedule failed')
             return render_template('partials/_transfer_schedule_edit_row.html',
-                                   schedule=schedule, accounts=accounts, error=str(e))
+                                   schedule=schedule, accounts=accounts, error=GENERIC_ERROR)
         with db_cursor() as cursor:
             schedule = _fetch_transfer_schedule_row(cursor, schedule_id)
         resp = make_response(render_template(

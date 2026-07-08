@@ -158,6 +158,9 @@ def generate():
     today = datetime.today()
     year = request.form.get('year', type=int) or today.year
     month = request.form.get('month', type=int) or today.month
+    if not (1 <= month <= 12 and 1 <= year <= 9999):
+        # Tamperable hidden fields (the forecasts twin's clamp) — fall back to now.
+        year, month = today.year, today.month
     facts = compute_month_facts(current_user.id, year, month)
 
     def _card(insight):

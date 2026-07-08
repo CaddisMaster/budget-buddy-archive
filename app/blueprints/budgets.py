@@ -1,13 +1,14 @@
 from datetime import datetime, date
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
-    make_response
+    make_response, current_app
 )
 from flask_login import login_required, current_user
 from app import limiter
 from app.db import get_db_connection, db_cursor
 from app.helpers import (
-    is_htmx, hx_toast, ai_enabled, parse_positive_amount, recent_months
+    is_htmx, hx_toast, ai_enabled, parse_positive_amount, recent_months,
+    parse_int_param, GENERIC_ERROR
 )
 from app.ai import propose_budgets, ParseError
 
@@ -380,7 +381,7 @@ def budgets():
 @login_required
 def set_budget():
     """Upsert one category's monthly budget amount (the override that sticks)."""
-    category_id = request.form.get('category_id')
+    category_id = parse_int_param(request.form.get('category_id'))
     errors = []
     if not category_id:
         errors.append('Category is required')
@@ -409,12 +410,13 @@ def set_budget():
             ON CONFLICT (user_id, category_id) DO UPDATE SET amount = EXCLUDED.amount
         """, (category_id, round(amount), current_user.id))
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
         cursor.close(); conn.close()
+        current_app.logger.exception('set_budget failed')
         if is_htmx():
-            return hx_toast(make_response('', 200), f'Error: {e}', 'error')
-        flash(f'Error: {e}')
+            return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
+        flash(GENERIC_ERROR)
         return redirect(url_for('budgets.budgets'))
     if is_htmx():
         row = build_budget_row(cursor, current_user.id, category_id)
@@ -431,7 +433,7 @@ def set_budget():
 @login_required
 def clear_budget():
     """Delete a category's override so it reverts to the suggested average."""
-    category_id = request.form.get('category_id')
+    category_id = parse_int_param(request.form.get('category_id'))
     if not category_id:
         abort(404)
     conn = get_db_connection()
@@ -444,12 +446,13 @@ def clear_budget():
         record_budget_change(cursor, current_user.id, category_id, None)
         cursor.execute("DELETE FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
         conn.commit()
-    except Exception as e:
+    except Exception:
         conn.rollback()
         cursor.close(); conn.close()
+        current_app.logger.exception('clear_budget failed')
         if is_htmx():
-            return hx_toast(make_response('', 200), f'Error: {e}', 'error')
-        flash(f'Error: {e}')
+            return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
+        flash(GENERIC_ERROR)
         return redirect(url_for('budgets.budgets'))
     if is_htmx():
         row = build_budget_row(cursor, current_user.id, category_id)
@@ -545,8 +548,9 @@ def budget_review_apply():
             if cursor.fetchone() is None:
                 continue  # not the user's category — skip (write-side IDOR guard)
             try:
+                # OverflowError: int(round(float("inf"))) — nan already raises ValueError.
                 amount = int(round(float(request.form.get(f'amount_{category_id}', ''))))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 continue
             if amount <= 0:
                 continue

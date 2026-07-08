@@ -1,0 +1,4 @@
+# Deps for the OFFLINE data pipeline only (ingest/clean/insert) — deliberately
+# kept out of the app image's requirements.txt (v10.10.1: pandas/numpy bloated
+# the prod image and widened the supply-chain surface for nothing).
+pandas==3.0.3

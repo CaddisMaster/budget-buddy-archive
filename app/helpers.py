@@ -6,6 +6,11 @@ from datetime import datetime, timedelta
 
 from flask import request
 
+# The one user-facing message for an unexpected write failure. Raw exception
+# text (psycopg2 constraint names, SQL fragments) stays in the server log —
+# pair every use with current_app.logger.exception().
+GENERIC_ERROR = 'Something went wrong — please try again'
+
 
 def ai_enabled():
     """True when the NL quick-add (v9) is configured — i.e. an ANTHROPIC_API_KEY
@@ -48,6 +53,40 @@ def parse_positive_amount(raw, label='Amount'):
     if amount <= 0:
         return None, f'{label} must be greater than zero'
     return amount, None
+
+
+def parse_month_param(raw):
+    """Validate a 'YYYY-MM' month filter off a query string. Returns the string
+    when it parses, else None (= no month filter) — a tampered ?month must fall
+    back to the unfiltered page, never 500 in strptime/EXTRACT."""
+    raw = (raw or '').strip()
+    try:
+        datetime.strptime(raw, '%Y-%m')
+    except ValueError:
+        return None
+    return raw
+
+
+def parse_page_param(raw):
+    """Pagination number off a query string: a positive int, else 1. Clamped —
+    page 0/negative would flow into a negative SQL OFFSET (a DB error), not
+    just a weird page."""
+    try:
+        page = int(raw)
+    except (TypeError, ValueError):
+        return 1
+    return max(page, 1)
+
+
+def parse_int_param(raw):
+    """A posted id field: int, or None when missing/blank/non-numeric. Callers
+    treat None as 'not provided' — their existing required/ownership checks do
+    the erroring; this just keeps garbage out of psycopg2 (a non-numeric string
+    against an integer column raises, i.e. a 500)."""
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def is_htmx():

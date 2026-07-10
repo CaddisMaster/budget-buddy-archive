@@ -1,5 +1,7 @@
 <tr id="txn-{{ txn[0] }}" class="editing">
   {# txn = (id, amount, description, date, category_id, account_id, type, is_adjustment) #}
+  {# Empty bulk-select cell — no input, or Save's hx-include="closest tr" would post it. #}
+  <td class="bulk-col"></td>
   <td><input type="date" name="transaction_date" value="{{ txn[3] }}" required></td>
   <td>
     <select name="transaction_type" required>

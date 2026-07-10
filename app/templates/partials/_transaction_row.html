@@ -1,4 +1,5 @@
 <tr id="txn-{{ t[0] }}" class="{% if t[10] %}transfer {% endif %}{% if t[6] == 'income' %}income{% else %}expense{% endif %}">
+  <td class="bulk-col">{% if not t[10] %}<input type="checkbox" class="row-select" name="row_id" value="{{ t[0] }}" aria-label="Select row">{% endif %}</td>
   <td>{{ t[5] }}</td>
   <td>{{ t[6] | capitalize }}</td>
   <td>{{ t[1] }}</td>

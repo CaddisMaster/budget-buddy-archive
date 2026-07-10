@@ -243,6 +243,18 @@ td.row-actions .btn + .btn { margin-left: 0.4rem; }
 tr.editing td { background: var(--bg); vertical-align: middle; }
 tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
 .inline-error { color: var(--danger); font-size: 12px; }
+
+/* Bulk edit (v10.11) — the multi-select action bar on History */
+.bulk-bar {
+  display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem;
+  font-size: 13px;
+}
+.bulk-bar[hidden] { display: none; } /* display:flex would beat the hidden attr */
+.bulk-bar select { padding: 0.3rem 0.5rem; font-size: 13px; }
+.bulk-col { width: 1.5rem; }
+.bulk-col input[type="checkbox"] { width: auto; margin: 0; }
 .suggested-tag { font-size: 12px; color: var(--text-muted); }
 .htmx-request.btn, .htmx-request .btn { opacity: 0.6; pointer-events: none; }
 

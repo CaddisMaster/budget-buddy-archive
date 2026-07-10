@@ -31,9 +31,30 @@
 {% if total == 0 and not search and not selected_month %}
 <p style="color:var(--text-muted)">No transactions yet. <a href="/transactions/new">Add your first transaction →</a></p>
 {% else %}
+{# v10.11 Bulk edit: hidden until at least one row is selected (script below). #}
+<div id="bulk-bar" class="bulk-bar" hidden>
+  <span id="bulk-count">0 selected</span>
+  {% if categories %}
+  <select id="bulk-category" name="category_id" aria-label="Category for selected">
+    {% for c in categories %}
+    <option value="{{ c[0] }}">{{ c[1] }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" class="btn btn-primary"
+    hx-post="/transactions/bulk/category?{{ filter_qs }}"
+    hx-include="#bulk-category, .row-select:checked"
+    hx-target="#txn-rows" hx-swap="outerHTML">Set category</button>
+  {% endif %}
+  <button type="button" class="btn btn-danger"
+    hx-post="/transactions/bulk/delete?{{ filter_qs }}"
+    hx-include=".row-select:checked"
+    hx-target="#txn-rows" hx-swap="outerHTML"
+    hx-confirm="Delete the selected transactions?">Delete selected</button>
+  <button type="button" class="btn" id="bulk-clear">Clear</button>
+</div>
 <div class="table-wrapper">
 <table>
-  <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Description</th><th>Category</th><th>Account</th><th>Balance</th><th>Actions</th></tr></thead>
+  <thead><tr><th class="bulk-col"><input type="checkbox" id="select-all" aria-label="Select all rows"></th><th>Date</th><th>Type</th><th>Amount</th><th>Description</th><th>Category</th><th>Account</th><th>Balance</th><th>Actions</th></tr></thead>
   {% include 'partials/_transactions_tbody.html' %}
 </table>
 </div>
@@ -49,4 +70,33 @@
   {% endif %}
 </div>
 {% endif %}
+<script>
+(function () {
+  const bar = document.getElementById('bulk-bar');
+  if (!bar) return;
+  const count = document.getElementById('bulk-count');
+  const selectAll = document.getElementById('select-all');
+  function boxes() { return document.querySelectorAll('.row-select'); }
+  function refresh() {
+    const n = document.querySelectorAll('.row-select:checked').length;
+    count.textContent = n + ' selected';
+    bar.hidden = n === 0;
+    if (selectAll) selectAll.checked = n > 0 && n === boxes().length;
+  }
+  document.addEventListener('change', function (e) {
+    if (e.target.classList && e.target.classList.contains('row-select')) refresh();
+  });
+  if (selectAll) selectAll.addEventListener('change', function () {
+    boxes().forEach(function (cb) { cb.checked = selectAll.checked; });
+    refresh();
+  });
+  document.getElementById('bulk-clear').addEventListener('click', function () {
+    boxes().forEach(function (cb) { cb.checked = false; });
+    refresh();
+  });
+  // Any swap can add/remove checkboxes (tbody refresh, inline edit rows) —
+  // recount every time rather than guessing at the target.
+  document.body.addEventListener('htmx:afterSwap', refresh);
+})();
+</script>
 {% endblock %}

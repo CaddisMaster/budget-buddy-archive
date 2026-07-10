@@ -68,6 +68,13 @@ CREATE TABLE public.transactions (
 -- Ties the two legs of a transfer together (one nextval per transfer).
 CREATE SEQUENCE public.transfer_group_seq;
 
+-- Indexes (v10.11, sql/26): user_id backs every page's scoping filter; the FK
+-- columns back the ON DELETE RESTRICT checks + transfer-pair lookups.
+CREATE INDEX idx_transactions_user_id ON transactions (user_id);
+CREATE INDEX idx_transactions_category_id ON transactions (category_id);
+CREATE INDEX idx_transactions_account_id ON transactions (account_id);
+CREATE INDEX idx_transactions_transfer_group_id ON transactions (transfer_group_id);
+
 -- ------------------------------------------------------------
 -- Budgets
 -- ------------------------------------------------------------

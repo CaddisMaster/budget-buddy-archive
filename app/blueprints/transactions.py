@@ -294,8 +294,13 @@ def transactions():
     rows, total, total_pages = _load_history(current_user.id, selected_month, search, page)
     cleanup_enabled = ai_enabled()
     uncategorized_count = count_uncategorized(current_user.id) if cleanup_enabled else 0
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name",
+                       (current_user.id,))
+        categories = cursor.fetchall()
     return render_template('history.html',
         transactions=rows,
+        categories=categories,
         months=months,
         selected_month=selected_month,
         search=search,
@@ -411,6 +416,81 @@ def delete_transaction(transaction_id):
     cursor.close()
     conn.close()
     return hx_toast(make_response(render_history_tbody()), 'Transaction deleted')
+
+
+def _bulk_response(applied, verb):
+    """Refreshed tbody (+ the cleanup banner OOB when the AI banner is on the
+    page, since a bulk change can move the uncategorized count) with a toast."""
+    body = render_history_tbody()
+    if ai_enabled():
+        body += _cleanup_banner_oob(current_user.id)
+    message = (f'{applied} transaction{"s" if applied != 1 else ""} {verb}'
+               if applied else 'Nothing applied')
+    return hx_toast(make_response(body), message, 'success' if applied else 'error')
+
+
+def _bulk_error(message):
+    return hx_toast(make_response(render_history_tbody()), message, 'error')
+
+
+@bp.route('/transactions/bulk/category', methods=['POST'])
+@login_required
+def bulk_category():
+    """Bulk edit (v10.11): set the category on every selected History row.
+    Guards per the cleanup/apply precedent — the target category is ownership-
+    checked once, each row id is int-coerced and scoped WHERE user_id, and
+    transfer legs are excluded server-side (is_transfer = false) even though the
+    UI never offers them a checkbox."""
+    checked = request.form.getlist('row_id')
+    if not checked:
+        return _bulk_error('Nothing selected')
+    category_id = parse_int_param(request.form.get('category_id'))
+    applied = 0
+    try:
+        with db_cursor(commit=True) as cursor:
+            if category_id is None or validate_category_account(
+                    cursor, current_user.id, category_id, None):
+                return _bulk_error('Invalid category')
+            for rid in checked:
+                row_id = parse_int_param(rid)
+                if row_id is None:
+                    continue
+                cursor.execute(
+                    "UPDATE transactions SET category_id = %s"
+                    " WHERE id = %s AND user_id = %s AND is_transfer = false",
+                    (category_id, row_id, current_user.id))
+                applied += cursor.rowcount
+    except Exception:
+        current_app.logger.exception('bulk category failed')
+        return _bulk_error(GENERIC_ERROR)
+    return _bulk_response(applied, 'updated')
+
+
+@bp.route('/transactions/bulk/delete', methods=['POST'])
+@login_required
+def bulk_delete():
+    """Bulk edit (v10.11): delete every selected History row. POST (not DELETE)
+    because the selection travels as a form body. Same guards as bulk_category;
+    transfer legs are skipped so a pair can never be orphaned."""
+    checked = request.form.getlist('row_id')
+    if not checked:
+        return _bulk_error('Nothing selected')
+    applied = 0
+    try:
+        with db_cursor(commit=True) as cursor:
+            for rid in checked:
+                row_id = parse_int_param(rid)
+                if row_id is None:
+                    continue
+                cursor.execute(
+                    "DELETE FROM transactions"
+                    " WHERE id = %s AND user_id = %s AND is_transfer = false",
+                    (row_id, current_user.id))
+                applied += cursor.rowcount
+    except Exception:
+        current_app.logger.exception('bulk delete failed')
+        return _bulk_error(GENERIC_ERROR)
+    return _bulk_response(applied, 'deleted')
 
 
 @bp.route('/transactions/export')

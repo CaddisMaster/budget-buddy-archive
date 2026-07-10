@@ -17,52 +17,23 @@
    in the release. One bundle per card; only ever one card here at a time. #}
 <div class="card">
   <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem">
-    <strong style="font-size:1.05rem">v10.10.0</strong>
-    <span class="recurring-badge">Jul 6, 2026</span>
+    <strong style="font-size:1.05rem">v10.11.0</strong>
+    <span class="recurring-badge">In progress</span>
   </div>
 
   {# ── One block per feature in this release. Add / remove blocks to match. ── #}
   <div>
-    <strong style="display:block;margin-bottom:0.35rem">A more honest Safe to spend</strong>
+    <strong style="display:block;margin-bottom:0.35rem">Bulk edit on History</strong>
     <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>Keep savings out of it:</strong> Every account now has a "Count in Safe to
-          spend" toggle — untick your savings account and that money stops looking spendable.
-          Scheduled transfers into it count as money leaving your pool, too.</li>
-      <li><strong>Card bills count now:</strong> Bills that charge to a credit card used to
-          reserve nothing. Now they're counted like any other upcoming bill — unless you have
-          a recurring payment transfer already covering that card.</li>
-      <li><strong>Same promise, better math:</strong> The number still means "cash you can
-          spend before your next paycheck" — it's just no longer flattered by savings balances
-          and invisible card charges.</li>
-    </ul>
-  </div>
-
-  <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
-    <strong style="display:block;margin-bottom:0.35rem">Credit limits on your cards</strong>
-    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>Set a limit, see your headroom:</strong> Give any credit card its limit on
-          the Accounts page and the card shows a utilization bar — amber past 30%, red past
-          80% — plus exactly how much credit is left.</li>
-      <li><strong>One total across cards:</strong> A summary line adds up the available
-          credit on every card with a limit set.</li>
-      <li><strong>Your AI knows it too:</strong> Ask "how much room is left on my card?",
-          and the monthly Insight and weekly digest can flag a card creeping toward its
-          limit.</li>
-    </ul>
-  </div>
-
-  <div style="border-top:1px solid var(--border);margin-top:1rem;padding-top:1rem">
-    <strong style="display:block;margin-bottom:0.35rem">The Money agent — a weekly check on your money</strong>
-    <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:14px;line-height:1.7">
-      <li><strong>An AI investigator on your side:</strong> Once a week it combs your recent
-          activity for things worth a second look — duplicate charges, a bill whose amount
-          changed, a card creeping up on its limit, a budget on pace to blow.</li>
-      <li><strong>Evidence or it doesn't count:</strong> It reports at most three findings,
-          each backed by the actual dates and amounts from your own data — and it only reads,
-          never changes anything. Most weeks the answer is simply "nothing notable."</li>
-      <li><strong>On the dashboard and in your inbox:</strong> A new dashboard card shows the
-          latest check (run it yourself anytime), and the weekly email digest includes the
-          same findings.</li>
+      <li><strong>Select more than one:</strong> Every row on the History page now has a
+          checkbox (plus a select-all at the top) — tick the transactions you want to change
+          together.</li>
+      <li><strong>Recategorize in one go:</strong> An action bar appears with a category
+          picker — pick one, hit Set category, and every selected transaction moves at once.
+          No more editing like entries one by one.</li>
+      <li><strong>Bulk delete too:</strong> Clear out a batch of mistaken entries with one
+          click (it asks first). Transfers sit out of bulk actions — they're still managed
+          as a pair.</li>
     </ul>
   </div>
 

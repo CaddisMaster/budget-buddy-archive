@@ -1,5 +1,5 @@
 <tr id="transfer-edit-{{ transfer.group_id }}" class="editing">
-  <td colspan="8">
+  <td colspan="9">
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center">
       <select name="from_account" required title="From account">
         {% for a in accounts %}<option value="{{ a[0] }}" {% if a[0] == transfer.from_account %}selected{% endif %}>From: {{ a[1] }}</option>{% endfor %}

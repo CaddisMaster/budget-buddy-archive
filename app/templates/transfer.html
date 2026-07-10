@@ -11,14 +11,14 @@
     <select name="from_account" required>
         <option value="">-- select account --</option>
         {% for account in accounts %}
-        <option value="{{ account[0] }}">{{ account[1] }}</option>
+        <option value="{{ account.account_id }}">{{ account.account_name }}</option>
         {% endfor %}
     </select>
     <label>To account</label>
     <select name="to_account" required>
         <option value="">-- select account --</option>
         {% for account in accounts %}
-        <option value="{{ account[0] }}">{{ account[1] }}</option>
+        <option value="{{ account.account_id }}">{{ account.account_name }}</option>
         {% endfor %}
     </select>
     <label>Amount</label>
@@ -48,14 +48,14 @@
     <select name="from_account" required>
         <option value="">-- select account --</option>
         {% for account in accounts %}
-        <option value="{{ account[0] }}">{{ account[1] }}</option>
+        <option value="{{ account.account_id }}">{{ account.account_name }}</option>
         {% endfor %}
     </select>
     <label>To account</label>
     <select name="to_account" required>
         <option value="">-- select account --</option>
         {% for account in accounts %}
-        <option value="{{ account[0] }}">{{ account[1] }}</option>
+        <option value="{{ account.account_id }}">{{ account.account_name }}</option>
         {% endfor %}
     </select>
     <label>Amount</label>

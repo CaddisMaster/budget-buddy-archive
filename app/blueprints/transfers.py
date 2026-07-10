@@ -77,7 +77,7 @@ def transfers():
     # balances are current the moment the user lands on the tab.
     run_due_transfers(current_user.id)
     with db_cursor() as cursor:
-        account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
+        account_ids = {a.account_id for a in _fetch_accounts(cursor, current_user.id)}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
@@ -133,7 +133,7 @@ def edit_transfer(group_id):
         if cursor.fetchone() is None:
             abort(404)
         all_accounts = _fetch_accounts(cursor, current_user.id)
-    account_ids = {a[0] for a in all_accounts}
+    account_ids = {a.account_id for a in all_accounts}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
@@ -195,11 +195,11 @@ def edit_transfer(group_id):
         legs = cursor.fetchall()
     transfer = {
         'group_id': group_id,
-        'amount': legs[0][0],
-        'description': legs[0][1],
-        'transfer_date': legs[0][2],
-        'from_account': next((l[3] for l in legs if l[4] == 'expense'), None),
-        'to_account': next((l[3] for l in legs if l[4] == 'income'), None),
+        'amount': legs[0].amount,
+        'description': legs[0].description,
+        'transfer_date': legs[0].transaction_date,
+        'from_account': next((l.account_id for l in legs if l.transaction_type == 'expense'), None),
+        'to_account': next((l.account_id for l in legs if l.transaction_type == 'income'), None),
     }
     return render_template('partials/_transfer_edit_row.html',
                            transfer=transfer, accounts=all_accounts,
@@ -355,7 +355,7 @@ def _fetch_transfer_schedule_row(cursor, schedule_id):
 @login_required
 def create_transfer_schedule():
     with db_cursor() as cursor:
-        account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
+        account_ids = {a.account_id for a in _fetch_accounts(cursor, current_user.id)}
     errors, f = _parse_transfer_schedule_form(request.form, account_ids)
     if errors:
         msg = errors[0]
@@ -398,7 +398,7 @@ def edit_transfer_schedule(schedule_id):
     with db_cursor() as cursor:
         schedule = _fetch_transfer_schedule_row(cursor, schedule_id)
         accounts = _fetch_accounts(cursor, current_user.id)
-        account_ids = {a[0] for a in accounts}
+        account_ids = {a.account_id for a in accounts}
 
     if request.method == 'POST':
         errors, f = _parse_transfer_schedule_form(request.form, account_ids)

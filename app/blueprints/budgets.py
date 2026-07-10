@@ -1,3 +1,4 @@
+from collections import namedtuple
 from datetime import datetime, date
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
@@ -42,9 +43,13 @@ def record_budget_change(cursor, user_id, category_id, amount):
     """, (category_id, amount, user_id))
 
 
+# The cockpit row shape — always Python-assembled (from several queries), so
+# this namedtuple is the single source of truth _budget_row.html reads.
+BudgetRow = namedtuple('BudgetRow', 'cid name effective is_set suggested actual')
+
+
 def build_budget_row(cursor, user_id, category_id):
-    """Rebuild one cockpit row tuple after a set/clear, mirroring budgets():
-    (category_id, name, effective, is_set, suggested, actual_this_month).
+    """Rebuild one cockpit BudgetRow after a set/clear, mirroring budgets().
     Returns None if the category isn't this user's."""
     cursor.execute("SELECT id, name FROM categories WHERE id = %s AND user_id = %s",
                    (category_id, user_id))
@@ -68,7 +73,7 @@ def build_budget_row(cursor, user_id, category_id):
     actual = float(cursor.fetchone()[0])
     suggested = compute_budget_suggestions(user_id).get(cid)
     effective = saved_amt if is_set else suggested
-    return (cid, name, effective, is_set, suggested, actual)
+    return BudgetRow(cid, name, effective, is_set, suggested, actual)
 
 
 def compute_budget_suggestions(user_id):
@@ -173,7 +178,7 @@ def load_budget_rows(user_id):
         is_set = cid in saved
         suggested = suggestions.get(cid)
         effective = saved[cid] if is_set else suggested
-        rows.append((cid, name, effective, is_set, suggested, actuals.get(cid, 0.0)))
+        rows.append(BudgetRow(cid, name, effective, is_set, suggested, actuals.get(cid, 0.0)))
     return rows, all_categories
 
 

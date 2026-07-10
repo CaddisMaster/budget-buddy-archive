@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
+import psycopg2
 import pytest
 
 import app.ai as ai
@@ -255,7 +256,9 @@ def test_db_error_shows_generic_message_not_exception_text(client_a, monkeypatch
     class _BoomCursor:
         def execute(self, sql, *a, **k):
             if sql.lstrip().upper().startswith("INSERT"):
-                raise Exception("SECRET-SQL-DETAIL")
+                # A psycopg2 error, matching the narrowed write-path handlers
+                # (except psycopg2.Error) — a generic Exception would now escape.
+                raise psycopg2.OperationalError("SECRET-SQL-DETAIL")
 
         def fetchall(self):
             return []

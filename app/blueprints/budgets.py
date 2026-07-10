@@ -1,5 +1,6 @@
 from collections import namedtuple
 from datetime import datetime, date
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response, current_app
@@ -404,7 +405,7 @@ def set_budget():
                 VALUES (%s, %s, %s)
                 ON CONFLICT (user_id, category_id) DO UPDATE SET amount = EXCLUDED.amount
             """, (category_id, round(amount), current_user.id))
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('set_budget failed')
         if is_htmx():
             return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
@@ -434,7 +435,7 @@ def clear_budget():
         with db_cursor(commit=True) as cursor:
             record_budget_change(cursor, current_user.id, category_id, None)
             cursor.execute("DELETE FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('clear_budget failed')
         if is_htmx():
             return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')

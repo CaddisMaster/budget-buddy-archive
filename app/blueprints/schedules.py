@@ -6,6 +6,7 @@ Inline-CRUD shape mirrors blueprints/accounts.py (ownership guard → 404, db_cu
 hx_toast fragments). Date math is reused from blueprints/transactions.py."""
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response, current_app
@@ -190,7 +191,7 @@ def scheduled():
                       f['transaction_type'], f['frequency'], f['anchor_day'],
                       f['second_day'], f['next_due'], current_user.id))
                 new_id = cursor.fetchone()[0]
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('create schedule failed')
             if is_htmx():
                 return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
@@ -243,7 +244,7 @@ def edit_schedule(schedule_id):
                 """, (f['amount'], f['description'], f['category_id'], f['account_id'],
                       f['transaction_type'], f['frequency'], f['anchor_day'],
                       f['second_day'], f['next_due'], schedule_id, current_user.id))
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('edit schedule failed')
             return render_template('partials/_schedule_edit_row.html',
                                    schedule=schedule, categories=categories,

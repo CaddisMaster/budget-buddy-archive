@@ -1,5 +1,6 @@
 from datetime import date
 
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response, current_app
@@ -141,7 +142,7 @@ def accounts():
                     (name, account_type, spendable, credit_limit, current_user.id),
                 )
                 new_id = cursor.fetchone()[0]
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('create account failed')
             if is_htmx():
                 return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
@@ -198,7 +199,7 @@ def edit_account(account_id):
                     "WHERE account_id=%s AND user_id=%s",
                     (name, account_type, spendable, credit_limit, account_id, current_user.id),
                 )
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('edit account failed')
             account = account._replace(account_name=name, type=account_type,
                                        spendable=spendable, credit_limit=raw_limit)
@@ -287,10 +288,12 @@ def delete_account(account_id):
                 "DELETE FROM account WHERE account_id = %s AND user_id = %s",
                 (account_id, current_user.id),
             )
-    except Exception as e:
+    except psycopg2.errors.ForeignKeyViolation:
         current_app.logger.exception('delete account failed')
-        msg = ('Cannot delete — this account is used by existing transactions'
-               if 'foreign key' in str(e).lower() else GENERIC_ERROR)
         resp = make_response(render_template('partials/_account_row.html', account=account))
-        return hx_toast(resp, msg, 'error')
+        return hx_toast(resp, 'Cannot delete — this account is used by existing transactions', 'error')
+    except psycopg2.Error:
+        current_app.logger.exception('delete account failed')
+        resp = make_response(render_template('partials/_account_row.html', account=account))
+        return hx_toast(resp, GENERIC_ERROR, 'error')
     return hx_toast(make_response('', 200), 'Account deleted')

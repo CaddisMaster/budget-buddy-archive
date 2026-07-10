@@ -1,6 +1,7 @@
 import os
 import subprocess
 from datetime import date
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, make_response,
     abort, current_app
@@ -66,7 +67,7 @@ def create_user():
                         (cat_name, cat_desc, new_user_id)
                     )
             flash(f'Account created for {username}')
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('create user failed')
             flash(GENERIC_ERROR)
         return redirect(url_for('admin.create_user'))
@@ -137,7 +138,7 @@ def delete_user(user_id):
     try:
         with db_cursor(commit=True) as cursor:
             cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('delete user failed')
         resp = make_response(render_template('partials/_user_row.html', u=user))
         return hx_toast(resp, GENERIC_ERROR, 'error')

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response, current_app
@@ -107,7 +108,7 @@ def transfers():
                      fields['to_account'], gid, current_user.id),
                 )
             flash('Transfer added successfully')
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('create transfer failed')
             flash(GENERIC_ERROR)
         return redirect(url_for('transfers.transfers'))
@@ -169,7 +170,7 @@ def edit_transfer(group_id):
                     (fields['amount'], desc, fields['transfer_date'],
                      fields['to_account'], group_id, current_user.id),
                 )
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('edit transfer failed')
             transfer = {
                 'group_id': group_id,
@@ -223,7 +224,7 @@ def delete_transfer(group_id):
                 "DELETE FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
                 (group_id, current_user.id),
             )
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('delete transfer failed')
         return hx_toast(make_response(render_history_tbody()), GENERIC_ERROR, 'error')
     return hx_toast(make_response(render_history_tbody()), 'Transfer deleted')
@@ -375,7 +376,7 @@ def create_transfer_schedule():
                   f['frequency'], f['anchor_day'], f['second_day'], f['next_due'],
                   current_user.id))
             new_id = cursor.fetchone()[0]
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('create transfer schedule failed')
         if is_htmx():
             return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
@@ -416,7 +417,7 @@ def edit_transfer_schedule(schedule_id):
                 """, (f['amount'], f['description'], f['from_account'],
                       f['to_account'], f['frequency'], f['anchor_day'],
                       f['second_day'], f['next_due'], schedule_id, current_user.id))
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('edit transfer schedule failed')
             return render_template('partials/_transfer_schedule_edit_row.html',
                                    schedule=schedule, accounts=accounts, error=GENERIC_ERROR)

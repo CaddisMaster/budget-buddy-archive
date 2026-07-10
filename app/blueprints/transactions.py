@@ -6,6 +6,7 @@ from collections import namedtuple
 from datetime import datetime, date, timedelta
 from urllib.parse import urlencode
 from dateutil.relativedelta import relativedelta
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, make_response,
     abort, current_app
@@ -160,7 +161,7 @@ def new_transaction():
                     (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, current_user.id)
                 )
             flash('Transaction added successfully')
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('new_transaction failed')
             flash(GENERIC_ERROR)
         return redirect(url_for('transactions.new_transaction'))
@@ -373,7 +374,7 @@ def edit_transaction(transaction_id):
                     "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s, is_adjustment=%s WHERE id=%s AND user_id=%s",
                     (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, transaction_id, current_user.id)
                 )
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('edit_transaction failed')
             txn = TxnEditRow(transaction_id, amount_str, description, transaction_date,
                              category_id, account_id, transaction_type, is_adjustment)
@@ -402,7 +403,7 @@ def delete_transaction(transaction_id):
     try:
         with db_cursor(commit=True) as cursor:
             cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('delete transaction failed')
         return hx_toast(make_response(render_history_tbody()), GENERIC_ERROR, 'error')
     return hx_toast(make_response(render_history_tbody()), 'Transaction deleted')
@@ -450,7 +451,7 @@ def bulk_category():
                     " WHERE id = %s AND user_id = %s AND is_transfer = false",
                     (category_id, row_id, current_user.id))
                 applied += cursor.rowcount
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('bulk category failed')
         return _bulk_error(GENERIC_ERROR)
     return _bulk_response(applied, 'updated')
@@ -477,7 +478,7 @@ def bulk_delete():
                     " WHERE id = %s AND user_id = %s AND is_transfer = false",
                     (row_id, current_user.id))
                 applied += cursor.rowcount
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('bulk delete failed')
         return _bulk_error(GENERIC_ERROR)
     return _bulk_response(applied, 'deleted')

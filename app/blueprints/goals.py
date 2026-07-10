@@ -3,6 +3,7 @@ import math
 from collections import namedtuple
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response, current_app
@@ -319,7 +320,7 @@ def goals():
                      fields['account_id'], baseline, fields['goal_type'], current_user.id),
                 )
                 new_id = cursor.fetchone()[0]
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('create goal failed')
             if is_htmx():
                 return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
@@ -390,7 +391,7 @@ def coach_generate():
                 DO UPDATE SET content = EXCLUDED.content, model = EXCLUDED.model,
                               created_at = now()
             """, (current_user.id, year, month, json.dumps(result), MODEL))
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('save goal coach failed')
         return hx_toast(_card(None), "Couldn't save coaching right now", 'error')
 
@@ -440,7 +441,7 @@ def edit_goal(goal_id):
                         (fields['name'], fields['target_amount'], fields['target_date'],
                          fields['account_id'], goal_id, current_user.id),
                     )
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('edit goal failed')
             goal = GoalEditRow(goal_id, fields['name'], request.form.get('target_amount', ''),
                                fields['target_date'],
@@ -485,7 +486,7 @@ def delete_goal(goal_id):
         with db_cursor(commit=True) as cursor:
             cursor.execute("DELETE FROM goals WHERE id = %s AND user_id = %s",
                            (goal_id, current_user.id))
-    except Exception:
+    except psycopg2.Error:
         current_app.logger.exception('delete goal failed')
         with db_cursor() as cursor:
             g = build_single_goal_view(cursor, current_user.id, goal_id)

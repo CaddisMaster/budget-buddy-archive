@@ -1,5 +1,6 @@
 from collections import namedtuple
 
+import psycopg2
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response, current_app
@@ -50,7 +51,7 @@ def categories():
                     (name, description, current_user.id),
                 )
                 cat = cursor.fetchone()
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('create category failed')
             if is_htmx():
                 return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
@@ -96,7 +97,7 @@ def edit_category(category_id):
                     "UPDATE categories SET name=%s, description=%s WHERE id=%s AND user_id=%s",
                     (name, description, category_id, current_user.id),
                 )
-        except Exception:
+        except psycopg2.Error:
             current_app.logger.exception('edit category failed')
             return render_template('partials/_category_edit_row.html',
                                    cat=CategoryRow(category_id, name, description), error=GENERIC_ERROR)
@@ -126,10 +127,12 @@ def delete_category(category_id):
                 "DELETE FROM categories WHERE id = %s AND user_id = %s",
                 (category_id, current_user.id),
             )
-    except Exception as e:
+    except psycopg2.errors.ForeignKeyViolation:
         current_app.logger.exception('delete category failed')
-        msg = ('Cannot delete — this category is used by existing transactions or budgets'
-               if 'foreign key' in str(e).lower() else GENERIC_ERROR)
         resp = make_response(render_template('partials/_category_row.html', cat=cat))
-        return hx_toast(resp, msg, 'error')
+        return hx_toast(resp, 'Cannot delete — this category is used by existing transactions or budgets', 'error')
+    except psycopg2.Error:
+        current_app.logger.exception('delete category failed')
+        resp = make_response(render_template('partials/_category_row.html', cat=cat))
+        return hx_toast(resp, GENERIC_ERROR, 'error')
     return hx_toast(make_response('', 200), 'Category deleted')

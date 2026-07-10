@@ -1,5 +1,6 @@
 import json
 import math
+from collections import namedtuple
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 from flask import (
@@ -31,6 +32,13 @@ GOAL_TYPES = ('save', 'payoff')
 
 # How many recent months feed the "projected completion" pace estimate.
 INFLOW_WINDOW_MONTHS = 3
+
+# Hand-built rows for the edit error/re-render paths — field names mirror the
+# edit GET's "SELECT id, name, target_amount, target_date, account_id,
+# goal_type" so real rows and fakes render identically.
+GoalEditRow = namedtuple('GoalEditRow', (
+    'id name target_amount target_date account_id goal_type'
+))
 
 
 def compute_goal_projection(target_amount, saved, target_date,
@@ -269,7 +277,7 @@ def load_goal_coach(cursor, user_id, year, month):
 @login_required
 def goals():
     with db_cursor() as cursor:
-        account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
+        account_ids = {a.account_id for a in _fetch_accounts(cursor, current_user.id)}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
@@ -403,14 +411,15 @@ def edit_goal(goal_id):
         # The STORED type decides what an edit may touch — never the posted one.
         stored_type = row[0]
         all_accounts = _fetch_accounts(cursor, current_user.id)
-    account_ids = {a[0] for a in all_accounts}
+    account_ids = {a.account_id for a in all_accounts}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
         if errors:
-            goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
-                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None,
-                    stored_type)
+            goal = GoalEditRow(goal_id, fields['name'], request.form.get('target_amount', ''),
+                               fields['target_date'],
+                               int(fields['account_id']) if fields['account_id'] else None,
+                               stored_type)
             return render_template('partials/_goal_edit_card.html',
                                    goal=goal, accounts=all_accounts, errors=errors)
         try:
@@ -433,9 +442,10 @@ def edit_goal(goal_id):
                     )
         except Exception:
             current_app.logger.exception('edit goal failed')
-            goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
-                    fields['target_date'], int(fields['account_id']) if fields['account_id'] else None,
-                    stored_type)
+            goal = GoalEditRow(goal_id, fields['name'], request.form.get('target_amount', ''),
+                               fields['target_date'],
+                               int(fields['account_id']) if fields['account_id'] else None,
+                               stored_type)
             return render_template('partials/_goal_edit_card.html',
                                    goal=goal, accounts=all_accounts, errors=[GENERIC_ERROR])
         with db_cursor() as cursor:

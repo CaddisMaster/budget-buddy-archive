@@ -27,7 +27,7 @@
     <select name="account_id" required>
         <option value="">-- select account --</option>
         {% for account in accounts %}
-        <option value="{{ account[0] }}">{{ account[1] }}</option>
+        <option value="{{ account.account_id }}">{{ account.account_name }}</option>
         {% endfor %}
     </select>
     <div id="goal-baseline-field">

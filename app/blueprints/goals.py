@@ -9,7 +9,7 @@ from flask import (
 from flask_login import login_required, current_user
 from app import limiter
 from app.ai import generate_goal_coach, ParseError, MODEL
-from app.db import get_db_connection
+from app.db import db_cursor
 from app.helpers import (
     is_htmx, hx_toast, ai_enabled, parse_positive_amount, GENERIC_ERROR
 )
@@ -268,14 +268,12 @@ def load_goal_coach(cursor, user_id, year, month):
 @bp.route('/goals', methods=['GET', 'POST'])
 @login_required
 def goals():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
+    with db_cursor() as cursor:
+        account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
         if errors:
-            cursor.close(); conn.close()
             if is_htmx():
                 return hx_toast(make_response('', 200), '; '.join(errors), 'error')
             for e in errors:
@@ -285,9 +283,9 @@ def goals():
             # Snapshot the debt: baseline = the (negative) balance now, target =
             # what it takes to get back to $0. The projection math then reads
             # saved as "paid off" and remaining as "still owed".
-            balance = _account_balance(cursor, current_user.id, fields['account_id'])
+            with db_cursor() as cursor:
+                balance = _account_balance(cursor, current_user.id, fields['account_id'])
             if balance >= 0:
-                cursor.close(); conn.close()
                 msg = "That account's balance is already $0 or positive — nothing to pay off"
                 if is_htmx():
                     return hx_toast(make_response('', 200), msg, 'error')
@@ -299,52 +297,49 @@ def goals():
         # a SAVE goal: "existing" → 0; "fresh" → current balance (so back-to-back
         # goals on one account start from zero progress).
         elif request.form.get('baseline_mode') == 'fresh':
-            baseline = _account_balance(cursor, current_user.id, fields['account_id'])
+            with db_cursor() as cursor:
+                baseline = _account_balance(cursor, current_user.id, fields['account_id'])
         else:
             baseline = 0
         try:
-            cursor.execute(
-                "INSERT INTO goals (name, target_amount, target_date, account_id, "
-                "baseline_amount, goal_type, user_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
-                (fields['name'], fields['target_amount'], fields['target_date'],
-                 fields['account_id'], baseline, fields['goal_type'], current_user.id),
-            )
-            new_id = cursor.fetchone()[0]
-            conn.commit()
+            with db_cursor(commit=True) as cursor:
+                cursor.execute(
+                    "INSERT INTO goals (name, target_amount, target_date, account_id, "
+                    "baseline_amount, goal_type, user_id) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                    (fields['name'], fields['target_amount'], fields['target_date'],
+                     fields['account_id'], baseline, fields['goal_type'], current_user.id),
+                )
+                new_id = cursor.fetchone()[0]
         except Exception:
-            conn.rollback()
-            cursor.close(); conn.close()
             current_app.logger.exception('create goal failed')
             if is_htmx():
                 return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
             flash(GENERIC_ERROR)
             return redirect(url_for('goals.goals'))
         if is_htmx():
-            g = build_single_goal_view(cursor, current_user.id, new_id)
-            cursor.close(); conn.close()
+            with db_cursor() as cursor:
+                g = build_single_goal_view(cursor, current_user.id, new_id)
             resp = make_response(render_template('partials/_goal_card.html', g=g))
             return hx_toast(resp, 'Goal added')
-        cursor.close(); conn.close()
         flash('Goal added successfully')
         return redirect(url_for('goals.goals'))
 
-    goals_view = build_goals_view(cursor, current_user.id)
-    all_accounts = _fetch_accounts(cursor, current_user.id)
-    # Goal Coach card (gated on the AI key + at least one in-progress goal). Read
-    # the cache only — never a model call on page load, mirroring the dashboard
-    # Insight/Forecast cards.
-    today = date.today()
-    ai_on = ai_enabled()
-    coach = coach_facts = None
-    show_coach = False
-    if ai_on:
-        coach_facts = compute_goal_coach_facts(cursor, current_user.id)
-        show_coach = coach_facts['incomplete_count'] > 0
-        if show_coach:
-            coach = load_goal_coach(cursor, current_user.id, today.year, today.month)
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        goals_view = build_goals_view(cursor, current_user.id)
+        all_accounts = _fetch_accounts(cursor, current_user.id)
+        # Goal Coach card (gated on the AI key + at least one in-progress goal). Read
+        # the cache only — never a model call on page load, mirroring the dashboard
+        # Insight/Forecast cards.
+        today = date.today()
+        ai_on = ai_enabled()
+        coach = coach_facts = None
+        show_coach = False
+        if ai_on:
+            coach_facts = compute_goal_coach_facts(cursor, current_user.id)
+            show_coach = coach_facts['incomplete_count'] > 0
+            if show_coach:
+                coach = load_goal_coach(cursor, current_user.id, today.year, today.month)
     return render_template('goals.html', goals=goals_view, accounts=all_accounts,
                            ai_enabled=ai_on, show_coach=show_coach,
                            coach=coach, coach_facts=coach_facts)
@@ -362,9 +357,8 @@ def coach_generate():
     un-generated card + an error toast, so the page never breaks."""
     today = datetime.today()
     year, month = today.year, today.month
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    facts = compute_goal_coach_facts(cursor, current_user.id)
+    with db_cursor() as cursor:
+        facts = compute_goal_coach_facts(cursor, current_user.id)
 
     def _card(coach):
         return make_response(render_template(
@@ -372,29 +366,25 @@ def coach_generate():
             coach=coach, facts=facts, ai_enabled=True))
 
     if facts['incomplete_count'] == 0:
-        cursor.close(); conn.close()
         return hx_toast(_card(None), 'No goals in progress to coach yet', 'error')
 
     try:
         result = generate_goal_coach(facts)
     except ParseError:
-        cursor.close(); conn.close()
         return hx_toast(_card(None), "Couldn't generate coaching right now", 'error')
 
     try:
-        cursor.execute("""
-            INSERT INTO goal_coach (user_id, year, month, content, model)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (user_id, year, month)
-            DO UPDATE SET content = EXCLUDED.content, model = EXCLUDED.model,
-                          created_at = now()
-        """, (current_user.id, year, month, json.dumps(result), MODEL))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("""
+                INSERT INTO goal_coach (user_id, year, month, content, model)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, year, month)
+                DO UPDATE SET content = EXCLUDED.content, model = EXCLUDED.model,
+                              created_at = now()
+            """, (current_user.id, year, month, json.dumps(result), MODEL))
     except Exception:
-        conn.rollback()
-        cursor.close(); conn.close()
+        current_app.logger.exception('save goal coach failed')
         return hx_toast(_card(None), "Couldn't save coaching right now", 'error')
-    cursor.close(); conn.close()
 
     coach = dict(result)
     coach['created_at'] = today
@@ -404,17 +394,15 @@ def coach_generate():
 @bp.route('/goals/<int:goal_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_goal(goal_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT goal_type FROM goals WHERE id = %s AND user_id = %s",
-                   (goal_id, current_user.id))
-    row = cursor.fetchone()
-    if row is None:
-        cursor.close(); conn.close()
-        abort(404)
-    # The STORED type decides what an edit may touch — never the posted one.
-    stored_type = row[0]
-    all_accounts = _fetch_accounts(cursor, current_user.id)
+    with db_cursor() as cursor:
+        cursor.execute("SELECT goal_type FROM goals WHERE id = %s AND user_id = %s",
+                       (goal_id, current_user.id))
+        row = cursor.fetchone()
+        if row is None:
+            abort(404)
+        # The STORED type decides what an edit may touch — never the posted one.
+        stored_type = row[0]
+        all_accounts = _fetch_accounts(cursor, current_user.id)
     account_ids = {a[0] for a in all_accounts}
 
     if request.method == 'POST':
@@ -423,60 +411,53 @@ def edit_goal(goal_id):
             goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
                     fields['target_date'], int(fields['account_id']) if fields['account_id'] else None,
                     stored_type)
-            cursor.close(); conn.close()
             return render_template('partials/_goal_edit_card.html',
                                    goal=goal, accounts=all_accounts, errors=errors)
         try:
-            if stored_type == 'payoff':
-                # Account + target stay locked to the creation snapshot — moving
-                # the goal to another account would need a re-baseline (delete +
-                # recreate covers that). Only the name and deadline move.
-                cursor.execute(
-                    "UPDATE goals SET name=%s, target_date=%s "
-                    "WHERE id=%s AND user_id=%s",
-                    (fields['name'], fields['target_date'], goal_id, current_user.id),
-                )
-            else:
-                cursor.execute(
-                    "UPDATE goals SET name=%s, target_amount=%s, target_date=%s, "
-                    "account_id=%s WHERE id=%s AND user_id=%s",
-                    (fields['name'], fields['target_amount'], fields['target_date'],
-                     fields['account_id'], goal_id, current_user.id),
-                )
-            conn.commit()
+            with db_cursor(commit=True) as cursor:
+                if stored_type == 'payoff':
+                    # Account + target stay locked to the creation snapshot — moving
+                    # the goal to another account would need a re-baseline (delete +
+                    # recreate covers that). Only the name and deadline move.
+                    cursor.execute(
+                        "UPDATE goals SET name=%s, target_date=%s "
+                        "WHERE id=%s AND user_id=%s",
+                        (fields['name'], fields['target_date'], goal_id, current_user.id),
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE goals SET name=%s, target_amount=%s, target_date=%s, "
+                        "account_id=%s WHERE id=%s AND user_id=%s",
+                        (fields['name'], fields['target_amount'], fields['target_date'],
+                         fields['account_id'], goal_id, current_user.id),
+                    )
         except Exception:
-            conn.rollback()
             current_app.logger.exception('edit goal failed')
             goal = (goal_id, fields['name'], request.form.get('target_amount', ''),
                     fields['target_date'], int(fields['account_id']) if fields['account_id'] else None,
                     stored_type)
-            cursor.close(); conn.close()
             return render_template('partials/_goal_edit_card.html',
                                    goal=goal, accounts=all_accounts, errors=[GENERIC_ERROR])
-        g = build_single_goal_view(cursor, current_user.id, goal_id)
-        cursor.close(); conn.close()
+        with db_cursor() as cursor:
+            g = build_single_goal_view(cursor, current_user.id, goal_id)
         resp = make_response(render_template('partials/_goal_card.html', g=g))
         return hx_toast(resp, 'Goal updated')
 
-    cursor.execute(
-        "SELECT id, name, target_amount, target_date, account_id, goal_type "
-        "FROM goals WHERE id = %s AND user_id = %s",
-        (goal_id, current_user.id),
-    )
-    goal = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute(
+            "SELECT id, name, target_amount, target_date, account_id, goal_type "
+            "FROM goals WHERE id = %s AND user_id = %s",
+            (goal_id, current_user.id),
+        )
+        goal = cursor.fetchone()
     return render_template('partials/_goal_edit_card.html', goal=goal, accounts=all_accounts)
 
 
 @bp.route('/goals/<int:goal_id>/card')
 @login_required
 def goal_card(goal_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    g = build_single_goal_view(cursor, current_user.id, goal_id)
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        g = build_single_goal_view(cursor, current_user.id, goal_id)
     if g is None:
         abort(404)
     return render_template('partials/_goal_card.html', g=g)
@@ -485,24 +466,19 @@ def goal_card(goal_id):
 @bp.route('/goals/<int:goal_id>', methods=['DELETE'])
 @login_required
 def delete_goal(goal_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM goals WHERE id = %s AND user_id = %s",
-                   (goal_id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
-    try:
-        cursor.execute("DELETE FROM goals WHERE id = %s AND user_id = %s",
+    with db_cursor() as cursor:
+        cursor.execute("SELECT 1 FROM goals WHERE id = %s AND user_id = %s",
                        (goal_id, current_user.id))
-        conn.commit()
+        if cursor.fetchone() is None:
+            abort(404)
+    try:
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("DELETE FROM goals WHERE id = %s AND user_id = %s",
+                           (goal_id, current_user.id))
     except Exception:
-        conn.rollback()
         current_app.logger.exception('delete goal failed')
-        g = build_single_goal_view(cursor, current_user.id, goal_id)
-        cursor.close(); conn.close()
+        with db_cursor() as cursor:
+            g = build_single_goal_view(cursor, current_user.id, goal_id)
         resp = make_response(render_template('partials/_goal_card.html', g=g))
         return hx_toast(resp, GENERIC_ERROR, 'error')
-    cursor.close()
-    conn.close()
     return hx_toast(make_response('', 200), 'Goal deleted')

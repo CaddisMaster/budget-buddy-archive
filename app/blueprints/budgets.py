@@ -5,7 +5,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from app import limiter
-from app.db import get_db_connection, db_cursor
+from app.db import db_cursor
 from app.helpers import (
     is_htmx, hx_toast, ai_enabled, parse_positive_amount, recent_months,
     parse_int_param, GENERIC_ERROR
@@ -80,30 +80,27 @@ def compute_budget_suggestions(user_id):
     users / categories get nothing, so the cockpit shows them as "—". The
     average is rounded to whole dollars — cents read oddly on a budget target.
     """
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT
-            monthly.category_id,
-            ROUND(AVG(monthly_total)::numeric, 0) AS suggested_budget
-        FROM (
+    with db_cursor() as cursor:
+        cursor.execute("""
             SELECT
-                category_id,
-                DATE_TRUNC('month', transaction_date) AS month,
-                SUM(amount) AS monthly_total
-            FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense'
-            AND is_adjustment = false AND is_transfer = false
-            AND transaction_date >= NOW() - INTERVAL '6 months'
-            AND category_id IS NOT NULL
-            GROUP BY category_id, DATE_TRUNC('month', transaction_date)
-        ) monthly
-        GROUP BY monthly.category_id
-        HAVING COUNT(DISTINCT month) >= 1
-    """, (user_id,))
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
+                monthly.category_id,
+                ROUND(AVG(monthly_total)::numeric, 0) AS suggested_budget
+            FROM (
+                SELECT
+                    category_id,
+                    DATE_TRUNC('month', transaction_date) AS month,
+                    SUM(amount) AS monthly_total
+                FROM transactions
+                WHERE user_id = %s AND transaction_type = 'expense'
+                AND is_adjustment = false AND is_transfer = false
+                AND transaction_date >= NOW() - INTERVAL '6 months'
+                AND category_id IS NOT NULL
+                GROUP BY category_id, DATE_TRUNC('month', transaction_date)
+            ) monthly
+            GROUP BY monthly.category_id
+            HAVING COUNT(DISTINCT month) >= 1
+        """, (user_id,))
+        rows = cursor.fetchall()
     return {row[0]: float(row[1]) for row in rows}
 
 
@@ -122,30 +119,27 @@ def compute_budget_vs_actual(user_id, year=None, month=None):
     else:
         today = datetime.today()
         filter_year, filter_month = today.year, today.month
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT
-            c.name AS category,
-            b.amount AS budget,
-            COALESCE(SUM(t.amount), 0) AS actual,
-            b.amount - COALESCE(SUM(t.amount), 0) AS remaining
-        FROM budgets b
-        JOIN categories c ON b.category_id = c.id
-        LEFT JOIN transactions t ON t.category_id = b.category_id
-            AND t.transaction_type = 'expense'
-            AND t.is_adjustment = false
-            AND t.is_transfer = false
-            AND EXTRACT(YEAR FROM t.transaction_date) = %s
-            AND EXTRACT(MONTH FROM t.transaction_date) = %s
-            AND t.user_id = b.user_id
-        WHERE b.user_id = %s
-        GROUP BY c.name, b.amount
-        ORDER BY c.name
-    """, (filter_year, filter_month, user_id))
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute("""
+            SELECT
+                c.name AS category,
+                b.amount AS budget,
+                COALESCE(SUM(t.amount), 0) AS actual,
+                b.amount - COALESCE(SUM(t.amount), 0) AS remaining
+            FROM budgets b
+            JOIN categories c ON b.category_id = c.id
+            LEFT JOIN transactions t ON t.category_id = b.category_id
+                AND t.transaction_type = 'expense'
+                AND t.is_adjustment = false
+                AND t.is_transfer = false
+                AND EXTRACT(YEAR FROM t.transaction_date) = %s
+                AND EXTRACT(MONTH FROM t.transaction_date) = %s
+                AND t.user_id = b.user_id
+            WHERE b.user_id = %s
+            GROUP BY c.name, b.amount
+            ORDER BY c.name
+        """, (filter_year, filter_month, user_id))
+        rows = cursor.fetchall()
     return rows
 
 
@@ -156,25 +150,22 @@ def load_budget_rows(user_id):
     (category_id, name, effective, is_set, suggested, actual_this_month) that
     partials/_budget_row.html indexes into."""
     today = datetime.today()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (user_id,))
-    all_categories = cursor.fetchall()
-    cursor.execute("SELECT category_id, amount FROM budgets WHERE user_id = %s", (user_id,))
-    saved = {row[0]: float(row[1]) for row in cursor.fetchall()}
-    cursor.execute("""
-        SELECT category_id, COALESCE(SUM(amount), 0)
-        FROM transactions
-        WHERE user_id = %s AND transaction_type = 'expense'
-        AND is_adjustment = false AND is_transfer = false
-        AND EXTRACT(YEAR FROM transaction_date) = %s
-        AND EXTRACT(MONTH FROM transaction_date) = %s
-        AND category_id IS NOT NULL
-        GROUP BY category_id
-    """, (user_id, today.year, today.month))
-    actuals = {row[0]: float(row[1]) for row in cursor.fetchall()}
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (user_id,))
+        all_categories = cursor.fetchall()
+        cursor.execute("SELECT category_id, amount FROM budgets WHERE user_id = %s", (user_id,))
+        saved = {row[0]: float(row[1]) for row in cursor.fetchall()}
+        cursor.execute("""
+            SELECT category_id, COALESCE(SUM(amount), 0)
+            FROM transactions
+            WHERE user_id = %s AND transaction_type = 'expense'
+            AND is_adjustment = false AND is_transfer = false
+            AND EXTRACT(YEAR FROM transaction_date) = %s
+            AND EXTRACT(MONTH FROM transaction_date) = %s
+            AND category_id IS NOT NULL
+            GROUP BY category_id
+        """, (user_id, today.year, today.month))
+        actuals = {row[0]: float(row[1]) for row in cursor.fetchall()}
 
     suggestions = compute_budget_suggestions(user_id)
     rows = []
@@ -394,37 +385,31 @@ def set_budget():
         for e in errors:
             flash(e)
         return redirect(url_for('budgets.budgets'))
-    conn = get_db_connection()
-    cursor = conn.cursor()
     # Guard ownership of the category before writing a budget against it.
-    cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
+    with db_cursor() as cursor:
+        cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
+        if cursor.fetchone() is None:
+            abort(404)
     try:
-        # Budgets are whole-dollar targets — cents read oddly, so round on save.
-        record_budget_change(cursor, current_user.id, category_id, round(amount))
-        cursor.execute("""
-            INSERT INTO budgets (category_id, amount, user_id)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (user_id, category_id) DO UPDATE SET amount = EXCLUDED.amount
-        """, (category_id, round(amount), current_user.id))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            # Budgets are whole-dollar targets — cents read oddly, so round on save.
+            record_budget_change(cursor, current_user.id, category_id, round(amount))
+            cursor.execute("""
+                INSERT INTO budgets (category_id, amount, user_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, category_id) DO UPDATE SET amount = EXCLUDED.amount
+            """, (category_id, round(amount), current_user.id))
     except Exception:
-        conn.rollback()
-        cursor.close(); conn.close()
         current_app.logger.exception('set_budget failed')
         if is_htmx():
             return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
         flash(GENERIC_ERROR)
         return redirect(url_for('budgets.budgets'))
     if is_htmx():
-        row = build_budget_row(cursor, current_user.id, category_id)
-        cursor.close(); conn.close()
+        with db_cursor() as cursor:
+            row = build_budget_row(cursor, current_user.id, category_id)
         resp = make_response(render_template('partials/_budget_row.html', row=row))
         return hx_toast(resp, 'Budget saved')
-    cursor.close()
-    conn.close()
     flash('Budget saved')
     return redirect(url_for('budgets.budgets'))
 
@@ -436,31 +421,25 @@ def clear_budget():
     category_id = parse_int_param(request.form.get('category_id'))
     if not category_id:
         abort(404)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
+    with db_cursor() as cursor:
+        cursor.execute("SELECT 1 FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
+        if cursor.fetchone() is None:
+            abort(404)
     try:
-        record_budget_change(cursor, current_user.id, category_id, None)
-        cursor.execute("DELETE FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            record_budget_change(cursor, current_user.id, category_id, None)
+            cursor.execute("DELETE FROM budgets WHERE category_id = %s AND user_id = %s", (category_id, current_user.id))
     except Exception:
-        conn.rollback()
-        cursor.close(); conn.close()
         current_app.logger.exception('clear_budget failed')
         if is_htmx():
             return hx_toast(make_response('', 200), GENERIC_ERROR, 'error')
         flash(GENERIC_ERROR)
         return redirect(url_for('budgets.budgets'))
     if is_htmx():
-        row = build_budget_row(cursor, current_user.id, category_id)
-        cursor.close(); conn.close()
+        with db_cursor() as cursor:
+            row = build_budget_row(cursor, current_user.id, category_id)
         resp = make_response(render_template('partials/_budget_row.html', row=row))
         return hx_toast(resp, 'Budget cleared — reverted to suggested')
-    cursor.close()
-    conn.close()
     flash('Budget cleared — reverted to suggested')
     return redirect(url_for('budgets.budgets'))
 

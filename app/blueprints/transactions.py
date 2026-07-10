@@ -2,6 +2,7 @@ import calendar
 import csv
 import io
 import math
+from collections import namedtuple
 from datetime import datetime, date, timedelta
 from urllib.parse import urlencode
 from dateutil.relativedelta import relativedelta
@@ -33,6 +34,22 @@ FREQUENCY_LABELS = {
     'quarterly': 'Quarterly',
     'annually': 'Annually',
 }
+
+
+# The History row shape: the 12-column history SELECT plus the per-page
+# running balance appended in _load_history. Field names mirror the SELECT.
+HistoryRow = namedtuple('HistoryRow', (
+    'id amount description category_name account_name transaction_date '
+    'transaction_type is_recurring frequency is_adjustment is_transfer '
+    'transfer_group_id running_balance'
+))
+
+# Hand-built rows for the edit error/re-render paths — field names mirror the
+# edit GET's SELECT so real rows and fakes render identically.
+TxnEditRow = namedtuple('TxnEditRow', (
+    'id amount description transaction_date category_id account_id '
+    'transaction_type is_adjustment'
+))
 
 
 def validate_category_account(cursor, user_id, category_id, account_id):
@@ -246,11 +263,11 @@ def _load_history(user_id, selected_month, search, page, per_page=PER_PAGE):
     running_balance = 0
     transactions_with_balance = []
     for t in reversed(rows):
-        if t[6] == 'income':
-            running_balance += t[1]
+        if t.transaction_type == 'income':
+            running_balance += t.amount
         else:
-            running_balance -= t[1]
-        transactions_with_balance.append(t + (running_balance,))
+            running_balance -= t.amount
+        transactions_with_balance.append(HistoryRow(*t, running_balance))
     transactions_with_balance.reverse()
     return transactions_with_balance, total, total_pages
 
@@ -343,8 +360,8 @@ def edit_transaction(transaction_id):
             with db_cursor() as cursor:
                 errors += validate_category_account(cursor, current_user.id, category_id, account_id)
         if errors:
-            txn = (transaction_id, amount_str, description, transaction_date,
-                   category_id, account_id, transaction_type, is_adjustment)
+            txn = TxnEditRow(transaction_id, amount_str, description, transaction_date,
+                             category_id, account_id, transaction_type, is_adjustment)
             return render_template('partials/_transaction_edit_row.html',
                                    txn=txn, categories=all_categories,
                                    accounts=all_accounts,
@@ -358,8 +375,8 @@ def edit_transaction(transaction_id):
                 )
         except Exception:
             current_app.logger.exception('edit_transaction failed')
-            txn = (transaction_id, amount_str, description, transaction_date,
-                   category_id, account_id, transaction_type, is_adjustment)
+            txn = TxnEditRow(transaction_id, amount_str, description, transaction_date,
+                             category_id, account_id, transaction_type, is_adjustment)
             return render_template('partials/_transaction_edit_row.html',
                                    txn=txn, categories=all_categories,
                                    accounts=all_accounts,
@@ -545,7 +562,7 @@ def _load_cleanup_candidates(user_id, cap=CLEANUP_BATCH_CAP):
     with db_cursor() as cursor:
         cursor.execute("""
             SELECT t.id, t.description, t.amount, t.transaction_type,
-                   t.category_id, c.name
+                   t.category_id, c.name AS category_name
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
             WHERE t.user_id = %s AND t.category_id IS NULL
@@ -560,7 +577,7 @@ def _load_cleanup_candidates(user_id, cap=CLEANUP_BATCH_CAP):
         if remaining > 0:
             cursor.execute("""
                 SELECT t.id, t.description, t.amount, t.transaction_type,
-                       t.category_id, c.name
+                       t.category_id, c.name AS category_name
                 FROM transactions t
                 JOIN categories c ON t.category_id = c.id
                 WHERE t.user_id = %s AND t.category_id IS NOT NULL
@@ -575,12 +592,12 @@ def _load_cleanup_candidates(user_id, cap=CLEANUP_BATCH_CAP):
     rows = []
     for r in candidates:
         rows.append({
-            'id': r[0],
-            'description': r[1] or '',
-            'amount': float(r[2]),
-            'type': r[3],
-            'current_category_id': r[4],
-            'current_category': r[5],
+            'id': r.id,
+            'description': r.description or '',
+            'amount': float(r.amount),
+            'type': r.transaction_type,
+            'current_category_id': r.category_id,
+            'current_category': r.category_name,
         })
     return rows
 

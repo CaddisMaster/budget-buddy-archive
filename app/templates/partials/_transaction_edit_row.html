@@ -1,21 +1,21 @@
-<tr id="txn-{{ txn[0] }}" class="editing">
-  {# txn = (id, amount, description, date, category_id, account_id, type, is_adjustment) #}
+<tr id="txn-{{ txn.id }}" class="editing">
+  {# txn = a TxnEditRow (real fetched row or the edit route's error-path fake). #}
   {# Empty bulk-select cell — no input, or Save's hx-include="closest tr" would post it. #}
   <td class="bulk-col"></td>
-  <td><input type="date" name="transaction_date" value="{{ txn[3] }}" required></td>
+  <td><input type="date" name="transaction_date" value="{{ txn.transaction_date }}" required></td>
   <td>
     <select name="transaction_type" required>
-      <option value="expense" {% if txn[6] == 'expense' %}selected{% endif %}>Expense</option>
-      <option value="income" {% if txn[6] == 'income' %}selected{% endif %}>Income</option>
+      <option value="expense" {% if txn.transaction_type == 'expense' %}selected{% endif %}>Expense</option>
+      <option value="income" {% if txn.transaction_type == 'income' %}selected{% endif %}>Income</option>
     </select>
   </td>
-  <td><input type="number" step="0.01" name="amount" value="{{ txn[1] }}" required style="width:6rem"></td>
-  <td><input type="text" name="description" value="{{ txn[2] or '' }}"></td>
+  <td><input type="number" step="0.01" name="amount" value="{{ txn.amount }}" required style="width:6rem"></td>
+  <td><input type="text" name="description" value="{{ txn.description or '' }}"></td>
   <td>
     <select name="category_id">
       <option value="">— none —</option>
       {% for c in categories %}
-      <option value="{{ c[0] }}" {% if c[0] == txn[4] %}selected{% endif %}>{{ c[1] }}</option>
+      <option value="{{ c.id }}" {% if c.id == txn.category_id %}selected{% endif %}>{{ c.name }}</option>
       {% endfor %}
     </select>
   </td>
@@ -23,19 +23,19 @@
     <select name="account_id">
       <option value="">— none —</option>
       {% for a in accounts %}
-      <option value="{{ a[0] }}" {% if a[0] == txn[5] %}selected{% endif %}>{{ a[1] }}</option>
+      <option value="{{ a.account_id }}" {% if a.account_id == txn.account_id %}selected{% endif %}>{{ a.account_name }}</option>
       {% endfor %}
     </select>
   </td>
   <td>
     <label style="margin:0;display:flex;align-items:center;gap:4px;font-size:12px">
-      <input type="checkbox" name="is_adjustment" value="true" style="width:auto" {% if txn[7] %}checked{% endif %}>
+      <input type="checkbox" name="is_adjustment" value="true" style="width:auto" {% if txn.is_adjustment %}checked{% endif %}>
       Adj.
     </label>
   </td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
-      hx-post="/transactions/{{ txn[0] }}/edit?{{ filter_qs }}" hx-include="closest tr"
+      hx-post="/transactions/{{ txn.id }}/edit?{{ filter_qs }}" hx-include="closest tr"
       hx-target="#txn-rows" hx-swap="outerHTML">Save</button>
     <button type="button" class="btn btn-sm"
       hx-get="/transactions/rows?{{ filter_qs }}"

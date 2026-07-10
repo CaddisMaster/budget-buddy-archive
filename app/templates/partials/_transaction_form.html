@@ -27,7 +27,7 @@
     <select name="account_id">
         <option value="">-- select account --</option>
         {% for account in accounts %}
-        <option value="{{ account[0] }}" {% if prefill.get('account_id') == account[0] %}selected{% endif %}>{{ account[1] }}</option>
+        <option value="{{ account.account_id }}" {% if prefill.get('account_id') == account.account_id %}selected{% endif %}>{{ account.account_name }}</option>
         {% endfor %}
     </select>
     <label>Date</label>

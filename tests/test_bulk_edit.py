@@ -210,10 +210,12 @@ def test_history_renders_selection_ui(users, client_a):
     a = users["a"]
     resp = client_a.get("/transactions")
     body = resp.get_data(as_text=True)
+    assert 'id="bulk-toggle"' in body                # the Bulk edit mode switch
     assert 'id="bulk-bar"' in body
     assert 'id="select-all"' in body
     assert 'id="bulk-category"' in body
-    # The seeded normal transaction gets a row checkbox.
+    # The seeded normal transaction gets a row checkbox (CSS-hidden until the
+    # toggle turns bulk-mode on, but always in the markup).
     assert f'name="row_id" value="{a["transaction_id"]}"' in body
 
 

@@ -25,6 +25,7 @@
     </div>
   </form>
   <a href="/transactions/export{% if selected_month %}?month={{ selected_month }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn">Export CSV</a>
+  <button type="button" id="bulk-toggle" class="btn">Bulk edit</button>
 </div>
 <p style="font-size:13px;color:var(--text-muted);margin-bottom:0.75rem">{{ total }} transaction{{ 's' if total != 1 else '' }}</p>
 {% if cleanup_enabled %}{% include 'partials/_cleanup_banner.html' %}{% endif %}
@@ -73,27 +74,45 @@
 <script>
 (function () {
   const bar = document.getElementById('bulk-bar');
-  if (!bar) return;
+  const toggle = document.getElementById('bulk-toggle');
+  if (!bar) { if (toggle) toggle.hidden = true; return; }
   const count = document.getElementById('bulk-count');
   const selectAll = document.getElementById('select-all');
   function boxes() { return document.querySelectorAll('.row-select'); }
+  function clearAll() {
+    boxes().forEach(function (cb) { cb.checked = false; });
+    refresh();
+  }
   function refresh() {
     const n = document.querySelectorAll('.row-select:checked').length;
     count.textContent = n + ' selected';
     bar.hidden = n === 0;
     if (selectAll) selectAll.checked = n > 0 && n === boxes().length;
   }
+  // The checkbox column stays hidden until Bulk edit is switched on
+  // (body.bulk-mode drives the CSS); switching off clears the selection.
+  toggle.addEventListener('click', function () {
+    const on = document.body.classList.toggle('bulk-mode');
+    toggle.textContent = on ? 'Done' : 'Bulk edit';
+    toggle.classList.toggle('btn-primary', on);
+    if (!on) clearAll();
+  });
   document.addEventListener('change', function (e) {
     if (e.target.classList && e.target.classList.contains('row-select')) refresh();
+  });
+  // The whole cell is a click target — the bare checkbox is fiddly on a trackpad.
+  document.addEventListener('click', function (e) {
+    const td = e.target.closest('td.bulk-col');
+    if (td && e.target.tagName !== 'INPUT') {
+      const cb = td.querySelector('.row-select');
+      if (cb) { cb.checked = !cb.checked; refresh(); }
+    }
   });
   if (selectAll) selectAll.addEventListener('change', function () {
     boxes().forEach(function (cb) { cb.checked = selectAll.checked; });
     refresh();
   });
-  document.getElementById('bulk-clear').addEventListener('click', function () {
-    boxes().forEach(function (cb) { cb.checked = false; });
-    refresh();
-  });
+  document.getElementById('bulk-clear').addEventListener('click', clearAll);
   // Any swap can add/remove checkboxes (tbody refresh, inline edit rows) —
   // recount every time rather than guessing at the target.
   document.body.addEventListener('htmx:afterSwap', refresh);

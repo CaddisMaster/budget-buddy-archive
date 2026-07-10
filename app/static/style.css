@@ -253,8 +253,14 @@ tr.editing input, tr.editing select { padding: 0.3rem 0.5rem; font-size: 13px; }
 }
 .bulk-bar[hidden] { display: none; } /* display:flex would beat the hidden attr */
 .bulk-bar select { padding: 0.3rem 0.5rem; font-size: 13px; }
-.bulk-col { width: 1.5rem; }
-.bulk-col input[type="checkbox"] { width: auto; margin: 0; }
+/* The checkbox column only exists while the Bulk edit toggle is on. */
+.bulk-col { display: none; }
+body.bulk-mode .bulk-col { display: table-cell; width: 2.25rem; }
+body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
+.bulk-col input[type="checkbox"] {
+  width: 18px; height: 18px; margin: 0; vertical-align: middle;
+  accent-color: var(--accent); cursor: pointer;
+}
 .suggested-tag { font-size: 12px; color: var(--text-muted); }
 .htmx-request.btn, .htmx-request .btn { opacity: 0.6; pointer-events: none; }
 

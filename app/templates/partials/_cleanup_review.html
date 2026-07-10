@@ -23,7 +23,7 @@
         <td>
           <select name="category_{{ it.id }}">
             {% for c in categories %}
-            <option value="{{ c[0] }}" {% if c[0] == it.suggested_id %}selected{% endif %}>{{ c[1] }}</option>
+            <option value="{{ c.id }}" {% if c.id == it.suggested_id %}selected{% endif %}>{{ c.name }}</option>
             {% endfor %}
           </select>
         </td>

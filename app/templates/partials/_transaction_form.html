@@ -20,7 +20,7 @@
     <select name="category_id">
         <option value="">-- select category --</option>
         {% for cat in categories %}
-        <option value="{{ cat[0] }}" {% if prefill.get('category_id') == cat[0] %}selected{% endif %}>{{ cat[1] }}</option>
+        <option value="{{ cat.id }}" {% if prefill.get('category_id') == cat.id %}selected{% endif %}>{{ cat.name }}</option>
         {% endfor %}
     </select>
     <label>Account</label>

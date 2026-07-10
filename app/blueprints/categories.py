@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, abort,
     make_response, current_app
@@ -7,6 +9,10 @@ from app.db import db_cursor
 from app.helpers import is_htmx, hx_toast, GENERIC_ERROR
 
 bp = Blueprint('categories', __name__)
+
+# Hand-built rows for the edit error/re-render paths — field names mirror the
+# "SELECT id, name, description" shape so templates read both identically.
+CategoryRow = namedtuple('CategoryRow', 'id name description')
 
 
 def _own_category_or_404(cursor, category_id):
@@ -83,7 +89,7 @@ def edit_category(category_id):
             error = 'Name must be 50 characters or fewer'
         if error:
             return render_template('partials/_category_edit_row.html',
-                                   cat=(category_id, name, description), error=error)
+                                   cat=CategoryRow(category_id, name, description), error=error)
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
@@ -93,9 +99,9 @@ def edit_category(category_id):
         except Exception:
             current_app.logger.exception('edit category failed')
             return render_template('partials/_category_edit_row.html',
-                                   cat=(category_id, name, description), error=GENERIC_ERROR)
+                                   cat=CategoryRow(category_id, name, description), error=GENERIC_ERROR)
         resp = make_response(render_template('partials/_category_row.html',
-                                             cat=(category_id, name, description)))
+                                             cat=CategoryRow(category_id, name, description)))
         return hx_toast(resp, 'Category updated')
 
     return render_template('partials/_category_edit_row.html', cat=cat)

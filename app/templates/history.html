@@ -38,7 +38,7 @@
   {% if categories %}
   <select id="bulk-category" name="category_id" aria-label="Category for selected">
     {% for c in categories %}
-    <option value="{{ c[0] }}">{{ c[1] }}</option>
+    <option value="{{ c.id }}">{{ c.name }}</option>
     {% endfor %}
   </select>
   <button type="button" class="btn btn-primary"

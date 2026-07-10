@@ -11,7 +11,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from app import limiter
-from app.db import get_db_connection, db_cursor
+from app.db import db_cursor
 from app.helpers import (
     recent_months, is_htmx, hx_toast, ai_enabled, parse_positive_amount,
     parse_month_param, parse_page_param, parse_int_param, GENERIC_ERROR
@@ -136,35 +136,23 @@ def new_transaction():
             for error in errors:
                 flash(error)
             return redirect(url_for('transactions.new_transaction'))
-        conn = None
-        cursor = None
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, current_user.id)
-            )
-            conn.commit()
+            with db_cursor(commit=True) as cursor:
+                cursor.execute(
+                    "INSERT INTO transactions (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, user_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, current_user.id)
+                )
             flash('Transaction added successfully')
         except Exception:
             current_app.logger.exception('new_transaction failed')
             flash(GENERIC_ERROR)
-            if conn:
-                conn.rollback()
-        finally:
-            if cursor: cursor.close()
-            if conn: conn.close()
         return redirect(url_for('transactions.new_transaction'))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
-    all_categories = cursor.fetchall()
-    cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
-    all_accounts = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
+        all_categories = cursor.fetchall()
+        cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
+        all_accounts = cursor.fetchall()
     return render_template('new_transaction.html', categories=all_categories,
                            accounts=all_accounts, ai_enabled=ai_enabled())
 
@@ -228,8 +216,6 @@ def _load_history(user_id, selected_month, search, page, per_page=PER_PAGE):
     """Return (rows_with_running_balance, total, total_pages) for one page of a
     user's transaction history under the given filters."""
     offset = (page - 1) * per_page
-    conn = get_db_connection()
-    cursor = conn.cursor()
     filters = ["t.user_id = %s"]
     params = [user_id]
     if selected_month:
@@ -240,24 +226,23 @@ def _load_history(user_id, selected_month, search, page, per_page=PER_PAGE):
         filters.append("t.description ILIKE %s")
         params.append(f'%{search}%')
     where_clause = "WHERE " + " AND ".join(filters)
-    cursor.execute(f"SELECT COUNT(*) FROM transactions t {where_clause}", params)
-    total = cursor.fetchone()[0]
-    total_pages = math.ceil(total / per_page) if total > 0 else 1
-    cursor.execute(f"""
-        SELECT t.id, t.amount, t.description, c.name, a.account_name,
-            t.transaction_date, t.transaction_type,
-            t.is_recurring, t.frequency, t.is_adjustment,
-            t.is_transfer, t.transfer_group_id
-        FROM transactions t
-        LEFT JOIN categories c ON t.category_id = c.id
-        LEFT JOIN account a ON t.account_id = a.account_id
-        {where_clause}
-        ORDER BY t.transaction_date DESC, t.id DESC
-        LIMIT %s OFFSET %s
-    """, params + [per_page, offset])
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute(f"SELECT COUNT(*) FROM transactions t {where_clause}", params)
+        total = cursor.fetchone()[0]
+        total_pages = math.ceil(total / per_page) if total > 0 else 1
+        cursor.execute(f"""
+            SELECT t.id, t.amount, t.description, c.name, a.account_name,
+                t.transaction_date, t.transaction_type,
+                t.is_recurring, t.frequency, t.is_adjustment,
+                t.is_transfer, t.transfer_group_id
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            LEFT JOIN account a ON t.account_id = a.account_id
+            {where_clause}
+            ORDER BY t.transaction_date DESC, t.id DESC
+            LIMIT %s OFFSET %s
+        """, params + [per_page, offset])
+        rows = cursor.fetchall()
     running_balance = 0
     transactions_with_balance = []
     for t in reversed(rows):
@@ -324,16 +309,14 @@ def transaction_rows():
 @bp.route('/transactions/<int:transaction_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_transaction(transaction_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
-    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
-    all_categories = cursor.fetchall()
-    cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
-    all_accounts = cursor.fetchall()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
+        if cursor.fetchone() is None:
+            abort(404)
+        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
+        all_categories = cursor.fetchall()
+        cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
+        all_accounts = cursor.fetchall()
 
     if request.method == 'POST':
         amount_str = request.form['amount'].strip()
@@ -357,9 +340,9 @@ def edit_transaction(transaction_id):
         if transaction_type not in ('income', 'expense'):
             errors.append('Transaction type must be income or expense')
         if not errors:
-            errors += validate_category_account(cursor, current_user.id, category_id, account_id)
+            with db_cursor() as cursor:
+                errors += validate_category_account(cursor, current_user.id, category_id, account_id)
         if errors:
-            cursor.close(); conn.close()
             txn = (transaction_id, amount_str, description, transaction_date,
                    category_id, account_id, transaction_type, is_adjustment)
             return render_template('partials/_transaction_edit_row.html',
@@ -368,14 +351,12 @@ def edit_transaction(transaction_id):
                                    filter_qs=request.query_string.decode(),
                                    errors=errors)
         try:
-            cursor.execute(
-                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s, is_adjustment=%s WHERE id=%s AND user_id=%s",
-                (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, transaction_id, current_user.id)
-            )
-            conn.commit()
+            with db_cursor(commit=True) as cursor:
+                cursor.execute(
+                    "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, category_id=%s, account_id=%s, transaction_type=%s, is_adjustment=%s WHERE id=%s AND user_id=%s",
+                    (amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment, transaction_id, current_user.id)
+                )
         except Exception:
-            conn.rollback()
-            cursor.close(); conn.close()
             current_app.logger.exception('edit_transaction failed')
             txn = (transaction_id, amount_str, description, transaction_date,
                    category_id, account_id, transaction_type, is_adjustment)
@@ -384,13 +365,11 @@ def edit_transaction(transaction_id):
                                    accounts=all_accounts,
                                    filter_qs=request.query_string.decode(),
                                    errors=[GENERIC_ERROR])
-        cursor.close(); conn.close()
         return hx_toast(make_response(render_history_tbody()), 'Transaction updated')
 
-    cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
-    txn = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, amount, description, transaction_date, category_id, account_id, transaction_type, is_adjustment FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
+        txn = cursor.fetchone()
     return render_template('partials/_transaction_edit_row.html',
                            txn=txn, categories=all_categories, accounts=all_accounts,
                            filter_qs=request.query_string.decode())
@@ -399,22 +378,16 @@ def edit_transaction(transaction_id):
 @bp.route('/transactions/<int:transaction_id>', methods=['DELETE'])
 @login_required
 def delete_transaction(transaction_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
+    with db_cursor() as cursor:
+        cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
+        if cursor.fetchone() is None:
+            abort(404)
     try:
-        cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("DELETE FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
     except Exception:
-        conn.rollback()
-        cursor.close(); conn.close()
         current_app.logger.exception('delete transaction failed')
         return hx_toast(make_response(render_history_tbody()), GENERIC_ERROR, 'error')
-    cursor.close()
-    conn.close()
     return hx_toast(make_response(render_history_tbody()), 'Transaction deleted')
 
 
@@ -498,8 +471,6 @@ def bulk_delete():
 def export_transactions():
     selected_month = parse_month_param(request.args.get('month'))
     search = request.args.get('search', '').strip()
-    conn = get_db_connection()
-    cursor = conn.cursor()
     filters = ["t.user_id = %s"]
     params = [current_user.id]
     if selected_month:
@@ -510,18 +481,17 @@ def export_transactions():
         filters.append("t.description ILIKE %s")
         params.append(f'%{search}%')
     where_clause = "WHERE " + " AND ".join(filters)
-    cursor.execute(f"""
-        SELECT t.transaction_date, t.transaction_type, t.amount,
-               t.description, c.name, a.account_name
-        FROM transactions t
-        LEFT JOIN categories c ON t.category_id = c.id
-        LEFT JOIN account a ON t.account_id = a.account_id
-        {where_clause}
-        ORDER BY t.transaction_date DESC, t.id DESC
-    """, params)
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute(f"""
+            SELECT t.transaction_date, t.transaction_type, t.amount,
+                   t.description, c.name, a.account_name
+            FROM transactions t
+            LEFT JOIN categories c ON t.category_id = c.id
+            LEFT JOIN account a ON t.account_id = a.account_id
+            {where_clause}
+            ORDER BY t.transaction_date DESC, t.id DESC
+        """, params)
+        rows = cursor.fetchall()
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Date', 'Type', 'Amount', 'Description', 'Category', 'Account'])

@@ -4,7 +4,7 @@ from flask import (
     make_response, current_app
 )
 from flask_login import login_required, current_user
-from app.db import get_db_connection, db_cursor
+from app.db import db_cursor
 from app.helpers import (
     hx_toast, is_htmx, parse_positive_amount, parse_int_param, GENERIC_ERROR
 )
@@ -76,52 +76,46 @@ def transfers():
     # Post any due recurring transfers before rendering, so the History and
     # balances are current the moment the user lands on the tab.
     run_due_transfers(current_user.id)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
+    with db_cursor() as cursor:
+        account_ids = {a[0] for a in _fetch_accounts(cursor, current_user.id)}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
         if errors:
-            cursor.close(); conn.close()
             for e in errors:
                 flash(e)
             return redirect(url_for('transfers.transfers'))
         desc = fields['description'] or 'Transfer'
         try:
-            cursor.execute("SELECT nextval('transfer_group_seq')")
-            gid = cursor.fetchone()[0]
-            # Expense leg out of the From account.
-            cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, "
-                "account_id, transaction_type, is_transfer, transfer_group_id, user_id) "
-                "VALUES (%s, %s, %s, %s, 'expense', true, %s, %s)",
-                (fields['amount'], desc, fields['transfer_date'],
-                 fields['from_account'], gid, current_user.id),
-            )
-            # Income leg into the To account.
-            cursor.execute(
-                "INSERT INTO transactions (amount, description, transaction_date, "
-                "account_id, transaction_type, is_transfer, transfer_group_id, user_id) "
-                "VALUES (%s, %s, %s, %s, 'income', true, %s, %s)",
-                (fields['amount'], desc, fields['transfer_date'],
-                 fields['to_account'], gid, current_user.id),
-            )
-            conn.commit()
+            with db_cursor(commit=True) as cursor:
+                cursor.execute("SELECT nextval('transfer_group_seq')")
+                gid = cursor.fetchone()[0]
+                # Expense leg out of the From account.
+                cursor.execute(
+                    "INSERT INTO transactions (amount, description, transaction_date, "
+                    "account_id, transaction_type, is_transfer, transfer_group_id, user_id) "
+                    "VALUES (%s, %s, %s, %s, 'expense', true, %s, %s)",
+                    (fields['amount'], desc, fields['transfer_date'],
+                     fields['from_account'], gid, current_user.id),
+                )
+                # Income leg into the To account.
+                cursor.execute(
+                    "INSERT INTO transactions (amount, description, transaction_date, "
+                    "account_id, transaction_type, is_transfer, transfer_group_id, user_id) "
+                    "VALUES (%s, %s, %s, %s, 'income', true, %s, %s)",
+                    (fields['amount'], desc, fields['transfer_date'],
+                     fields['to_account'], gid, current_user.id),
+                )
             flash('Transfer added successfully')
         except Exception:
             current_app.logger.exception('create transfer failed')
             flash(GENERIC_ERROR)
-            conn.rollback()
-        cursor.close()
-        conn.close()
         return redirect(url_for('transfers.transfers'))
 
-    all_accounts = _fetch_accounts(cursor, current_user.id)
-    cursor.execute(TRANSFER_SCHEDULE_ROW_SQL.format(extra=""), (current_user.id,))
-    schedules = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        all_accounts = _fetch_accounts(cursor, current_user.id)
+        cursor.execute(TRANSFER_SCHEDULE_ROW_SQL.format(extra=""), (current_user.id,))
+        schedules = cursor.fetchall()
     return render_template('transfer.html', accounts=all_accounts,
                            schedules=schedules, frequency_labels=FREQUENCY_LABELS)
 
@@ -131,23 +125,19 @@ def transfers():
 def edit_transfer(group_id):
     # Imported here to avoid a circular import at module load.
     from app.blueprints.transactions import render_history_tbody
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT 1 FROM transactions WHERE transfer_group_id = %s AND user_id = %s LIMIT 1",
-        (group_id, current_user.id),
-    )
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
-
-    all_accounts = _fetch_accounts(cursor, current_user.id)
+    with db_cursor() as cursor:
+        cursor.execute(
+            "SELECT 1 FROM transactions WHERE transfer_group_id = %s AND user_id = %s LIMIT 1",
+            (group_id, current_user.id),
+        )
+        if cursor.fetchone() is None:
+            abort(404)
+        all_accounts = _fetch_accounts(cursor, current_user.id)
     account_ids = {a[0] for a in all_accounts}
 
     if request.method == 'POST':
         fields, errors = _validate(request.form, account_ids)
         if errors:
-            cursor.close(); conn.close()
             transfer = {
                 'group_id': group_id,
                 'amount': request.form.get('amount', ''),
@@ -162,26 +152,24 @@ def edit_transfer(group_id):
                                    errors=errors)
         desc = fields['description'] or 'Transfer'
         try:
-            # Expense leg → From account; income leg → To account. Updating by
-            # transaction_type keeps each leg pointed at the right account.
-            cursor.execute(
-                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, "
-                "account_id=%s WHERE transfer_group_id=%s AND transaction_type='expense' "
-                "AND user_id=%s",
-                (fields['amount'], desc, fields['transfer_date'],
-                 fields['from_account'], group_id, current_user.id),
-            )
-            cursor.execute(
-                "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, "
-                "account_id=%s WHERE transfer_group_id=%s AND transaction_type='income' "
-                "AND user_id=%s",
-                (fields['amount'], desc, fields['transfer_date'],
-                 fields['to_account'], group_id, current_user.id),
-            )
-            conn.commit()
+            with db_cursor(commit=True) as cursor:
+                # Expense leg → From account; income leg → To account. Updating by
+                # transaction_type keeps each leg pointed at the right account.
+                cursor.execute(
+                    "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, "
+                    "account_id=%s WHERE transfer_group_id=%s AND transaction_type='expense' "
+                    "AND user_id=%s",
+                    (fields['amount'], desc, fields['transfer_date'],
+                     fields['from_account'], group_id, current_user.id),
+                )
+                cursor.execute(
+                    "UPDATE transactions SET amount=%s, description=%s, transaction_date=%s, "
+                    "account_id=%s WHERE transfer_group_id=%s AND transaction_type='income' "
+                    "AND user_id=%s",
+                    (fields['amount'], desc, fields['transfer_date'],
+                     fields['to_account'], group_id, current_user.id),
+                )
         except Exception:
-            conn.rollback()
-            cursor.close(); conn.close()
             current_app.logger.exception('edit transfer failed')
             transfer = {
                 'group_id': group_id,
@@ -195,18 +183,16 @@ def edit_transfer(group_id):
                                    transfer=transfer, accounts=all_accounts,
                                    filter_qs=request.query_string.decode(),
                                    errors=[GENERIC_ERROR])
-        cursor.close(); conn.close()
         return hx_toast(make_response(render_history_tbody()), 'Transfer updated')
 
     # Pull the current pair to prefill the form.
-    cursor.execute(
-        "SELECT amount, description, transaction_date, account_id, transaction_type "
-        "FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
-        (group_id, current_user.id),
-    )
-    legs = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute(
+            "SELECT amount, description, transaction_date, account_id, transaction_type "
+            "FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
+            (group_id, current_user.id),
+        )
+        legs = cursor.fetchall()
     transfer = {
         'group_id': group_id,
         'amount': legs[0][0],
@@ -224,28 +210,22 @@ def edit_transfer(group_id):
 @login_required
 def delete_transfer(group_id):
     from app.blueprints.transactions import render_history_tbody
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT 1 FROM transactions WHERE transfer_group_id = %s AND user_id = %s LIMIT 1",
-        (group_id, current_user.id),
-    )
-    if cursor.fetchone() is None:
-        cursor.close(); conn.close()
-        abort(404)
-    try:
+    with db_cursor() as cursor:
         cursor.execute(
-            "DELETE FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
+            "SELECT 1 FROM transactions WHERE transfer_group_id = %s AND user_id = %s LIMIT 1",
             (group_id, current_user.id),
         )
-        conn.commit()
+        if cursor.fetchone() is None:
+            abort(404)
+    try:
+        with db_cursor(commit=True) as cursor:
+            cursor.execute(
+                "DELETE FROM transactions WHERE transfer_group_id = %s AND user_id = %s",
+                (group_id, current_user.id),
+            )
     except Exception:
-        conn.rollback()
-        cursor.close(); conn.close()
         current_app.logger.exception('delete transfer failed')
         return hx_toast(make_response(render_history_tbody()), GENERIC_ERROR, 'error')
-    cursor.close()
-    conn.close()
     return hx_toast(make_response(render_history_tbody()), 'Transfer deleted')
 
 

@@ -20,10 +20,10 @@
   <td style="color:var(--text-muted)">{{ account.last_checked_in.strftime('%b %-d, %Y') if account.last_checked_in else 'Never' }}</td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
-      hx-post="/accounts/{{ account.account_id }}/edit" hx-include="closest tr"
+      hx-post="{{ url_for('accounts.edit_account', account_id=account.account_id) }}" hx-include="closest tr"
       hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Save</button>
     <button type="button" class="btn btn-sm"
-      hx-get="/accounts/{{ account.account_id }}/row"
+      hx-get="{{ url_for('accounts.account_row', account_id=account.account_id) }}"
       hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Cancel</button>
     {% if error %}<span class="inline-error">{{ error }}</span>{% endif %}
   </td>

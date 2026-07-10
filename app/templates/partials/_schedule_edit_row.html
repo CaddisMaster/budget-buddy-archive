@@ -46,10 +46,10 @@
   </td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
-      hx-post="/scheduled/{{ schedule.id }}/edit" hx-include="closest tr"
+      hx-post="{{ url_for('schedules.edit_schedule', schedule_id=schedule.id) }}" hx-include="closest tr"
       hx-target="#schedule-{{ schedule.id }}" hx-swap="outerHTML">Save</button>
     <button type="button" class="btn btn-sm"
-      hx-get="/scheduled/{{ schedule.id }}/row"
+      hx-get="{{ url_for('schedules.schedule_row', schedule_id=schedule.id) }}"
       hx-target="#schedule-{{ schedule.id }}" hx-swap="outerHTML">Cancel</button>
     {% if error %}<span class="inline-error">{{ error }}</span>{% endif %}
   </td>

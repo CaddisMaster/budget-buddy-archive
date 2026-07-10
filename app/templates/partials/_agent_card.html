@@ -26,13 +26,13 @@
   {% endif %}
   <div class="insight-foot">
     <span class="insight-ts">Week of {{ agent_run.period_start.strftime('%b %d') }}{% if agent_run.created_at %} · ran {{ agent_run.created_at.strftime('%b %d, %Y %H:%M') }}{% endif %}{% if agent_run.tools_used %} · checked via {{ agent_run.tools_used | length }} data quer{{ 'y' if agent_run.tools_used | length == 1 else 'ies' }}{% endif %}</span>
-    <button class="btn-sm" hx-post="/agent/run"
+    <button class="btn-sm" hx-post="{{ url_for('agent.run') }}"
             hx-target="#agent-card" hx-swap="outerHTML"
             hx-indicator="#agent-spinner">Re-run</button>
   </div>
   {% else %}
   <p class="insight-intro">Once a week, an AI investigator combs your recent activity for duplicate charges, bills that changed, rising card utilization, and budgets on pace to blow — and reports at most three findings, each backed by your own numbers. Most weeks the right answer is "nothing notable."</p>
-  <button class="btn-sm" hx-post="/agent/run"
+  <button class="btn-sm" hx-post="{{ url_for('agent.run') }}"
           hx-target="#agent-card" hx-swap="outerHTML"
           hx-indicator="#agent-spinner">Run now</button>
   {% endif %}

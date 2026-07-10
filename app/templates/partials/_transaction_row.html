@@ -14,18 +14,18 @@
   <td class="row-actions">
     {% if t.is_transfer %}
     <button type="button" class="btn btn-sm"
-      hx-get="/transfers/{{ t.transfer_group_id }}/edit?{{ filter_qs }}"
+      hx-get="{{ url_for('transfers.edit_transfer', group_id=t.transfer_group_id) }}?{{ filter_qs }}"
       hx-target="#txn-{{ t.id }}" hx-swap="outerHTML">Edit</button>
     <button type="button" class="btn btn-sm btn-danger"
-      hx-delete="/transfers/{{ t.transfer_group_id }}?{{ filter_qs }}"
+      hx-delete="{{ url_for('transfers.delete_transfer', group_id=t.transfer_group_id) }}?{{ filter_qs }}"
       hx-target="#txn-rows" hx-swap="outerHTML"
       hx-confirm="Delete this transfer (both legs)?">Delete</button>
     {% else %}
     <button type="button" class="btn btn-sm"
-      hx-get="/transactions/{{ t.id }}/edit?{{ filter_qs }}"
+      hx-get="{{ url_for('transactions.edit_transaction', transaction_id=t.id) }}?{{ filter_qs }}"
       hx-target="#txn-{{ t.id }}" hx-swap="outerHTML">Edit</button>
     <button type="button" class="btn btn-sm btn-danger"
-      hx-delete="/transactions/{{ t.id }}?{{ filter_qs }}"
+      hx-delete="{{ url_for('transactions.delete_transaction', transaction_id=t.id) }}?{{ filter_qs }}"
       hx-target="#txn-rows" hx-swap="outerHTML"
       hx-confirm="Delete this transaction?">Delete</button>
     {% endif %}

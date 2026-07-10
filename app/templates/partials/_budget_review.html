@@ -3,7 +3,7 @@
    override the proposal or uncheck the row entirely. Confirm posts the checked
    rows to /budgets/review/apply, which swaps the whole budgets tbody
    (#budget-rows) and OOB-clears this panel. #}
-<form hx-post="/budgets/review/apply" hx-target="#budget-rows" hx-swap="outerHTML">
+<form hx-post="{{ url_for('budgets.budget_review_apply') }}" hx-target="#budget-rows" hx-swap="outerHTML">
   <div class="card" style="margin-bottom:1rem">
     <h3 style="margin-top:0">Proposed budgets</h3>
     <p class="insight-summary">{{ summary }}</p>

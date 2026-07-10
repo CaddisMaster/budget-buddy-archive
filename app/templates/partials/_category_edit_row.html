@@ -3,10 +3,10 @@
   <td><input type="text" name="description" value="{{ cat.description or '' }}"></td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
-      hx-post="/categories/{{ cat.id }}/edit" hx-include="closest tr"
+      hx-post="{{ url_for('categories.edit_category', category_id=cat.id) }}" hx-include="closest tr"
       hx-target="#category-{{ cat.id }}" hx-swap="outerHTML">Save</button>
     <button type="button" class="btn btn-sm"
-      hx-get="/categories/{{ cat.id }}/row"
+      hx-get="{{ url_for('categories.category_row', category_id=cat.id) }}"
       hx-target="#category-{{ cat.id }}" hx-swap="outerHTML">Cancel</button>
     {% if error %}<span class="inline-error">{{ error }}</span>{% endif %}
   </td>

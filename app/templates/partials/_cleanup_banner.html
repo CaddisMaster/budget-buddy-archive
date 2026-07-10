@@ -8,7 +8,7 @@
     <span><strong>{{ uncategorized_count }}</strong> uncategorized transaction{{ 's' if uncategorized_count != 1 else '' }}</span>
     <span class="ai-badge">AI</span>
     <button class="btn btn-primary"
-            hx-post="/transactions/cleanup/scan"
+            hx-post="{{ url_for('transactions.cleanup_scan') }}"
             hx-target="#cleanup-panel" hx-swap="innerHTML"
             hx-indicator="#cleanup-spinner">Review →</button>
     <span id="cleanup-spinner" class="htmx-indicator" style="color:var(--text-muted)">Scanning your transactions…</span>

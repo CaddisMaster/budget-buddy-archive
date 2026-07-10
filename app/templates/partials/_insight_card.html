@@ -29,14 +29,14 @@
   {% endif %}
   <div class="insight-foot">
     <span class="insight-ts">{% if insight.created_at %}Generated {{ insight.created_at.strftime('%b %d, %Y %H:%M') }}{% endif %}</span>
-    <button class="btn-sm" hx-post="/insights/generate"
+    <button class="btn-sm" hx-post="{{ url_for('insights.generate') }}"
             hx-vals='{"year": {{ insight_year }}, "month": {{ insight_month }}}'
             hx-target="#insight-card" hx-swap="outerHTML"
             hx-indicator="#insight-spinner">Regenerate</button>
   </div>
   {% else %}
   <p class="insight-intro">Get a plain-English recap of this month, with a couple of coaching tips — written from your own numbers.</p>
-  <button class="btn-sm" hx-post="/insights/generate"
+  <button class="btn-sm" hx-post="{{ url_for('insights.generate') }}"
           hx-vals='{"year": {{ insight_year }}, "month": {{ insight_month }}}'
           hx-target="#insight-card" hx-swap="outerHTML"
           hx-indicator="#insight-spinner">Generate insight</button>

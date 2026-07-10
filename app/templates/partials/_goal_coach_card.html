@@ -20,13 +20,13 @@
   {% endif %}
   <div class="insight-foot">
     <span class="insight-ts">{% if coach.created_at %}Generated {{ coach.created_at.strftime('%b %d, %Y %H:%M') }}{% endif %}</span>
-    <button class="btn-sm" hx-post="/goals/coach/generate"
+    <button class="btn-sm" hx-post="{{ url_for('goals.coach_generate') }}"
             hx-target="#goal-coach-card" hx-swap="outerHTML"
             hx-indicator="#coach-spinner">Regenerate</button>
   </div>
   {% else %}
   <p class="insight-intro">Get a plain-English read on how your savings goals are tracking — what's on pace, what's behind, and a nudge or two to close the gap — written from your own numbers.</p>
-  <button class="btn-sm" hx-post="/goals/coach/generate"
+  <button class="btn-sm" hx-post="{{ url_for('goals.coach_generate') }}"
           hx-target="#goal-coach-card" hx-swap="outerHTML"
           hx-indicator="#coach-spinner">Generate coaching</button>
   {% endif %}

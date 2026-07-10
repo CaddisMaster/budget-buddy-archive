@@ -11,10 +11,10 @@
       <input type="date" name="transfer_date" value="{{ transfer.transfer_date }}" required>
       <input type="text" name="description" value="{{ transfer.description }}" placeholder="Description">
       <button type="button" class="btn btn-sm btn-primary"
-        hx-post="/transfers/{{ transfer.group_id }}/edit?{{ filter_qs }}" hx-include="closest tr"
+        hx-post="{{ url_for('transfers.edit_transfer', group_id=transfer.group_id) }}?{{ filter_qs }}" hx-include="closest tr"
         hx-target="#txn-rows" hx-swap="outerHTML">Save</button>
       <button type="button" class="btn btn-sm"
-        hx-get="/transactions/rows?{{ filter_qs }}"
+        hx-get="{{ url_for('transactions.transaction_rows') }}?{{ filter_qs }}"
         hx-target="#txn-rows" hx-swap="outerHTML">Cancel</button>
       {% if errors %}<span class="inline-error">{{ errors|join('; ') }}</span>{% endif %}
     </div>

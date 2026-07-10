@@ -5,10 +5,10 @@
     <td class="row-actions">
         {% if u.id != current_user.id %}
         <button type="button" class="btn btn-sm"
-            hx-post="/admin/users/toggle-admin/{{ u.id }}"
+            hx-post="{{ url_for('admin.toggle_admin', user_id=u.id) }}"
             hx-target="#user-{{ u.id }}" hx-swap="outerHTML">{{ 'Remove admin' if u.is_admin else 'Make admin' }}</button>
         <button type="button" class="btn btn-sm btn-danger"
-            hx-delete="/admin/users/{{ u.id }}"
+            hx-delete="{{ url_for('admin.delete_user', user_id=u.id) }}"
             hx-target="#user-{{ u.id }}" hx-swap="outerHTML"
             hx-confirm="Delete {{ u.username }} and all their data?">Delete</button>
         {% else %}—{% endif %}

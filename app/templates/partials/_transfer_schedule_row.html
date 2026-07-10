@@ -13,10 +13,10 @@
   <td>{{ schedule.next_due }}</td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm"
-      hx-get="/transfers/recurring/{{ schedule.id }}/edit"
+      hx-get="{{ url_for('transfers.edit_transfer_schedule', schedule_id=schedule.id) }}"
       hx-target="#transfer-schedule-{{ schedule.id }}" hx-swap="outerHTML">Edit</button>
     <button type="button" class="btn btn-sm btn-danger"
-      hx-delete="/transfers/recurring/{{ schedule.id }}"
+      hx-delete="{{ url_for('transfers.delete_transfer_schedule', schedule_id=schedule.id) }}"
       hx-target="#transfer-schedule-{{ schedule.id }}" hx-swap="outerHTML"
       hx-confirm="Delete this automatic transfer? Transfers it already posted stay in your history.">Delete</button>
   </td>

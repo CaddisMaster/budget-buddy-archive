@@ -11,10 +11,10 @@
   </td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
-      hx-post="/accounts/{{ account.account_id }}/checkin" hx-include="closest tr"
+      hx-post="{{ url_for('accounts.checkin_account', account_id=account.account_id) }}" hx-include="closest tr"
       hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Check in</button>
     <button type="button" class="btn btn-sm"
-      hx-get="/accounts/{{ account.account_id }}/row"
+      hx-get="{{ url_for('accounts.account_row', account_id=account.account_id) }}"
       hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Cancel</button>
     {% if error %}<span class="inline-error">{{ error }}</span>{% endif %}
   </td>

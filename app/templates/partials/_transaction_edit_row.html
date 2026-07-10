@@ -35,10 +35,10 @@
   </td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
-      hx-post="/transactions/{{ txn.id }}/edit?{{ filter_qs }}" hx-include="closest tr"
+      hx-post="{{ url_for('transactions.edit_transaction', transaction_id=txn.id) }}?{{ filter_qs }}" hx-include="closest tr"
       hx-target="#txn-rows" hx-swap="outerHTML">Save</button>
     <button type="button" class="btn btn-sm"
-      hx-get="/transactions/rows?{{ filter_qs }}"
+      hx-get="{{ url_for('transactions.transaction_rows') }}?{{ filter_qs }}"
       hx-target="#txn-rows" hx-swap="outerHTML">Cancel</button>
     {% if errors %}<span class="inline-error">{{ errors|join('; ') }}</span>{% endif %}
   </td>

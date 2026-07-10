@@ -28,14 +28,14 @@
   {% endif %}
   <div class="insight-foot">
     <span class="insight-ts">{% if forecast.created_at %}Generated {{ forecast.created_at.strftime('%b %d, %Y %H:%M') }} · {% endif %}{{ 'day-weighted run-rate' if forecast_facts.method == 'day_weighted' else 'flat run-rate' }}</span>
-    <button class="btn-sm" hx-post="/forecasts/generate"
+    <button class="btn-sm" hx-post="{{ url_for('forecasts.generate') }}"
             hx-vals='{"year": {{ forecast_year }}, "month": {{ forecast_month }}}'
             hx-target="#forecast-card" hx-swap="outerHTML"
             hx-indicator="#forecast-spinner">Regenerate</button>
   </div>
   {% else %}
   <p class="insight-intro">See where this month is headed — a projected end-of-month net from your spending pace and upcoming scheduled income, with a tip or two. Written from your own numbers.</p>
-  <button class="btn-sm" hx-post="/forecasts/generate"
+  <button class="btn-sm" hx-post="{{ url_for('forecasts.generate') }}"
           hx-vals='{"year": {{ forecast_year }}, "month": {{ forecast_month }}}'
           hx-target="#forecast-card" hx-swap="outerHTML"
           hx-indicator="#forecast-spinner">Generate forecast</button>

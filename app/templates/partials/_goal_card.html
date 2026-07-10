@@ -59,10 +59,10 @@
     {% endif %}
     <div class="row-actions goal-actions">
         <button type="button" class="btn btn-sm"
-          hx-get="/goals/{{ g.id }}/edit"
+          hx-get="{{ url_for('goals.edit_goal', goal_id=g.id) }}"
           hx-target="#goal-{{ g.id }}" hx-swap="outerHTML">Edit</button>
         <button type="button" class="btn btn-sm btn-danger"
-          hx-delete="/goals/{{ g.id }}"
+          hx-delete="{{ url_for('goals.delete_goal', goal_id=g.id) }}"
           hx-target="#goal-{{ g.id }}" hx-swap="outerHTML"
           hx-confirm="Delete this goal?">Delete</button>
     </div>

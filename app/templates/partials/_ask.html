@@ -17,10 +17,10 @@
     <input type="text" id="ask-question" name="question"
            placeholder="how much did I spend on groceries last month?"
            style="flex:1;margin:0"
-           hx-post="/ask" hx-target="#ask-answer" hx-swap="innerHTML"
+           hx-post="{{ url_for('ask.ask') }}" hx-target="#ask-answer" hx-swap="innerHTML"
            hx-trigger="keyup[key=='Enter']" hx-indicator="#ask-spinner">
     <button type="button" class="btn btn-primary" style="margin:0;white-space:nowrap"
-            hx-post="/ask" hx-include="#ask-question"
+            hx-post="{{ url_for('ask.ask') }}" hx-include="#ask-question"
             hx-target="#ask-answer" hx-swap="innerHTML" hx-indicator="#ask-spinner">
       Ask
     </button>

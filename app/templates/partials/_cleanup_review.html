@@ -3,7 +3,7 @@
    user can override the suggestion or uncheck the row entirely. Confirm posts
    the checked rows to /cleanup/apply, which swaps the History tbody (#txn-rows)
    and OOB-refreshes the banner. #}
-<form hx-post="/transactions/cleanup/apply" hx-target="#txn-rows" hx-swap="outerHTML">
+<form hx-post="{{ url_for('transactions.cleanup_apply') }}" hx-target="#txn-rows" hx-swap="outerHTML">
   <div class="card" style="margin-bottom:1rem">
     <h3 style="margin-top:0">Suggested categories</h3>
     <p style="font-size:13px;color:var(--text-muted)">

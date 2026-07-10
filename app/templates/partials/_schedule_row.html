@@ -12,10 +12,10 @@
   <td>{{ schedule.next_due }}</td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm"
-      hx-get="/scheduled/{{ schedule.id }}/edit"
+      hx-get="{{ url_for('schedules.edit_schedule', schedule_id=schedule.id) }}"
       hx-target="#schedule-{{ schedule.id }}" hx-swap="outerHTML">Edit</button>
     <button type="button" class="btn btn-sm btn-danger"
-      hx-delete="/scheduled/{{ schedule.id }}"
+      hx-delete="{{ url_for('schedules.delete_schedule', schedule_id=schedule.id) }}"
       hx-target="#schedule-{{ schedule.id }}" hx-swap="outerHTML"
       hx-confirm="Delete this schedule? Transactions it already posted stay in your history.">Delete</button>
   </td>

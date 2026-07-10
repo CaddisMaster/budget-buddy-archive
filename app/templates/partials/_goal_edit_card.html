@@ -28,10 +28,10 @@
     {% endif %}
     <div class="row-actions" style="margin-top:1rem">
         <button type="button" class="btn btn-sm btn-primary"
-          hx-post="/goals/{{ goal.id }}/edit" hx-include="closest .card"
+          hx-post="{{ url_for('goals.edit_goal', goal_id=goal.id) }}" hx-include="closest .card"
           hx-target="#goal-{{ goal.id }}" hx-swap="outerHTML">Save changes</button>
         <button type="button" class="btn btn-sm"
-          hx-get="/goals/{{ goal.id }}/card"
+          hx-get="{{ url_for('goals.goal_card', goal_id=goal.id) }}"
           hx-target="#goal-{{ goal.id }}" hx-swap="outerHTML">Cancel</button>
     </div>
     {% if errors %}<p class="inline-error" style="margin-top:0.5rem">{{ errors|join('; ') }}</p>{% endif %}

@@ -7,7 +7,7 @@
                    {% if row.effective is not none %}value="{{ "%.0f"|format(row.effective) }}"{% endif %}
                    placeholder="—" style="width:7rem" required>
             <button type="button" class="btn btn-sm btn-primary"
-                hx-post="/budgets/set"
+                hx-post="{{ url_for('budgets.set_budget') }}"
                 hx-vals='{"category_id": "{{ row.cid }}"}'
                 hx-include="#budget-amount-{{ row.cid }}"
                 hx-target="#budget-{{ row.cid }}" hx-swap="outerHTML">Save</button>
@@ -20,7 +20,7 @@
     <td>
         {% if row.is_set %}
         <button type="button" class="btn btn-sm"
-            hx-post="/budgets/clear" hx-vals='{"category_id": "{{ row.cid }}"}'
+            hx-post="{{ url_for('budgets.clear_budget') }}" hx-vals='{"category_id": "{{ row.cid }}"}'
             hx-target="#budget-{{ row.cid }}" hx-swap="outerHTML">Clear</button>
         {% endif %}
     </td>

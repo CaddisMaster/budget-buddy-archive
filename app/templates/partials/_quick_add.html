@@ -17,10 +17,10 @@
     <input type="text" id="nl-quick-add" name="text"
            placeholder="spent 42 on groceries at Safeway yesterday"
            style="flex:1;margin:0"
-           hx-post="/transactions/parse" hx-target="#txn-form-wrap" hx-swap="innerHTML"
+           hx-post="{{ url_for('transactions.parse_transaction') }}" hx-target="#txn-form-wrap" hx-swap="innerHTML"
            hx-trigger="keyup[key=='Enter']" hx-indicator="#nl-spinner">
     <button type="button" class="btn btn-primary" style="margin:0;white-space:nowrap"
-            hx-post="/transactions/parse" hx-include="#nl-quick-add"
+            hx-post="{{ url_for('transactions.parse_transaction') }}" hx-include="#nl-quick-add"
             hx-target="#txn-form-wrap" hx-swap="innerHTML" hx-indicator="#nl-spinner">
       Parse
     </button>

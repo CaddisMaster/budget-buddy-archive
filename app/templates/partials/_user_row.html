@@ -1,16 +1,16 @@
-<tr id="user-{{ u[0] }}">
-    <td>{{ u[1] }}{% if u[0] == current_user.id %} <span class="suggested-tag">(you)</span>{% endif %}</td>
-    <td>{{ 'Admin' if u[2] else 'User' }}</td>
-    <td>{{ u[3].strftime('%Y-%m-%d') if u[3] else '—' }}</td>
+<tr id="user-{{ u.id }}">
+    <td>{{ u.username }}{% if u.id == current_user.id %} <span class="suggested-tag">(you)</span>{% endif %}</td>
+    <td>{{ 'Admin' if u.is_admin else 'User' }}</td>
+    <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}</td>
     <td class="row-actions">
-        {% if u[0] != current_user.id %}
+        {% if u.id != current_user.id %}
         <button type="button" class="btn btn-sm"
-            hx-post="/admin/users/toggle-admin/{{ u[0] }}"
-            hx-target="#user-{{ u[0] }}" hx-swap="outerHTML">{{ 'Remove admin' if u[2] else 'Make admin' }}</button>
+            hx-post="/admin/users/toggle-admin/{{ u.id }}"
+            hx-target="#user-{{ u.id }}" hx-swap="outerHTML">{{ 'Remove admin' if u.is_admin else 'Make admin' }}</button>
         <button type="button" class="btn btn-sm btn-danger"
-            hx-delete="/admin/users/{{ u[0] }}"
-            hx-target="#user-{{ u[0] }}" hx-swap="outerHTML"
-            hx-confirm="Delete {{ u[1] }} and all their data?">Delete</button>
+            hx-delete="/admin/users/{{ u.id }}"
+            hx-target="#user-{{ u.id }}" hx-swap="outerHTML"
+            hx-confirm="Delete {{ u.username }} and all their data?">Delete</button>
         {% else %}—{% endif %}
     </td>
 </tr>

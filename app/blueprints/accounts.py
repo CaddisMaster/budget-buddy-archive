@@ -5,7 +5,7 @@ from flask import (
     make_response, current_app
 )
 from flask_login import login_required, current_user
-from app.db import get_db_connection, db_cursor
+from app.db import db_cursor
 from app.helpers import (
     is_htmx, hx_toast, parse_signed_amount, parse_positive_amount, GENERIC_ERROR
 )

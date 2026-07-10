@@ -2,7 +2,7 @@ import calendar
 from datetime import date, datetime
 from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
-from app.db import get_db_connection, db_cursor
+from app.db import db_cursor
 from app.helpers import ai_enabled, parse_month_param, recent_months
 from app.blueprints.goals import build_goals_view
 from app.blueprints.budgets import compute_budget_vs_actual
@@ -213,129 +213,127 @@ def dashboard():
     if selected_month:
         filter_year, filter_month = (int(p) for p in selected_month.split('-'))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    with db_cursor() as cursor:
+        if selected_month:
+            cursor.execute("""
+                SELECT c.name, SUM(t.amount) AS total
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
+                WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false AND t.is_adjustment = false
+                AND EXTRACT(YEAR FROM t.transaction_date) = %s
+                AND EXTRACT(MONTH FROM t.transaction_date) = %s
+                GROUP BY c.name
+                ORDER BY total DESC
+            """, (current_user.id, filter_year, filter_month))
+        else:
+            cursor.execute("""
+                SELECT c.name, SUM(t.amount) AS total
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
+                WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false AND t.is_adjustment = false
+                GROUP BY c.name
+                ORDER BY total DESC
+            """, (current_user.id,))
+        spending = cursor.fetchall()
 
-    if selected_month:
-        cursor.execute("""
-            SELECT c.name, SUM(t.amount) AS total
-            FROM transactions t
-            JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false AND t.is_adjustment = false
-            AND EXTRACT(YEAR FROM t.transaction_date) = %s
-            AND EXTRACT(MONTH FROM t.transaction_date) = %s
-            GROUP BY c.name
-            ORDER BY total DESC
-        """, (current_user.id, filter_year, filter_month))
-    else:
-        cursor.execute("""
-            SELECT c.name, SUM(t.amount) AS total
-            FROM transactions t
-            JOIN categories c ON t.category_id = c.id
-            WHERE t.user_id = %s AND t.transaction_type = 'expense' AND t.is_transfer = false AND t.is_adjustment = false
-            GROUP BY c.name
-            ORDER BY total DESC
-        """, (current_user.id,))
-    spending = cursor.fetchall()
+        if selected_month:
+            cursor.execute("""
+                SELECT
+                    TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+                    SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+                    SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+                FROM transactions
+                WHERE user_id = %s AND is_transfer = false AND is_adjustment = false
+                AND EXTRACT(YEAR FROM transaction_date) = %s
+                AND EXTRACT(MONTH FROM transaction_date) = %s
+                GROUP BY DATE_TRUNC('month', transaction_date)
+                ORDER BY DATE_TRUNC('month', transaction_date)
+            """, (current_user.id, filter_year, filter_month))
+        else:
+            cursor.execute("""
+                SELECT
+                    TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
+                    SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
+                    SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+                FROM transactions
+                WHERE user_id = %s AND is_transfer = false AND is_adjustment = false
+                GROUP BY DATE_TRUNC('month', transaction_date)
+                ORDER BY DATE_TRUNC('month', transaction_date)
+            """, (current_user.id,))
+        cash_flow = cursor.fetchall()
 
-    if selected_month:
         cursor.execute("""
             SELECT
                 TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
-                SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
-                SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
+                SUM(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END))
+                OVER (ORDER BY DATE_TRUNC('month', transaction_date)) AS running_balance
             FROM transactions
-            WHERE user_id = %s AND is_transfer = false AND is_adjustment = false
-            AND EXTRACT(YEAR FROM transaction_date) = %s
-            AND EXTRACT(MONTH FROM transaction_date) = %s
-            GROUP BY DATE_TRUNC('month', transaction_date)
-            ORDER BY DATE_TRUNC('month', transaction_date)
-        """, (current_user.id, filter_year, filter_month))
-    else:
-        cursor.execute("""
-            SELECT
-                TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
-                SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) AS income,
-                SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) AS expenses
-            FROM transactions
-            WHERE user_id = %s AND is_transfer = false AND is_adjustment = false
+            WHERE user_id = %s
             GROUP BY DATE_TRUNC('month', transaction_date)
             ORDER BY DATE_TRUNC('month', transaction_date)
         """, (current_user.id,))
-    cash_flow = cursor.fetchall()
+        net_balance_trend = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT
-            TO_CHAR(DATE_TRUNC('month', transaction_date), 'YYYY-MM') AS month,
-            SUM(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END))
-            OVER (ORDER BY DATE_TRUNC('month', transaction_date)) AS running_balance
-        FROM transactions
-        WHERE user_id = %s
-        GROUP BY DATE_TRUNC('month', transaction_date)
-        ORDER BY DATE_TRUNC('month', transaction_date)
-    """, (current_user.id,))
-    net_balance_trend = cursor.fetchall()
-
-    cursor.execute("""
-        SELECT
-            a.account_name,
-            COALESCE(SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE -t.amount END), 0) AS balance
-        FROM account a
-        LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
-        WHERE a.user_id = %s
-        GROUP BY a.account_id, a.account_name
-        ORDER BY balance DESC
-    """, (current_user.id,))
-    account_balances = cursor.fetchall()
-
-    # Spending by day of week (merged from /analytics, v10.9) — expense totals
-    # grouped Sunday-first by Postgres DOW.
-    if selected_month:
         cursor.execute("""
             SELECT
-                EXTRACT(DOW FROM transaction_date) AS dow,
-                TO_CHAR(transaction_date, 'Day') AS day_name,
-                SUM(amount) AS total
-            FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
-            AND EXTRACT(YEAR FROM transaction_date) = %s
-            AND EXTRACT(MONTH FROM transaction_date) = %s
-            GROUP BY dow, day_name
-            ORDER BY dow
-        """, (current_user.id, filter_year, filter_month))
-    else:
-        cursor.execute("""
-            SELECT
-                EXTRACT(DOW FROM transaction_date) AS dow,
-                TO_CHAR(transaction_date, 'Day') AS day_name,
-                SUM(amount) AS total
-            FROM transactions
-            WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
-            GROUP BY dow, day_name
-            ORDER BY dow
+                a.account_name,
+                COALESCE(SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE -t.amount END), 0) AS balance
+            FROM account a
+            LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
+            WHERE a.user_id = %s
+            GROUP BY a.account_id, a.account_name
+            ORDER BY balance DESC
         """, (current_user.id,))
-    spending_by_day = cursor.fetchall()
+        account_balances = cursor.fetchall()
 
-    # Year over year (merged from /analytics, v10.9) — expenses for the same
-    # month last year. Only meaningful when a single month is selected; the
-    # this-year side reuses the hero's expense total (same filters), computed
-    # after the cursor closes.
-    last_year_expenses = None
-    if selected_month:
-        cursor.execute("""
-            SELECT SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
-            FROM transactions
-            WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
-            AND EXTRACT(YEAR FROM transaction_date) = %s
-            AND EXTRACT(MONTH FROM transaction_date) = %s
-        """, (current_user.id, filter_year - 1, filter_month))
-        last_year_expenses = float(cursor.fetchone()[0] or 0)
+        # Spending by day of week (merged from /analytics, v10.9) — expense totals
+        # grouped Sunday-first by Postgres DOW.
+        if selected_month:
+            cursor.execute("""
+                SELECT
+                    EXTRACT(DOW FROM transaction_date) AS dow,
+                    TO_CHAR(transaction_date, 'Day') AS day_name,
+                    SUM(amount) AS total
+                FROM transactions
+                WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
+                AND EXTRACT(YEAR FROM transaction_date) = %s
+                AND EXTRACT(MONTH FROM transaction_date) = %s
+                GROUP BY dow, day_name
+                ORDER BY dow
+            """, (current_user.id, filter_year, filter_month))
+        else:
+            cursor.execute("""
+                SELECT
+                    EXTRACT(DOW FROM transaction_date) AS dow,
+                    TO_CHAR(transaction_date, 'Day') AS day_name,
+                    SUM(amount) AS total
+                FROM transactions
+                WHERE user_id = %s AND transaction_type = 'expense' AND is_adjustment = false AND is_transfer = false
+                GROUP BY dow, day_name
+                ORDER BY dow
+            """, (current_user.id,))
+        spending_by_day = cursor.fetchall()
 
-    # Monthly budget vs this-month (or selected-month) actual.
-    # Returns (category, budget, actual, remaining).
-    budget_data = compute_budget_vs_actual(current_user.id, filter_year, filter_month)
+        # Year over year (merged from /analytics, v10.9) — expenses for the same
+        # month last year. Only meaningful when a single month is selected; the
+        # this-year side reuses the hero's expense total (same filters), computed
+        # after the cursor closes.
+        last_year_expenses = None
+        if selected_month:
+            cursor.execute("""
+                SELECT SUM(CASE WHEN transaction_type='expense' THEN amount ELSE 0 END)
+                FROM transactions
+                WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
+                AND EXTRACT(YEAR FROM transaction_date) = %s
+                AND EXTRACT(MONTH FROM transaction_date) = %s
+            """, (current_user.id, filter_year - 1, filter_month))
+            last_year_expenses = float(cursor.fetchone()[0] or 0)
 
-    goals_view = build_goals_view(cursor, current_user.id)
+        # Monthly budget vs this-month (or selected-month) actual.
+        # Returns (category, budget, actual, remaining).
+        budget_data = compute_budget_vs_actual(current_user.id, filter_year, filter_month)
+
+        goals_view = build_goals_view(cursor, current_user.id)
 
     # AI cards (both independent of the chart month filter so their cache keys
     # stay stable; cache-only on load, no model call). Each is positioned at a
@@ -347,35 +345,32 @@ def dashboard():
     #   * Forecast (v10.2) is PROSPECTIVE → the current month. Shown only when
     #     there's something to project (month-to-date activity OR a scheduled
     #     item still to land) — mirrors the generator's own not-enough-data gate.
-    ai_on = ai_enabled()
-    insight = None
-    insight_facts = None
-    show_insight = False
-    forecast = None
-    forecast_facts = None
-    show_forecast = False
-    agent_run = None
-    insight_year, insight_month = _prev_month(today.year, today.month)
-    if ai_on:
-        insight_facts = compute_month_facts(current_user.id, insight_year, insight_month)
-        show_insight = insight_facts['income'] > 0 or insight_facts['expenses'] > 0
-        if show_insight:
-            insight = load_insight(cursor, current_user.id, insight_year, insight_month)
+        ai_on = ai_enabled()
+        insight = None
+        insight_facts = None
+        show_insight = False
+        forecast = None
+        forecast_facts = None
+        show_forecast = False
+        agent_run = None
+        insight_year, insight_month = _prev_month(today.year, today.month)
+        if ai_on:
+            insight_facts = compute_month_facts(current_user.id, insight_year, insight_month)
+            show_insight = insight_facts['income'] > 0 or insight_facts['expenses'] > 0
+            if show_insight:
+                insight = load_insight(cursor, current_user.id, insight_year, insight_month)
 
-        forecast_facts = compute_forecast(current_user.id, today.year, today.month)
-        show_forecast = not (forecast_facts['income_to_date'] == 0
-                             and forecast_facts['expenses_to_date'] == 0
-                             and not forecast_facts['remaining_items'])
-        if show_forecast:
-            forecast = load_forecast(cursor, current_user.id, today.year, today.month)
+            forecast_facts = compute_forecast(current_user.id, today.year, today.month)
+            show_forecast = not (forecast_facts['income_to_date'] == 0
+                                 and forecast_facts['expenses_to_date'] == 0
+                                 and not forecast_facts['remaining_items'])
+            if show_forecast:
+                forecast = load_forecast(cursor, current_user.id, today.year, today.month)
 
-        # Money agent (v10.10) — the latest cached weekly run. Unlike the two
-        # cards above there's no not-enough-data gate: the empty state IS the
-        # card (it carries the Run-now button), so it shows whenever AI is on.
-        agent_run = load_agent_run(cursor, current_user.id)
-
-    cursor.close()
-    conn.close()
+            # Money agent (v10.10) — the latest cached weekly run. Unlike the two
+            # cards above there's no not-enough-data gate: the empty state IS the
+            # card (it carries the Run-now button), so it shows whenever AI is on.
+            agent_run = load_agent_run(cursor, current_user.id)
 
     # Chart payloads — plain lists the template renders with |tojson, which
     # HTML-escapes into the script block (the old json.dumps + |safe let a

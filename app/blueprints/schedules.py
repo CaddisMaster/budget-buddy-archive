@@ -25,7 +25,7 @@ bp = Blueprint('schedules', __name__)
 SCHEDULE_ROW_SQL = """
     SELECT s.id, s.amount, s.description, s.category_id, s.account_id,
            s.transaction_type, s.frequency, s.anchor_day, s.second_day,
-           s.next_due, s.is_active, c.name, a.account_name
+           s.next_due, s.is_active, c.name AS category_name, a.account_name
     FROM schedules s
     LEFT JOIN categories c ON s.category_id = c.id
     LEFT JOIN account a ON s.account_id = a.account_id

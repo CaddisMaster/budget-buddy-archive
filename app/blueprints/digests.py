@@ -65,7 +65,7 @@ def _upcoming_scheduled(user_id, today, days=UPCOMING_DAYS):
         cursor.execute("""
             SELECT ts.description, ts.amount, ts.next_due,
                    ts.frequency, ts.anchor_day, ts.second_day,
-                   af.account_name, at.account_name
+                   af.account_name AS from_account_name, at.account_name AS to_account_name
             FROM transfer_schedules ts
             JOIN account af ON ts.from_account_id = af.account_id
             JOIN account at ON ts.to_account_id = at.account_id

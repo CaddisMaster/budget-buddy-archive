@@ -20,7 +20,7 @@ bp = Blueprint('transfers', __name__)
 TRANSFER_SCHEDULE_ROW_SQL = """
     SELECT ts.id, ts.amount, ts.description, ts.from_account_id, ts.to_account_id,
            ts.frequency, ts.anchor_day, ts.second_day, ts.next_due, ts.is_active,
-           fa.account_name, ta.account_name
+           fa.account_name AS from_account_name, ta.account_name AS to_account_name
     FROM transfer_schedules ts
     LEFT JOIN account fa ON ts.from_account_id = fa.account_id
     LEFT JOIN account ta ON ts.to_account_id = ta.account_id

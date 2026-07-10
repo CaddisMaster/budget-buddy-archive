@@ -151,7 +151,8 @@ def compute_safe_to_spend(user_id, today=None):
         cursor.execute("""
             SELECT ts.description, ts.amount, ts.frequency, ts.anchor_day,
                    ts.second_day, ts.next_due, ts.from_account_id,
-                   ts.to_account_id, af.account_name, at.account_name
+                   ts.to_account_id, af.account_name AS from_account_name,
+                   at.account_name AS to_account_name
             FROM transfer_schedules ts
             JOIN account af ON ts.from_account_id = af.account_id
             JOIN account at ON ts.to_account_id = at.account_id

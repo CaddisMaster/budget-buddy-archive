@@ -231,7 +231,7 @@ def _load_history(user_id, selected_month, search, page, per_page=PER_PAGE):
         total = cursor.fetchone()[0]
         total_pages = math.ceil(total / per_page) if total > 0 else 1
         cursor.execute(f"""
-            SELECT t.id, t.amount, t.description, c.name, a.account_name,
+            SELECT t.id, t.amount, t.description, c.name AS category_name, a.account_name,
                 t.transaction_date, t.transaction_type,
                 t.is_recurring, t.frequency, t.is_adjustment,
                 t.is_transfer, t.transfer_group_id

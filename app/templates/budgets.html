@@ -14,7 +14,7 @@
     <span><strong>AI budget review</strong> — right-size every category from your recent spending</span>
     <span class="ai-badge">AI</span>
     <button class="btn btn-primary"
-            hx-post="/budgets/review/scan"
+            hx-post="{{ url_for('budgets.budget_review_scan') }}"
             hx-target="#budget-review-panel" hx-swap="innerHTML"
             hx-indicator="#budget-review-spinner">Review →</button>
     <span id="budget-review-spinner" class="htmx-indicator" style="color:var(--text-muted)">Reviewing your budgets…</span>
@@ -29,6 +29,6 @@
 </div>
 {% include 'partials/_budget_report.html' %}
 {% else %}
-<p style="color:var(--text-muted)">You need at least one <a href="/categories">category</a> before you can set a budget.</p>
+<p style="color:var(--text-muted)">You need at least one <a href="{{ url_for('categories.categories') }}">category</a> before you can set a budget.</p>
 {% endif %}
 {% endblock %}

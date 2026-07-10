@@ -7,7 +7,7 @@
 {% endif %}
 <h2>Add goal</h2>
 {% if accounts %}
-<form hx-post="/goals" hx-target="#goal-list" hx-swap="afterbegin"
+<form hx-post="{{ url_for('goals.goals') }}" hx-target="#goal-list" hx-swap="afterbegin"
       hx-on::after-request="if(event.detail.successful){this.reset();toggleGoalType('save');document.getElementById('goal-empty')?.remove();}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Goal type</label>
@@ -54,7 +54,7 @@ function toggleGoalType(v) {
 }
 </script>
 {% else %}
-<p style="color:var(--text-muted)">You need at least one <a href="/accounts">account</a> before you can create a goal.</p>
+<p style="color:var(--text-muted)">You need at least one <a href="{{ url_for('accounts.accounts') }}">account</a> before you can create a goal.</p>
 {% endif %}
 
 <h2>Your goals</h2>

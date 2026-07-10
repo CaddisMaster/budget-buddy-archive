@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Transfer money</h1>
 {% if accounts|length < 2 %}
-<p style="color:var(--text-muted)">You need at least two <a href="/accounts">accounts</a> to make a transfer.</p>
+<p style="color:var(--text-muted)">You need at least two <a href="{{ url_for('accounts.accounts') }}">accounts</a> to make a transfer.</p>
 {% else %}
 <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -41,7 +41,7 @@
     for income and bills.
 </p>
 
-<form hx-post="/transfers/recurring" hx-target="#transfer-schedule-rows" hx-swap="afterbegin"
+<form hx-post="{{ url_for('transfers.create_transfer_schedule') }}" hx-target="#transfer-schedule-rows" hx-swap="afterbegin"
       hx-on::after-request="if(event.detail.successful){this.reset();toggleAutoTransferFields();document.getElementById('auto-transfer-empty')?.remove();}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>From account</label>

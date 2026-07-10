@@ -23,7 +23,7 @@
         A weekly email recap — your spending vs budget, net position, and what's
         scheduled in the week ahead. Sent Sunday evenings.
     </p>
-    <form method="post" action="/profile/settings">
+    <form method="post" action="{{ url_for('auth.profile_settings') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Email address</label>
         <input type="email" name="email" value="{{ email or '' }}" placeholder="you@example.com">
@@ -38,6 +38,6 @@
 {% endif %}
 
 <div style="margin-top:1.5rem">
-    <a href="/change-password" class="btn">Change password</a>
+    <a href="{{ url_for('auth.change_password') }}" class="btn">Change password</a>
 </div>
 {% endblock %}

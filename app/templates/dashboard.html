@@ -138,7 +138,7 @@
     </div>
     {% endfor %}
 </div>
-<p style="margin-bottom:1.5rem"><a href="/goals">Manage goals →</a></p>
+<p style="margin-bottom:1.5rem"><a href="{{ url_for('goals.goals') }}">Manage goals →</a></p>
 {% endif %}
 {% if has_transactions %}
 <h2>Charts</h2>
@@ -260,6 +260,6 @@ new Chart(document.getElementById('budgetBar'), {
 });
 </script>
 {% else %}
-<p style="color:var(--text-muted)">No transactions yet. <a href="/transactions/new">Add your first transaction</a> to see your dashboard.</p>
+<p style="color:var(--text-muted)">No transactions yet. <a href="{{ url_for('transactions.new_transaction') }}">Add your first transaction</a> to see your dashboard.</p>
 {% endif %}
 {% endblock %}

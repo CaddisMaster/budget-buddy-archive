@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Accounts</h1>
 <h2>Add account</h2>
-<form hx-post="/accounts" hx-target="#account-rows" hx-swap="afterbegin"
+<form hx-post="{{ url_for('accounts.accounts') }}" hx-target="#account-rows" hx-swap="afterbegin"
       hx-on::after-request="if(event.detail.successful){this.reset();this.querySelector('input[name=name]').focus();document.getElementById('acct-empty')?.remove();}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Name</label>

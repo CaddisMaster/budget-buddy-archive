@@ -3,7 +3,7 @@
 {% block content %}
 <h1>User management</h1>
 <div style="margin-bottom:1rem">
-    <a href="/admin/create-user" class="btn btn-primary">Create user</a>
+    <a href="{{ url_for('admin.create_user') }}" class="btn btn-primary">Create user</a>
 </div>
 <div class="table-wrapper">
     <table>

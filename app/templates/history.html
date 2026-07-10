@@ -10,7 +10,7 @@
       <input type="text" name="search" value="{{ search }}" placeholder="Search descriptions...">
     </div>
     <button type="submit" class="btn btn-primary">Search</button>
-    {% if search %}<a href="/transactions{% if selected_month %}?month={{ selected_month }}{% endif %}" class="btn">Clear</a>{% endif %}
+    {% if search %}<a href="{{ url_for('transactions.transactions') }}{% if selected_month %}?month={{ selected_month }}{% endif %}" class="btn">Clear</a>{% endif %}
   </form>
   <form method="get" style="display:flex;gap:0.5rem;align-items:flex-end">
     {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
@@ -24,13 +24,13 @@
       </select>
     </div>
   </form>
-  <a href="/transactions/export{% if selected_month %}?month={{ selected_month }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn">Export CSV</a>
+  <a href="{{ url_for('transactions.export_transactions') }}{% if selected_month %}?month={{ selected_month }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn">Export CSV</a>
   <button type="button" id="bulk-toggle" class="btn">Bulk edit</button>
 </div>
 <p style="font-size:13px;color:var(--text-muted);margin-bottom:0.75rem">{{ total }} transaction{{ 's' if total != 1 else '' }}</p>
 {% if cleanup_enabled %}{% include 'partials/_cleanup_banner.html' %}{% endif %}
 {% if total == 0 and not search and not selected_month %}
-<p style="color:var(--text-muted)">No transactions yet. <a href="/transactions/new">Add your first transaction →</a></p>
+<p style="color:var(--text-muted)">No transactions yet. <a href="{{ url_for('transactions.new_transaction') }}">Add your first transaction →</a></p>
 {% else %}
 {# v10.11 Bulk edit: hidden until at least one row is selected (script below). #}
 <div id="bulk-bar" class="bulk-bar" hidden>
@@ -42,12 +42,12 @@
     {% endfor %}
   </select>
   <button type="button" class="btn btn-primary"
-    hx-post="/transactions/bulk/category?{{ filter_qs }}"
+    hx-post="{{ url_for('transactions.bulk_category') }}?{{ filter_qs }}"
     hx-include="#bulk-category, .row-select:checked"
     hx-target="#txn-rows" hx-swap="outerHTML">Set category</button>
   {% endif %}
   <button type="button" class="btn btn-danger"
-    hx-post="/transactions/bulk/delete?{{ filter_qs }}"
+    hx-post="{{ url_for('transactions.bulk_delete') }}?{{ filter_qs }}"
     hx-include=".row-select:checked"
     hx-target="#txn-rows" hx-swap="outerHTML"
     hx-confirm="Delete the selected transactions?">Delete selected</button>

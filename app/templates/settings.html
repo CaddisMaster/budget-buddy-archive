@@ -6,14 +6,14 @@
 <h2>Database</h2>
 <div class="card">
     <p style="font-size:14px;color:var(--text-muted);margin-bottom:1rem">Download a full SQL backup of the database.</p>
-    <a href="/admin/backup" class="btn btn-primary">Download backup</a>
+    <a href="{{ url_for('admin.backup_database') }}" class="btn btn-primary">Download backup</a>
 </div>
 
 {% if current_user.is_admin %}
 <h2>User management</h2>
 <div class="card">
     <p style="font-size:14px;color:var(--text-muted);margin-bottom:1rem">View and manage all user accounts.</p>
-    <a href="/admin/users" class="btn btn-primary">Manage users</a>
+    <a href="{{ url_for('admin.admin_users') }}" class="btn btn-primary">Manage users</a>
 </div>
 {% endif %}
 

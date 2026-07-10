@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Categories</h1>
 <h2>Add category</h2>
-<form hx-post="/categories" hx-target="#category-rows" hx-swap="afterbegin"
+<form hx-post="{{ url_for('categories.categories') }}" hx-target="#category-rows" hx-swap="afterbegin"
       hx-on::after-request="if(event.detail.successful){this.reset();this.querySelector('input[name=name]').focus();document.getElementById('cat-empty')?.remove();}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Name</label>

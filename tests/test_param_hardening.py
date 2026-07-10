@@ -15,7 +15,6 @@ the boom stub (the route's graceful ParseError fallback is the assertion).
 import re
 from contextlib import contextmanager
 from datetime import date, timedelta
-from pathlib import Path
 
 import psycopg2
 import pytest
@@ -278,17 +277,18 @@ def test_db_error_shows_generic_message_not_exception_text(client_a, monkeypatch
     assert GENERIC_ERROR in text
 
 
-# --- style.css cache-bust lockstep ---------------------------------------------
+# --- style.css cache-bust (automatic content hash) ------------------------------
 
-def test_login_and_base_cache_bust_versions_match():
-    """login.html doesn't extend base.html, so its stylesheet link carries its
-    own ?v= — this keeps the two from drifting (the 2026-07-06 hotfix found
-    login.html serving stale CSS with no version at all)."""
-    templates = Path(__file__).resolve().parents[1] / "app" / "templates"
+def test_cache_bust_hash_rendered_on_login_and_app_pages(anon_client, client_a):
+    """The ?v= is now a startup-computed hash of style.css content (css_v Jinja
+    global) — both login.html (which doesn't extend base) and base.html must
+    render it, and render the SAME value (the 2026-07-06 hotfix found login.html
+    serving stale CSS with no version at all)."""
+    pattern = re.compile(r"style\.css\?v=([0-9a-f]{8})")
     versions = {}
-    for name in ("base.html", "login.html"):
-        match = re.search(r"style\.css.*?\?v=(\d+)",
-                          (templates / name).read_text())
-        assert match, f"{name} is missing the style.css ?v= cache-bust"
+    for name, response in (("login", anon_client.get("/login")),
+                           ("app", client_a.get("/"))):
+        match = pattern.search(response.data.decode())
+        assert match, f"{name} page is missing the style.css ?v= cache-bust hash"
         versions[name] = match.group(1)
-    assert versions["base.html"] == versions["login.html"]
+    assert versions["login"] == versions["app"]

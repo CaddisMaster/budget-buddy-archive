@@ -1,3 +1,4 @@
+import hashlib
 import os
 import hmac
 from flask import Flask, redirect, url_for
@@ -44,6 +45,13 @@ def set_security_headers(response):
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
+
+# Auto cache-bust for the stylesheet: ?v= is a hash of style.css CONTENT,
+# computed once at startup (a deploy restarts the container; local dev rebuilds
+# the image — no bind mount), so nobody hand-bumps a version number again.
+# Both base.html and login.html (which doesn't extend base) read this global.
+with open(os.path.join(app.static_folder, 'style.css'), 'rb') as _css:
+    app.jinja_env.globals['css_v'] = hashlib.md5(_css.read()).hexdigest()[:8]
 
 csrf = CSRFProtect(app)
 

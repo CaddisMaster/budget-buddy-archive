@@ -1,28 +1,28 @@
-<tr id="account-{{ account[0] }}">
-  <td>{{ account[1] }}{% if not account[6] %}
+<tr id="account-{{ account.account_id }}">
+  <td>{{ account.account_name }}{% if not account.spendable %}
     <span style="display:block;color:var(--text-muted);font-size:0.8em">not in Safe to spend</span>
   {% endif %}</td>
-  <td>{{ account[2] }}</td>
-  <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}
-    {% set cu = credit_utilization(account[3], account[7]) if account[2] == 'Credit Card' else none %}
+  <td>{{ account.type }}</td>
+  <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account.balance) }}
+    {% set cu = credit_utilization(account.balance, account.credit_limit) if account.type == 'Credit Card' else none %}
     {% if cu %}
     <div class="goal-bar credit-bar"><div class="goal-bar-fill {{ cu.tier }}" style="width:{{ cu.bar_pct }}%"></div></div>
     <span class="credit-meta">{{ cu.pct }}% of ${{ "%.0f"|format(cu.limit) }} · ${{ "%.2f"|format(cu.available) }} available</span>
     {% endif %}
   </td>
-  <td class="{% if account[5] %}checkin-stale{% endif %}" style="{% if not account[5] %}color:var(--text-muted){% endif %}">
-    {{ account[4].strftime('%b %-d, %Y') if account[4] else 'Never' }}
+  <td class="{% if account.checkin_stale %}checkin-stale{% endif %}" style="{% if not account.checkin_stale %}color:var(--text-muted){% endif %}">
+    {{ account.last_checked_in.strftime('%b %-d, %Y') if account.last_checked_in else 'Never' }}
   </td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm"
-      hx-get="/accounts/{{ account[0] }}/checkin"
-      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Check in</button>
+      hx-get="/accounts/{{ account.account_id }}/checkin"
+      hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Check in</button>
     <button type="button" class="btn btn-sm"
-      hx-get="/accounts/{{ account[0] }}/edit"
-      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Edit</button>
+      hx-get="/accounts/{{ account.account_id }}/edit"
+      hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Edit</button>
     <button type="button" class="btn btn-sm btn-danger"
-      hx-delete="/accounts/{{ account[0] }}"
-      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML"
+      hx-delete="/accounts/{{ account.account_id }}"
+      hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML"
       hx-confirm="Delete this account?">Delete</button>
   </td>
 </tr>

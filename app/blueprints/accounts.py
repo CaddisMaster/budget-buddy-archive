@@ -79,12 +79,12 @@ def credit_card_utilization_facts(user_id):
         rows = cursor.fetchall()
     facts = []
     for r in rows:
-        if r[2] != 'Credit Card':
+        if r.type != 'Credit Card':
             continue
-        cu = credit_utilization(r[3], r[7])
+        cu = credit_utilization(r.balance, r.credit_limit)
         if cu is None:
             continue
-        facts.append({'name': r[1], 'limit': cu['limit'], 'debt': cu['debt'],
+        facts.append({'name': r.account_name, 'limit': cu['limit'], 'debt': cu['debt'],
                       'available': cu['available'], 'utilization_pct': cu['pct']})
     return facts
 
@@ -159,8 +159,8 @@ def accounts():
         cursor.execute(ACCOUNT_ROW_SQL.format(extra=""), (current_user.id,))
         all_accounts = cursor.fetchall()
     # Total available credit across cards with a limit set (None = no line).
-    cards = [cu for a in all_accounts if a[2] == 'Credit Card'
-             for cu in [credit_utilization(a[3], a[7])] if cu]
+    cards = [cu for a in all_accounts if a.type == 'Credit Card'
+             for cu in [credit_utilization(a.balance, a.credit_limit)] if cu]
     credit_summary = None
     if cards:
         credit_summary = {'available': round(sum(c['available'] for c in cards), 2),
@@ -188,7 +188,8 @@ def edit_account(account_id):
         if not error:
             credit_limit, error = _parse_credit_limit(raw_limit)
         if error:
-            account = (account[0], name, account_type, account[3], account[4], account[5], spendable, raw_limit)
+            account = account._replace(account_name=name, type=account_type,
+                                       spendable=spendable, credit_limit=raw_limit)
             return render_template('partials/_account_edit_row.html', account=account, error=error)
         try:
             with db_cursor(commit=True) as cursor:
@@ -199,7 +200,8 @@ def edit_account(account_id):
                 )
         except Exception:
             current_app.logger.exception('edit account failed')
-            account = (account[0], name, account_type, account[3], account[4], account[5], spendable, raw_limit)
+            account = account._replace(account_name=name, type=account_type,
+                                       spendable=spendable, credit_limit=raw_limit)
             return render_template('partials/_account_edit_row.html', account=account, error=GENERIC_ERROR)
         with db_cursor() as cursor:
             account = _fetch_account_row(cursor, account_id)

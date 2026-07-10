@@ -1,30 +1,30 @@
-<tr id="account-{{ account[0] }}" class="editing">
-  <td><input type="text" name="name" value="{{ account[1] }}" required></td>
+<tr id="account-{{ account.account_id }}" class="editing">
+  <td><input type="text" name="name" value="{{ account.account_name }}" required></td>
   <td>
     <select name="type" required>
-      <option value="Credit Card" {% if account[2] == 'Credit Card' %}selected{% endif %}>Credit Card</option>
-      <option value="Debit Card" {% if account[2] == 'Debit Card' %}selected{% endif %}>Debit Card</option>
-      <option value="Bank Account" {% if account[2] == 'Bank Account' %}selected{% endif %}>Bank Account</option>
+      <option value="Credit Card" {% if account.type == 'Credit Card' %}selected{% endif %}>Credit Card</option>
+      <option value="Debit Card" {% if account.type == 'Debit Card' %}selected{% endif %}>Debit Card</option>
+      <option value="Bank Account" {% if account.type == 'Bank Account' %}selected{% endif %}>Bank Account</option>
     </select>
     <label style="display:flex;align-items:center;gap:0.35rem;margin-top:0.35rem;font-size:0.85em;color:var(--text-muted)"
            title="Untick to exclude this account from the Safe to spend number (e.g. savings). Only affects Bank/Debit accounts.">
-      <input type="checkbox" name="spendable" {% if account[6] %}checked{% endif %} style="width:auto">
+      <input type="checkbox" name="spendable" {% if account.spendable %}checked{% endif %} style="width:auto">
       Safe to spend
     </label>
     <input type="number" name="credit_limit" step="0.01" min="0.01"
-           value="{{ account[7] if account[7] is not none else '' }}"
+           value="{{ account.credit_limit if account.credit_limit is not none else '' }}"
            placeholder="Credit limit" title="Optional — credit cards only"
            style="margin-top:0.35rem">
   </td>
-  <td class="{% if account[3] >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account[3]) }}</td>
-  <td style="color:var(--text-muted)">{{ account[4].strftime('%b %-d, %Y') if account[4] else 'Never' }}</td>
+  <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account.balance) }}</td>
+  <td style="color:var(--text-muted)">{{ account.last_checked_in.strftime('%b %-d, %Y') if account.last_checked_in else 'Never' }}</td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"
-      hx-post="/accounts/{{ account[0] }}/edit" hx-include="closest tr"
-      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Save</button>
+      hx-post="/accounts/{{ account.account_id }}/edit" hx-include="closest tr"
+      hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Save</button>
     <button type="button" class="btn btn-sm"
-      hx-get="/accounts/{{ account[0] }}/row"
-      hx-target="#account-{{ account[0] }}" hx-swap="outerHTML">Cancel</button>
+      hx-get="/accounts/{{ account.account_id }}/row"
+      hx-target="#account-{{ account.account_id }}" hx-swap="outerHTML">Cancel</button>
     {% if error %}<span class="inline-error">{{ error }}</span>{% endif %}
   </td>
 </tr>

@@ -7,7 +7,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from app import bcrypt
-from app.db import get_db_connection
+from app.db import db_cursor
 from app.helpers import is_htmx, hx_toast, GENERIC_ERROR
 
 bp = Blueprint('admin', __name__)
@@ -42,39 +42,33 @@ def create_user():
                 flash(e)
             return redirect(url_for('admin.create_user'))
         password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-        conn = get_db_connection()
-        cursor = conn.cursor()
         try:
-            cursor.execute(
-                "INSERT INTO users (username, password_hash, is_admin) VALUES (%s, %s, %s) RETURNING id",
-                (username, password_hash, is_admin)
-            )
-            new_user_id = cursor.fetchone()[0]
-            default_categories = [
-                ('Housing', 'Rent, mortgage, utilities'),
-                ('Food & Dining', 'Groceries, restaurants'),
-                ('Transportation', 'Gas, public transit, car maintenance'),
-                ('Healthcare', 'Doctor, pharmacy, insurance'),
-                ('Entertainment', 'Movies, subscriptions, hobbies'),
-                ('Shopping', 'Clothing, electronics, household'),
-                ('Personal Care', 'Haircuts, gym, personal products'),
-                ('Income', 'Salary, freelance, other income'),
-                ('Other', 'Miscellaneous expenses'),
-            ]
-            for cat_name, cat_desc in default_categories:
+            with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "INSERT INTO categories (name, description, user_id) VALUES (%s, %s, %s)",
-                    (cat_name, cat_desc, new_user_id)
+                    "INSERT INTO users (username, password_hash, is_admin) VALUES (%s, %s, %s) RETURNING id",
+                    (username, password_hash, is_admin)
                 )
-            conn.commit()
+                new_user_id = cursor.fetchone()[0]
+                default_categories = [
+                    ('Housing', 'Rent, mortgage, utilities'),
+                    ('Food & Dining', 'Groceries, restaurants'),
+                    ('Transportation', 'Gas, public transit, car maintenance'),
+                    ('Healthcare', 'Doctor, pharmacy, insurance'),
+                    ('Entertainment', 'Movies, subscriptions, hobbies'),
+                    ('Shopping', 'Clothing, electronics, household'),
+                    ('Personal Care', 'Haircuts, gym, personal products'),
+                    ('Income', 'Salary, freelance, other income'),
+                    ('Other', 'Miscellaneous expenses'),
+                ]
+                for cat_name, cat_desc in default_categories:
+                    cursor.execute(
+                        "INSERT INTO categories (name, description, user_id) VALUES (%s, %s, %s)",
+                        (cat_name, cat_desc, new_user_id)
+                    )
             flash(f'Account created for {username}')
         except Exception:
             current_app.logger.exception('create user failed')
             flash(GENERIC_ERROR)
-            conn.rollback()
-        finally:
-            cursor.close()
-            conn.close()
         return redirect(url_for('admin.create_user'))
     return render_template('create_user.html')
 
@@ -121,12 +115,9 @@ def admin_users():
     if not current_user.is_admin:
         flash('Access denied')
         return redirect(url_for('main.index'))
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, is_admin, created_at FROM users ORDER BY created_at")
-    users = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, username, is_admin, created_at FROM users ORDER BY created_at")
+        users = cursor.fetchall()
     return render_template('admin_users.html', users=users)
 
 
@@ -135,28 +126,21 @@ def admin_users():
 def delete_user(user_id):
     if not current_user.is_admin:
         abort(403)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
-    user = cursor.fetchone()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
     if not user:
-        cursor.close(); conn.close()
         abort(404)
     if user_id == current_user.id:
-        cursor.close(); conn.close()
         resp = make_response(render_template('partials/_user_row.html', u=user))
         return hx_toast(resp, 'You cannot delete your own account', 'error')
     try:
-        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-        conn.commit()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
     except Exception:
-        conn.rollback()
-        cursor.close(); conn.close()
         current_app.logger.exception('delete user failed')
         resp = make_response(render_template('partials/_user_row.html', u=user))
         return hx_toast(resp, GENERIC_ERROR, 'error')
-    cursor.close()
-    conn.close()
     return hx_toast(make_response('', 200), f'User {user[1]} deleted')
 
 
@@ -165,22 +149,17 @@ def delete_user(user_id):
 def toggle_admin(user_id):
     if not current_user.is_admin:
         abort(403)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
-    user = cursor.fetchone()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
     if not user:
-        cursor.close(); conn.close()
         abort(404)
     if user_id == current_user.id:
-        cursor.close(); conn.close()
         resp = make_response(render_template('partials/_user_row.html', u=user))
         return hx_toast(resp, 'You cannot change your own admin status', 'error')
-    cursor.execute("UPDATE users SET is_admin = NOT is_admin WHERE id = %s", (user_id,))
-    conn.commit()
-    cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
-    user = cursor.fetchone()
-    cursor.close()
-    conn.close()
+    with db_cursor(commit=True) as cursor:
+        cursor.execute("UPDATE users SET is_admin = NOT is_admin WHERE id = %s", (user_id,))
+        cursor.execute("SELECT id, username, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
     resp = make_response(render_template('partials/_user_row.html', u=user))
     return hx_toast(resp, 'Admin status updated')

@@ -3,7 +3,7 @@ import re
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app import bcrypt, limiter
-from app.db import get_db_connection
+from app.db import db_cursor
 from app.mailer import mail_enabled
 from app.models import User
 
@@ -52,25 +52,22 @@ def logout():
 @bp.route('/profile')
 @login_required
 def profile():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT created_at, email, weekly_digest FROM users WHERE id = %s",
-                   (current_user.id,))
-    row = cursor.fetchone()
-    created_at = row[0] if row else None
-    email = row[1] if row else None
-    weekly_digest = row[2] if row else False
-    # A small at-a-glance summary of the user's data.
-    cursor.execute("SELECT COUNT(*) FROM transactions WHERE user_id = %s", (current_user.id,))
-    txn_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM categories WHERE user_id = %s", (current_user.id,))
-    cat_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM account WHERE user_id = %s", (current_user.id,))
-    acct_count = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM goals WHERE user_id = %s", (current_user.id,))
-    goal_count = cursor.fetchone()[0]
-    cursor.close()
-    conn.close()
+    with db_cursor() as cursor:
+        cursor.execute("SELECT created_at, email, weekly_digest FROM users WHERE id = %s",
+                       (current_user.id,))
+        row = cursor.fetchone()
+        created_at = row[0] if row else None
+        email = row[1] if row else None
+        weekly_digest = row[2] if row else False
+        # A small at-a-glance summary of the user's data.
+        cursor.execute("SELECT COUNT(*) FROM transactions WHERE user_id = %s", (current_user.id,))
+        txn_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM categories WHERE user_id = %s", (current_user.id,))
+        cat_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM account WHERE user_id = %s", (current_user.id,))
+        acct_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM goals WHERE user_id = %s", (current_user.id,))
+        goal_count = cursor.fetchone()[0]
     return render_template('profile.html', created_at=created_at,
                            txn_count=txn_count, cat_count=cat_count,
                            acct_count=acct_count, goal_count=goal_count,
@@ -93,14 +90,10 @@ def profile_settings():
         flash('Add an email address to receive the weekly digest')
         return redirect(url_for('auth.profile'))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE users SET email = %s, weekly_digest = %s WHERE id = %s",
-        (email or None, weekly_digest, current_user.id))
-    conn.commit()
-    cursor.close()
-    conn.close()
+    with db_cursor(commit=True) as cursor:
+        cursor.execute(
+            "UPDATE users SET email = %s, weekly_digest = %s WHERE id = %s",
+            (email or None, weekly_digest, current_user.id))
     flash('Preferences saved')
     return redirect(url_for('auth.profile'))
 
@@ -123,15 +116,11 @@ def change_password():
             flash('New password must be 72 bytes or fewer')
             return redirect(url_for('auth.change_password'))
         new_hash = bcrypt.generate_password_hash(new_password).decode('utf-8')
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE users SET password_hash = %s WHERE id = %s",
-            (new_hash, current_user.id)
-        )
-        conn.commit()
-        cursor.close()
-        conn.close()
+        with db_cursor(commit=True) as cursor:
+            cursor.execute(
+                "UPDATE users SET password_hash = %s WHERE id = %s",
+                (new_hash, current_user.id)
+            )
         flash('Password updated')
         return redirect(url_for('main.index'))
     return render_template('change_password.html')

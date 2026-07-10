@@ -136,7 +136,10 @@ input, select, textarea { width: 100%; padding: 0.55rem 0.75rem; border: 1px sol
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* Buttons */
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.5rem 1.15rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.05s; }
+/* font-family + line-height are explicit because .btn sits on BOTH <a> and
+   <button>: anchors inherit the body's 1.6, buttons get the UA's ~1.15 — same
+   class, two heights (caught on Export CSV vs the Bulk edit toggle). */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.5rem 1.15rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 500; line-height: 1.2; cursor: pointer; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.05s; }
 .btn:hover { background: var(--surface-2); border-color: var(--text-muted); }
 .btn:active { transform: translateY(1px); }
 .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: var(--shadow-sm); }

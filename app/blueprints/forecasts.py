@@ -79,8 +79,8 @@ def _to_date_totals(cursor, user_id, year, month, cutoff):
     cash flow."""
     cursor.execute("""
         SELECT
-            COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0),
-            COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0)
+            COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0) AS income,
+            COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0) AS expenses
         FROM transactions
         WHERE user_id = %s AND is_adjustment = false AND is_transfer = false
         AND EXTRACT(YEAR FROM transaction_date) = %s

@@ -2,6 +2,7 @@ import os
 from contextlib import contextmanager
 
 import psycopg2
+from psycopg2.extras import NamedTupleCursor
 
 def get_db_connection():
     conn = psycopg2.connect(
@@ -16,14 +17,16 @@ def get_db_connection():
 
 @contextmanager
 def db_cursor(commit=False):
-    """Yield a cursor, then always close the cursor + connection.
+    """Yield a NamedTupleCursor, then always close the cursor + connection.
 
-    Pass commit=True for write paths (commits on a clean exit). Any exception
-    rolls back and re-raises, so callers can `flash` the error as before. This
-    retires the repetitive `cursor.close(); conn.close()` dance in newer code.
+    Rows are namedtuples — read `row.amount` (positional `row[1]` still works).
+    Every SELECT column therefore needs a unique, valid-identifier name; alias
+    expressions and duplicate JOIN columns with AS. Pass commit=True for write
+    paths (commits on a clean exit). Any exception rolls back and re-raises,
+    so callers can `flash` the error as before.
     """
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=NamedTupleCursor)
     try:
         yield cursor
         if commit:

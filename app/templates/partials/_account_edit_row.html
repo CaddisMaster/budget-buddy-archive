@@ -6,11 +6,6 @@
       <option value="Debit Card" {% if account.type == 'Debit Card' %}selected{% endif %}>Debit Card</option>
       <option value="Bank Account" {% if account.type == 'Bank Account' %}selected{% endif %}>Bank Account</option>
     </select>
-    <label style="display:flex;align-items:center;gap:0.35rem;margin-top:0.35rem;font-size:0.85em;color:var(--text-muted)"
-           title="Untick to exclude this account from the Safe to spend number (e.g. savings). Only affects Bank/Debit accounts.">
-      <input type="checkbox" name="spendable" {% if account.spendable %}checked{% endif %} style="width:auto">
-      Safe to spend
-    </label>
     <input type="number" name="credit_limit" step="0.01" min="0.01"
            value="{{ account.credit_limit if account.credit_limit is not none else '' }}"
            placeholder="Credit limit" title="Optional — credit cards only"

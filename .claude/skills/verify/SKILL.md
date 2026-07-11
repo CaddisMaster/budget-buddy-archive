@@ -45,7 +45,7 @@ curl -s -b $JAR -c $JAR -d "username=__verify__&password=verify-pass-123&csrf_to
 
 ## Useful flows
 
-- Account create: POST `/accounts` (`name`, `type` = exact `Credit Card|Debit Card|Bank Account`, `spendable=on`, `credit_limit`) → returns the `_account_row` fragment under HTMX.
+- Account create: POST `/accounts` (`name`, `type` = exact `Credit Card|Debit Card|Bank Account`, `credit_limit`) → returns the `_account_row` fragment under HTMX.
 - Transaction: POST `/transactions/new` (`amount`, `description`, `transaction_date`, `account_id`, `transaction_type`) → 302.
 - Live AI (real key in `.env`, calls are cheap Haiku): `/ask` with `question=`, `/insights/generate` with `year`+`month`.
 

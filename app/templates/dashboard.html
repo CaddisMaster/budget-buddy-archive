@@ -44,51 +44,6 @@
             </div>
         </div>
     </div>
-    {# Safe to spend (v10.9) — always "now", unaffected by the month filter #}
-    <div class="hero-safe">
-        <div class="hero-safe-line">
-            <span class="hero-safe-label">Safe to spend</span>
-            <span class="hero-safe-val {{ 'pos' if safe.safe_to_spend >= 0 else 'neg' }}">
-                {{ '−' if safe.safe_to_spend < 0 else '' }}${{ "%.2f"|format(safe.safe_to_spend|abs) }}
-            </span>
-            <span class="hero-safe-until">
-                until {{ safe.window_end.strftime('%b %-d') }}{{ '' if safe.window_is_paycheck else ' (month end)' }}
-            </span>
-        </div>
-        <details class="hero-safe-details">
-            <summary>How this is calculated</summary>
-            <table class="hero-safe-table">
-                <tr>
-                    <td>Cash in bank &amp; debit accounts</td>
-                    <td class="num">${{ "%.2f"|format(safe.liquid_balance) }}</td>
-                </tr>
-                <tr>
-                    <td>Upcoming bills before then</td>
-                    <td class="num">−${{ "%.2f"|format(safe.upcoming_bills) }}</td>
-                </tr>
-                {% for i in safe.bill_items %}
-                <tr class="hero-safe-item">
-                    <td>{{ i.description }} · {{ i.due.strftime('%b %-d') }}</td>
-                    <td class="num">${{ "%.2f"|format(i.amount) }}</td>
-                </tr>
-                {% endfor %}
-                <tr>
-                    <td>Transfers out (savings, card payments)</td>
-                    <td class="num">−${{ "%.2f"|format(safe.upcoming_transfers_out) }}</td>
-                </tr>
-                {% for i in safe.transfer_items %}
-                <tr class="hero-safe-item">
-                    <td>{{ i.description }} · {{ i.due.strftime('%b %-d') }}</td>
-                    <td class="num">${{ "%.2f"|format(i.amount) }}</td>
-                </tr>
-                {% endfor %}
-                <tr>
-                    <td>Left in this month's budgets</td>
-                    <td class="num">−${{ "%.2f"|format(safe.budget_room) }}</td>
-                </tr>
-            </table>
-        </details>
-    </div>
 </div>
 {% endif %}
 {% include 'partials/_ask.html' %}

@@ -320,14 +320,14 @@ def create_transaction(user_id, account_id, amount, transaction_date,
     return tid
 
 
-def create_account(user_id, name, account_type="Bank Account", spendable=True,
+def create_account(user_id, name, account_type="Bank Account",
                    credit_limit=None):
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO account (account_name, type, spendable, credit_limit, user_id) "
-        "VALUES (%s, %s, %s, %s, %s) RETURNING account_id",
-        (name, account_type, spendable, credit_limit, user_id),
+        "INSERT INTO account (account_name, type, credit_limit, user_id) "
+        "VALUES (%s, %s, %s, %s) RETURNING account_id",
+        (name, account_type, credit_limit, user_id),
     )
     aid = cur.fetchone()[0]
     conn.commit()

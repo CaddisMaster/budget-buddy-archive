@@ -1,7 +1,5 @@
 <tr id="account-{{ account.account_id }}">
-  <td>{{ account.account_name }}{% if not account.spendable %}
-    <span style="display:block;color:var(--text-muted);font-size:0.8em">not in Safe to spend</span>
-  {% endif %}</td>
+  <td>{{ account.account_name }}</td>
   <td>{{ account.type }}</td>
   <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account.balance) }}
     {% set cu = credit_utilization(account.balance, account.credit_limit) if account.type == 'Credit Card' else none %}

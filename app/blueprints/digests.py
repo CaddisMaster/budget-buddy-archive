@@ -40,7 +40,7 @@ def _upcoming_scheduled(user_id, today, days=UPCOMING_DAYS):
     """Every scheduled income/expense (schedules) and transfer
     (transfer_schedules) occurrence falling in [today, today+days] — the
     bills/paychecks/transfers coming up this week. Enumerates occurrences with
-    the safe-to-spend walker rather than reading next_due once, so a weekly
+    the main.py occurrence walker rather than reading next_due once, so a weekly
     bill landing twice inside the window is counted twice. Projection only (no
     materialization). User-scoped. Returns [{description, amount, type, due},
     ...] sorted by due; type is one of 'income' | 'expense' | 'transfer'."""

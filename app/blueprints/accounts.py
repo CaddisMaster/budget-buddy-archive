@@ -25,12 +25,11 @@ ACCOUNT_ROW_SQL = """
         a.last_checked_in,
         (a.last_checked_in IS NULL
             OR a.last_checked_in < CURRENT_DATE - {stale_days}) AS checkin_stale,
-        a.spendable,
         a.credit_limit
     FROM account a
     LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
     WHERE a.user_id = %s {extra}
-    GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in, a.spendable,
+    GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in,
         a.credit_limit
     ORDER BY a.account_name
 """.replace('{stale_days}', str(CHECKIN_STALE_DAYS))
@@ -125,7 +124,6 @@ def accounts():
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
-        spendable = 'spendable' in request.form
         error = _validate(name, account_type)
         if not error:
             credit_limit, error = _parse_credit_limit(request.form.get('credit_limit'))
@@ -137,9 +135,9 @@ def accounts():
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "INSERT INTO account (account_name, type, spendable, credit_limit, user_id) "
-                    "VALUES (%s, %s, %s, %s, %s) RETURNING account_id",
-                    (name, account_type, spendable, credit_limit, current_user.id),
+                    "INSERT INTO account (account_name, type, credit_limit, user_id) "
+                    "VALUES (%s, %s, %s, %s) RETURNING account_id",
+                    (name, account_type, credit_limit, current_user.id),
                 )
                 new_id = cursor.fetchone()[0]
         except psycopg2.Error:
@@ -180,7 +178,6 @@ def edit_account(account_id):
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
-        spendable = 'spendable' in request.form
         # Error paths re-render the edit row with the RAW posted limit string
         # (so the user sees what they typed); happy path stores the parsed value.
         raw_limit = request.form.get('credit_limit', '')
@@ -190,19 +187,19 @@ def edit_account(account_id):
             credit_limit, error = _parse_credit_limit(raw_limit)
         if error:
             account = account._replace(account_name=name, type=account_type,
-                                       spendable=spendable, credit_limit=raw_limit)
+                                       credit_limit=raw_limit)
             return render_template('partials/_account_edit_row.html', account=account, error=error)
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "UPDATE account SET account_name=%s, type=%s, spendable=%s, credit_limit=%s "
+                    "UPDATE account SET account_name=%s, type=%s, credit_limit=%s "
                     "WHERE account_id=%s AND user_id=%s",
-                    (name, account_type, spendable, credit_limit, account_id, current_user.id),
+                    (name, account_type, credit_limit, account_id, current_user.id),
                 )
         except psycopg2.Error:
             current_app.logger.exception('edit account failed')
             account = account._replace(account_name=name, type=account_type,
-                                       spendable=spendable, credit_limit=raw_limit)
+                                       credit_limit=raw_limit)
             return render_template('partials/_account_edit_row.html', account=account, error=GENERIC_ERROR)
         with db_cursor() as cursor:
             account = _fetch_account_row(cursor, account_id)

@@ -25,7 +25,7 @@ I decided to build Budget Buddy because I was looking to expand my understanding
 - **Smart budgets** — one monthly amount per category, auto-suggested from the last 6 months of spending; edit to set your own (it stays fixed) or clear to revert, with this month's actual shown inline
 - **Transaction history** — search, filter by month, pagination, and a running balance column
 - **CSV export** — download filtered transactions as a CSV file
-- **Dashboard** — one page for the numbers: net position hero with savings rate, safe-to-spend, Chart.js visualisations (spending by category, cash flow, net balance over time, budget performance, spending by day of week), and a year-over-year comparison when a month is selected
+- **Dashboard** — one page for the numbers: net position hero with savings rate, Chart.js visualisations (spending by category, cash flow, net balance over time, budget performance, spending by day of week), and a year-over-year comparison when a month is selected
 - **Admin tools** — user management UI, database backup download via pg_dump
 - **Dark mode** — automatic system-based dark mode support
 - **Mobile responsive** — collapsible sidebar, horizontal table scroll, tested on iPhone

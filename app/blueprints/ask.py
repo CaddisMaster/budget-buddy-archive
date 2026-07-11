@@ -253,9 +253,9 @@ def _t_account_balances(user_id, args):
         rows = cursor.fetchall()
     accts = []
     for r in rows:
-        entry = {"account": r[1], "balance": _money(r[3])}
-        if r[2] == 'Credit Card':
-            cu = credit_utilization(r[3], r[7])
+        entry = {"account": r.account_name, "balance": _money(r.balance)}
+        if r.type == 'Credit Card':
+            cu = credit_utilization(r.balance, r.credit_limit)
             if cu:
                 entry.update({"credit_limit": cu['limit'],
                               "available_credit": cu['available'],

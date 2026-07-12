@@ -19,9 +19,9 @@
     <label>Category</label>
     <select name="category_id">
         <option value="">-- select category --</option>
-        {% for cat in categories %}
-        <option value="{{ cat.id }}" {% if prefill.get('category_id') == cat.id %}selected{% endif %}>{{ cat.name }}</option>
-        {% endfor %}
+        {% with selected_id = prefill.get('category_id') %}
+        {% include 'partials/_category_options.html' %}
+        {% endwith %}
     </select>
     <label>Account</label>
     <select name="account_id">

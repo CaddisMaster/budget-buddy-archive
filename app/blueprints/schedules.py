@@ -154,7 +154,7 @@ def _parse_form(form):
 
 
 def _form_lists(cursor):
-    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name",
+    cursor.execute("SELECT id, name, kind FROM categories WHERE user_id = %s ORDER BY name",
                    (current_user.id,))
     categories = cursor.fetchall()
     cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s "

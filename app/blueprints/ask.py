@@ -84,15 +84,16 @@ def _clamp_limit(args, default=10):
 
 
 def _resolve_category(cursor, user_id, name):
-    """Match `name` (case-insensitive) against the user's OWN categories → id.
-    Raises _ToolError listing the valid names so the model can retry — this is
-    the per-user guard that the model can only name a category the user owns."""
-    cursor.execute("SELECT id, name FROM categories WHERE user_id = %s", (user_id,))
+    """Match `name` (case-insensitive) against the user's OWN categories →
+    (id, name, kind). Raises _ToolError listing the valid names so the model can
+    retry — this is the per-user guard that the model can only name a category
+    the user owns."""
+    cursor.execute("SELECT id, name, kind FROM categories WHERE user_id = %s", (user_id,))
     rows = cursor.fetchall()
     target = str(name or '').strip().lower()
-    for cid, cname in rows:
+    for cid, cname, ckind in rows:
         if cname.strip().lower() == target:
-            return cid, cname
+            return cid, cname, ckind
     valid = ', '.join(sorted(r[1] for r in rows)) or '(none)'
     raise _ToolError(f"No category named {name!r}. Your categories are: {valid}")
 
@@ -101,10 +102,10 @@ def _resolve_category(cursor, user_id, name):
 
 def _t_list_categories(user_id, args):
     with db_cursor() as cursor:
-        cursor.execute("SELECT name FROM categories WHERE user_id = %s ORDER BY name",
+        cursor.execute("SELECT name, kind FROM categories WHERE user_id = %s ORDER BY name",
                        (user_id,))
-        names = [r[0] for r in cursor.fetchall()]
-    return {"categories": names}
+        cats = [{"name": r[0], "kind": r[1]} for r in cursor.fetchall()]
+    return {"categories": cats}
 
 
 def _t_spending_by_category(user_id, args):
@@ -145,16 +146,21 @@ def _t_total_for_category(user_id, args):
     start = _parse_date(args, 'start_date')
     end = _parse_date(args, 'end_date')
     with db_cursor() as cursor:
-        cid, cname = _resolve_category(cursor, user_id, args.get('category'))
+        cid, cname, ckind = _resolve_category(cursor, user_id, args.get('category'))
+        # Kind-aware (v10.12): an income-kind category sums what came IN, so
+        # "how much from Freelance" doesn't answer $0.
+        ttype = 'income' if ckind == 'income' else 'expense'
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0) FROM transactions
-            WHERE user_id = %s AND category_id = %s AND transaction_type = 'expense'
+            WHERE user_id = %s AND category_id = %s AND transaction_type = %s
             AND is_adjustment = false AND is_transfer = false
             AND transaction_date >= %s AND transaction_date <= %s
-        """, (user_id, cid, start, end))
+        """, (user_id, cid, ttype, start, end))
         total = float(cursor.fetchone()[0])
-    return {"category": cname, "start_date": start.isoformat(),
-            "end_date": end.isoformat(), "total_spent": _money(total)}
+    result = {"category": cname, "kind": ckind, "start_date": start.isoformat(),
+              "end_date": end.isoformat()}
+    result["total_received" if ckind == 'income' else "total_spent"] = _money(total)
+    return result
 
 
 def _t_search_transactions(user_id, args):
@@ -291,9 +297,9 @@ def _date_arg():
 # (json schema spec, handler). The spec name must match the registry key.
 ASK_TOOLS = [
     ({"name": "list_categories",
-      "description": "List the user's own expense/income category names. Call this "
-                     "first when you need the exact category name to pass to "
-                     "another tool.",
+      "description": "List the user's own categories with their kind ('expense' "
+                     "or 'income'). Call this first when you need the exact "
+                     "category name to pass to another tool.",
       "strict": True, "input_schema": _no_args()},
      _t_list_categories),
 
@@ -319,9 +325,10 @@ ASK_TOOLS = [
      _t_budget_status),
 
     ({"name": "total_for_category",
-      "description": "Total expense spending in one category over a date range. "
-                     "Pass an exact category name (call list_categories if "
-                     "unsure).",
+      "description": "Total for one category over a date range — expense spending "
+                     "for an expense-kind category, income received for an "
+                     "income-kind one. Pass an exact category name (call "
+                     "list_categories if unsure).",
       "strict": True, "input_schema": {
           "type": "object",
           "properties": {

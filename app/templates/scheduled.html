@@ -23,9 +23,7 @@
     <label>Category</label>
     <select name="category_id">
         <option value="">-- select category --</option>
-        {% for cat in categories %}
-        <option value="{{ cat.id }}">{{ cat.name }}</option>
-        {% endfor %}
+        {% include 'partials/_category_options.html' %}
     </select>
     <label>Account</label>
     <select name="account_id" required>

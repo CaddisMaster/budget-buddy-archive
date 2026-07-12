@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import app.ai as ai
 from app.ai import answer_question, ParseError
 import app.blueprints.ask as ask
+from conftest import create_category, create_transaction
 
 HX = {"HX-Request": "true"}
 
@@ -50,7 +51,7 @@ def test_dispatch_bad_month_is_error(users):
 def test_dispatch_list_categories_returns_own(users):
     content, is_error = ask.dispatch(users["a"]["id"], "list_categories", {})
     assert is_error is False
-    assert json.loads(content)["categories"] == ["cat-A"]
+    assert json.loads(content)["categories"] == [{"name": "cat-A", "kind": "expense"}]
 
 
 def test_dispatch_unknown_category_lists_valid(users):
@@ -68,6 +69,34 @@ def test_dispatch_search_limit_is_clamped(users):
         "limit": 9999})
     assert is_error is False
     assert json.loads(content)["count"] >= 1
+
+
+def test_dispatch_total_for_income_kind_sums_income(users):
+    # v10.12 kind-awareness: an income-kind category totals what came IN
+    # (was hard-coded to expense — income categories always answered $0).
+    a = users["a"]
+    inc = create_category(a["id"], "Freelance", kind="income")
+    create_transaction(a["id"], a["account_id"], 800, date.today(),
+                       transaction_type="income", category_id=inc)
+    create_transaction(a["id"], a["account_id"], 25, date.today(),
+                       category_id=inc)  # stray expense-typed row: not summed
+    content, is_error = ask.dispatch(users["a"]["id"], "total_for_category", {
+        "category": "Freelance", "start_date": "2000-01-01", "end_date": "2100-01-01"})
+    assert is_error is False
+    data = json.loads(content)
+    assert data["kind"] == "income"
+    assert data["total_received"] == 800.0
+    assert "total_spent" not in data
+
+
+def test_dispatch_total_for_expense_kind_unchanged(users):
+    a = users["a"]
+    content, is_error = ask.dispatch(a["id"], "total_for_category", {
+        "category": "cat-A", "start_date": "2000-01-01", "end_date": "2100-01-01"})
+    assert is_error is False
+    data = json.loads(content)
+    assert data["kind"] == "expense"
+    assert data["total_spent"] == 42.5
 
 
 # --- per-user scoping (the security boundary) -------------------------------

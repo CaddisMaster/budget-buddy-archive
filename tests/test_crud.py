@@ -101,6 +101,20 @@ def test_budgets_cockpit_hides_income_kind(client_a, users):
     assert inc_cid is not None
 
 
+def test_transaction_form_groups_categories_by_kind(client_a, users):
+    create_category(users["a"]["id"], "SalaryKind", kind="income")
+    body = client_a.get("/transactions/new").get_data(as_text=True)
+    assert 'label="Expense categories"' in body
+    assert 'label="Income categories"' in body
+    assert "SalaryKind" in body
+
+
+def test_transaction_form_no_income_group_without_income_kind(client_a, users):
+    body = client_a.get("/transactions/new").get_data(as_text=True)
+    assert 'label="Income categories"' not in body
+    assert "cat-A" in body
+
+
 def test_set_budget_rejects_income_kind_category(client_a, users):
     inc_cid = create_category(users["a"]["id"], "SalaryKind", kind="income")
     resp = client_a.post("/budgets/set",

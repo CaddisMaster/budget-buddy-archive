@@ -167,7 +167,7 @@ def new_transaction():
         return redirect(url_for('transactions.new_transaction'))
 
     with db_cursor() as cursor:
-        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
+        cursor.execute("SELECT id, name, kind FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
         all_categories = cursor.fetchall()
         cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
         all_accounts = cursor.fetchall()
@@ -186,7 +186,7 @@ def parse_transaction():
     to an empty form + an error toast, so the manual form is always usable."""
     text = request.form.get('text', '').strip()
     with db_cursor() as cursor:
-        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
+        cursor.execute("SELECT id, name, kind FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
         all_categories = cursor.fetchall()
         cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
         all_accounts = cursor.fetchall()
@@ -313,7 +313,7 @@ def transactions():
     cleanup_enabled = ai_enabled()
     uncategorized_count = count_uncategorized(current_user.id) if cleanup_enabled else 0
     with db_cursor() as cursor:
-        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name",
+        cursor.execute("SELECT id, name, kind FROM categories WHERE user_id = %s ORDER BY name",
                        (current_user.id,))
         categories = cursor.fetchall()
     return render_template('history.html',
@@ -346,7 +346,7 @@ def edit_transaction(transaction_id):
         cursor.execute("SELECT 1 FROM transactions WHERE id = %s AND user_id = %s", (transaction_id, current_user.id))
         if cursor.fetchone() is None:
             abort(404)
-        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
+        cursor.execute("SELECT id, name, kind FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
         all_categories = cursor.fetchall()
         cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
         all_accounts = cursor.fetchall()

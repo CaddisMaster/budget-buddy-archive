@@ -1,0 +1,21 @@
+{# Category <option>s grouped by kind (v10.12) — shared by every category
+   select that lists both kinds. Expects `categories` rows carrying
+   .id/.name/.kind and (optionally, via {% with %}) a `selected_id`.
+   Mismatches stay allowed by design — the groups just make the kind visible
+   at pick time. #}
+{% set expense_cats = categories | selectattr('kind', 'equalto', 'expense') | list %}
+{% set income_cats = categories | selectattr('kind', 'equalto', 'income') | list %}
+{% if expense_cats %}
+<optgroup label="Expense categories">
+  {% for c in expense_cats %}
+  <option value="{{ c.id }}" {% if selected_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+  {% endfor %}
+</optgroup>
+{% endif %}
+{% if income_cats %}
+<optgroup label="Income categories">
+  {% for c in income_cats %}
+  <option value="{{ c.id }}" {% if selected_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+  {% endfor %}
+</optgroup>
+{% endif %}

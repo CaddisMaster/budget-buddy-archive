@@ -13,9 +13,9 @@
   <td>
     <select name="category_id">
       <option value="">-- none --</option>
-      {% for cat in categories %}
-      <option value="{{ cat.id }}" {% if schedule.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
-      {% endfor %}
+      {% with selected_id = schedule.category_id %}
+      {% include 'partials/_category_options.html' %}
+      {% endwith %}
     </select>
   </td>
   <td>

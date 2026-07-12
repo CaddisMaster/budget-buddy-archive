@@ -261,7 +261,22 @@ def _load_history(user_id, selected_month, search, page, per_page=PER_PAGE):
             LIMIT %s OFFSET %s
         """, params + [per_page, offset])
         rows = cursor.fetchall()
-    running_balance = 0
+        # Seed the page's balance walk with the signed net of every filtered row
+        # OLDER than this slice, so balances connect across pages instead of
+        # restarting at 0 (with filters active the column reads as the running
+        # net of the matching rows).
+        cursor.execute(f"""
+            SELECT COALESCE(SUM(CASE WHEN older.transaction_type = 'income'
+                                     THEN older.amount ELSE -older.amount END), 0) AS base
+            FROM (
+                SELECT t.transaction_type, t.amount
+                FROM transactions t
+                {where_clause}
+                ORDER BY t.transaction_date DESC, t.id DESC
+                OFFSET %s
+            ) older
+        """, params + [offset + per_page])
+        running_balance = cursor.fetchone().base
     transactions_with_balance = []
     for t in reversed(rows):
         if t.transaction_type == 'income':

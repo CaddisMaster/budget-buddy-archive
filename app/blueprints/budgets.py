@@ -157,7 +157,9 @@ def load_budget_rows(user_id):
     partials/_budget_row.html indexes into."""
     today = datetime.today()
     with db_cursor() as cursor:
-        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name", (user_id,))
+        cursor.execute(
+            "SELECT id, name FROM categories WHERE user_id = %s AND kind = 'expense' ORDER BY name",
+            (user_id,))
         all_categories = cursor.fetchall()
         cursor.execute("SELECT category_id, amount FROM budgets WHERE user_id = %s", (user_id,))
         saved = {row[0]: float(row[1]) for row in cursor.fetchall()}
@@ -203,6 +205,7 @@ def compute_budget_review_facts(user_id, cap=BUDGET_REVIEW_CAP):
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             WHERE t.user_id = %s AND t.transaction_type = 'expense'
+            AND c.kind = 'expense'
             AND t.is_adjustment = false AND t.is_transfer = false
             AND t.transaction_date >= NOW() - INTERVAL '6 months'
             AND t.category_id IS NOT NULL
@@ -214,7 +217,7 @@ def compute_budget_review_facts(user_id, cap=BUDGET_REVIEW_CAP):
             SELECT b.category_id, c.name, b.amount
             FROM budgets b
             JOIN categories c ON b.category_id = c.id
-            WHERE b.user_id = %s
+            WHERE b.user_id = %s AND c.kind = 'expense'
         """, (user_id,))
         budget_rows = cursor.fetchall()
 
@@ -350,6 +353,7 @@ def load_budget_report(user_id, today=None):
             FROM transactions t
             JOIN categories c ON t.category_id = c.id
             WHERE t.user_id = %s AND t.transaction_type = 'expense'
+            AND c.kind = 'expense'
             AND t.is_adjustment = false AND t.is_transfer = false
             AND t.transaction_date >= %s AND t.transaction_date < %s
             GROUP BY t.category_id, c.name, DATE_TRUNC('month', t.transaction_date)
@@ -391,9 +395,12 @@ def set_budget():
         for e in errors:
             flash(e)
         return redirect(url_for('budgets.budgets'))
-    # Guard ownership of the category before writing a budget against it.
+    # Guard ownership of the category before writing a budget against it —
+    # and its kind: budgets are expense-only, income categories take none.
     with db_cursor() as cursor:
-        cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s", (category_id, current_user.id))
+        cursor.execute(
+            "SELECT 1 FROM categories WHERE id = %s AND user_id = %s AND kind = 'expense'",
+            (category_id, current_user.id))
         if cursor.fetchone() is None:
             abort(404)
     try:
@@ -471,8 +478,9 @@ def budget_review_scan():
         return _toast_only('Not enough history to review — add some transactions first')
 
     with db_cursor() as cursor:
-        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name",
-                       (current_user.id,))
+        cursor.execute(
+            "SELECT id, name FROM categories WHERE user_id = %s AND kind = 'expense' ORDER BY name",
+            (current_user.id,))
         all_categories = cursor.fetchall()
         cursor.execute("SELECT category_id, amount FROM budgets WHERE user_id = %s",
                        (current_user.id,))
@@ -528,10 +536,11 @@ def budget_review_apply():
                 category_id = int(cid)
             except (TypeError, ValueError):
                 continue
-            cursor.execute("SELECT 1 FROM categories WHERE id = %s AND user_id = %s",
-                           (category_id, current_user.id))
+            cursor.execute(
+                "SELECT 1 FROM categories WHERE id = %s AND user_id = %s AND kind = 'expense'",
+                (category_id, current_user.id))
             if cursor.fetchone() is None:
-                continue  # not the user's category — skip (write-side IDOR guard)
+                continue  # not the user's expense category — skip (write-side IDOR guard)
             try:
                 # OverflowError: int(round(float("inf"))) — nan already raises ValueError.
                 amount = int(round(float(request.form.get(f'amount_{category_id}', ''))))

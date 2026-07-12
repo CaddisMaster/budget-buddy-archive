@@ -7,9 +7,12 @@ isolation tests in test_isolation.py.
 """
 from app.db import get_db_connection
 from tests.conftest import (
+    create_budget,
     create_category,
     fetch_account,
     fetch_budget,
+    fetch_budget_by_category,
+    fetch_budget_history,
     fetch_category,
     fetch_category_kind,
     find_category_id,
@@ -73,6 +76,37 @@ def test_edit_category_flips_kind(client_a, users):
                   data={"name": "Side hustle", "description": "", "kind": "income"},
                   follow_redirects=True)
     assert fetch_category_kind(cid) == "income"
+
+
+def test_flip_to_income_clears_saved_budget(client_a, users):
+    # Budgets are expense-only: flipping a budgeted category to income drops
+    # the budget (else it would linger unreachable — the cockpit hides the row)
+    # and logs the clear in budget_history.
+    a = users["a"]
+    cid = create_category(a["id"], "FlipMe")
+    create_budget(a["id"], cid, 150)
+    client_a.post(f"/categories/{cid}/edit",
+                  data={"name": "FlipMe", "description": "", "kind": "income"})
+    assert fetch_category_kind(cid) == "income"
+    assert fetch_budget_by_category(a["id"], cid) is None
+    history = fetch_budget_history(a["id"], cid)
+    assert history and history[-1][0] is None
+
+
+def test_budgets_cockpit_hides_income_kind(client_a, users):
+    inc_cid = create_category(users["a"]["id"], "SalaryKind", kind="income")
+    body = client_a.get("/budgets").get_data(as_text=True)
+    assert "SalaryKind" not in body
+    assert "cat-A" in body
+    assert inc_cid is not None
+
+
+def test_set_budget_rejects_income_kind_category(client_a, users):
+    inc_cid = create_category(users["a"]["id"], "SalaryKind", kind="income")
+    resp = client_a.post("/budgets/set",
+                         data={"category_id": inc_cid, "amount": "100"})
+    assert resp.status_code == 404
+    assert fetch_budget_by_category(users["a"]["id"], inc_cid) is None
 
 
 # --- accounts ---------------------------------------------------------------

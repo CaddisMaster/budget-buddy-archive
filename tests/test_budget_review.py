@@ -204,6 +204,16 @@ def test_facts_exclude_income_adjustments_and_transfers(users):
     assert entry["avg_monthly"] == pytest.approx(50.0)
 
 
+def test_facts_exclude_income_kind_categories(users):
+    # v10.12: an income-kind category is never a review candidate — not for
+    # stray expense-typed spend, and not for a lingering saved budget.
+    a = users["a"]
+    inc = create_category(a["id"], "salary-A", kind="income")
+    create_transaction(a["id"], a["account_id"], 75, date.today(), category_id=inc)
+    create_budget(a["id"], inc, 90)
+    assert _entry(compute_budget_review_facts(a["id"]), "salary-A") is None
+
+
 def test_facts_are_user_scoped(users):
     a = users["a"]
     facts = compute_budget_review_facts(a["id"])
@@ -291,6 +301,26 @@ def test_apply_rejects_other_users_category(ai_on, users, client_a):
         f'amount_{b["category_id"]}': "123"})
     assert fetch_budget_by_category(a["id"], b["category_id"]) is None
     assert fetch_budget_by_category(b["id"], b["category_id"]) is None
+
+
+def test_scan_drops_proposals_for_income_kind(monkeypatch, ai_on, users, client_a):
+    # The scan's category list is expense-kind only, so a proposal naming an
+    # income-kind category resolves to nothing -> toast, no panel.
+    a = users["a"]
+    create_category(a["id"], "salary-A", kind="income")
+    monkeypatch.setattr(ai, "_call_budget_model",
+                        lambda *args, **k: _review("Trim", _prop("salary-A", 50)))
+    resp = client_a.post("/budgets/review/scan", headers=HX)
+    assert resp.status_code == 200
+    assert resp.headers.get("HX-Reswap") == "none"
+
+
+def test_apply_rejects_income_kind_category(ai_on, users, client_a):
+    a = users["a"]
+    inc = create_category(a["id"], "salary-A", kind="income")
+    client_a.post("/budgets/review/apply", headers=HX, data={
+        "category_id": str(inc), f"amount_{inc}": "123"})
+    assert fetch_budget_by_category(a["id"], inc) is None
 
 
 def test_apply_skips_invalid_amounts(ai_on, users, client_a):

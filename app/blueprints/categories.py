@@ -99,19 +99,37 @@ def edit_category(category_id):
         if error:
             return render_template('partials/_category_edit_row.html',
                                    cat=CategoryRow(category_id, name, description, kind), error=error)
+        from app.blueprints.budgets import record_budget_change  # lazy: avoids import cycle
+        cleared_budget = False
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
                     "UPDATE categories SET name=%s, description=%s, kind=%s WHERE id=%s AND user_id=%s",
                     (name, description, kind, category_id, current_user.id),
                 )
+                # Budgets are expense-only: flipping a category to income drops
+                # its saved budget (logged), else it would linger invisibly —
+                # the cockpit no longer lists the row that could clear it.
+                if kind == 'income':
+                    cursor.execute(
+                        "SELECT 1 FROM budgets WHERE category_id = %s AND user_id = %s",
+                        (category_id, current_user.id),
+                    )
+                    if cursor.fetchone():
+                        record_budget_change(cursor, current_user.id, category_id, None)
+                        cursor.execute(
+                            "DELETE FROM budgets WHERE category_id = %s AND user_id = %s",
+                            (category_id, current_user.id),
+                        )
+                        cleared_budget = True
         except psycopg2.Error:
             current_app.logger.exception('edit category failed')
             return render_template('partials/_category_edit_row.html',
                                    cat=CategoryRow(category_id, name, description, kind), error=GENERIC_ERROR)
         resp = make_response(render_template('partials/_category_row.html',
                                              cat=CategoryRow(category_id, name, description, kind)))
-        return hx_toast(resp, 'Category updated')
+        return hx_toast(resp, 'Category updated — its budget was cleared (income categories have no budgets)'
+                        if cleared_budget else 'Category updated')
 
     return render_template('partials/_category_edit_row.html', cat=cat)
 

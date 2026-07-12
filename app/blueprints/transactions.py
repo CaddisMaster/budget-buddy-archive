@@ -554,10 +554,10 @@ CLEANUP_RECENT_DAYS = 90        # window of categorized rows eligible for re-sug
 def count_uncategorized(user_id):
     """How many of the user's real EXPENSE transactions have no category — the
     deterministic number the History banner shows. Scoped to expenses on purpose:
-    categories in Budget Buddy are effectively expense categories (budgets, the
-    category breakdown, and analytics all filter to expense), so an uncategorized
-    income row has no downstream effect AND can never get a suggestion — counting
-    it would make the banner promise a fix the scan can't deliver."""
+    the scan only proposes expense-kind categories (v10.12 — categories carry an
+    explicit kind now), so an uncategorized income row can never get a suggestion —
+    counting it would make the banner promise a fix the scan can't deliver.
+    Income rows are categorized manually via the forms."""
     with db_cursor() as cursor:
         cursor.execute("""
             SELECT COUNT(*) FROM transactions
@@ -646,8 +646,11 @@ def cleanup_scan():
     by_id = {r['id']: r for r in rows}
 
     with db_cursor() as cursor:
-        cursor.execute("SELECT id, name FROM categories WHERE user_id = %s ORDER BY name",
-                       (current_user.id,))
+        # Expense-kind only: the candidates are expense rows, so the model
+        # should never see (or resolve to) an income category.
+        cursor.execute(
+            "SELECT id, name FROM categories WHERE user_id = %s AND kind = 'expense' ORDER BY name",
+            (current_user.id,))
         all_categories = cursor.fetchall()
 
     def _toast_only(message):

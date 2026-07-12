@@ -164,6 +164,20 @@ def test_scan_skips_low_confidence_recategorize(monkeypatch, ai_on, users, clien
     assert f'value="{a["transaction_id"]}"' not in body
 
 
+def test_scan_never_resolves_income_kind_category(monkeypatch, ai_on, users, client_a):
+    # v10.12: the feeder lists expense-kind categories only, so a model proposal
+    # naming an income-kind category can't resolve and its row is dropped.
+    a = users["a"]
+    create_category(a["id"], "Paychecks", kind="income")
+    u1 = create_transaction(a["id"], a["account_id"], 5, date.today(), category_id=None)
+    monkeypatch.setattr(ai, "_call_categorize_model",
+                        lambda *args, **k: _batch(_sugg(u1, "Paychecks", "high")))
+    resp = client_a.post("/transactions/cleanup/scan", headers=HX)
+    assert resp.status_code == 200
+    assert f'value="{u1}"' not in resp.get_data(as_text=True)
+    assert _fetch_category_id(u1) is None
+
+
 def test_scan_graceful_when_model_fails(monkeypatch, ai_on, users, client_a):
     a = users["a"]
     create_transaction(a["id"], a["account_id"], 5, date.today(), category_id=None)

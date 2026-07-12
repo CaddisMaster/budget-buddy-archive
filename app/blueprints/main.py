@@ -91,6 +91,31 @@ def dashboard():
             """, (current_user.id,))
         spending = cursor.fetchall()
 
+        # v10.12 income-by-category — the categorization payoff for income-kind
+        # categories (salary vs freelance vs interest). Same shape/filters as
+        # the spending rollup; feeds the Spending card's Expense/Income toggle.
+        if selected_month:
+            cursor.execute("""
+                SELECT c.name, SUM(t.amount) AS total
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
+                WHERE t.user_id = %s AND t.transaction_type = 'income' AND t.is_transfer = false AND t.is_adjustment = false
+                AND EXTRACT(YEAR FROM t.transaction_date) = %s
+                AND EXTRACT(MONTH FROM t.transaction_date) = %s
+                GROUP BY c.name
+                ORDER BY total DESC
+            """, (current_user.id, filter_year, filter_month))
+        else:
+            cursor.execute("""
+                SELECT c.name, SUM(t.amount) AS total
+                FROM transactions t
+                JOIN categories c ON t.category_id = c.id
+                WHERE t.user_id = %s AND t.transaction_type = 'income' AND t.is_transfer = false AND t.is_adjustment = false
+                GROUP BY c.name
+                ORDER BY total DESC
+            """, (current_user.id,))
+        income_by_category = cursor.fetchall()
+
         if selected_month:
             cursor.execute("""
                 SELECT
@@ -231,6 +256,7 @@ def dashboard():
     # HTML-escapes into the script block (the old json.dumps + |safe let a
     # </script> in a category/account name break out of it).
     spending_data = [{'category': r[0], 'total': float(r[1])} for r in spending]
+    income_by_category_data = [{'category': r[0], 'total': float(r[1])} for r in income_by_category]
     cash_flow_data = [{'month': r[0], 'income': float(r[1]), 'expenses': float(r[2])} for r in cash_flow]
     net_balance_data = [{'month': r[0], 'balance': float(r[1])} for r in net_balance_trend]
     account_data = [{'account': r[0], 'balance': float(r[1])} for r in account_balances]
@@ -266,6 +292,7 @@ def dashboard():
         summary=summary,
         yoy=yoy,
         spending_data=spending_data,
+        income_by_category_data=income_by_category_data,
         cash_flow_data=cash_flow_data,
         net_balance_data=net_balance_data,
         account_data=account_data,

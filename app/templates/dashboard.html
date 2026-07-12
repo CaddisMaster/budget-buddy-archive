@@ -99,7 +99,15 @@
 <h2>Charts</h2>
 <div class="chart-grid">
     <div class="chart-card">
-        <h3>Spending by category</h3>
+        <div class="chart-head">
+            <h3 id="categoryChartTitle">Spending by category</h3>
+            {% if income_by_category_data %}
+            <div class="chart-toggle" id="categoryChartToggle">
+                <button type="button" class="active" data-view="expense">Expenses</button>
+                <button type="button" data-view="income">Income</button>
+            </div>
+            {% endif %}
+        </div>
         <canvas id="spendingPie"></canvas>
     </div>
     <div class="chart-card">
@@ -126,6 +134,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const spendingData = {{ spending_data | tojson }};
+const incomeByCategoryData = {{ income_by_category_data | tojson }};
 const cashFlowData = {{ cash_flow_data | tojson }};
 const netBalanceData = {{ net_balance_data | tojson }};
 const accountData = {{ account_data | tojson }};
@@ -146,13 +155,28 @@ Chart.defaults.plugins.legend.labels.padding = 14;
 const gridColor = cssVar('--border');
 const gridScales = { x: { grid: { color: gridColor } }, y: { beginAtZero: true, grid: { color: gridColor } } };
 
-new Chart(document.getElementById('spendingPie'), {
+const categoryPie = new Chart(document.getElementById('spendingPie'), {
     type: 'doughnut',
     data: {
         labels: spendingData.map(d => d.category),
         datasets: [{ data: spendingData.map(d => d.total), backgroundColor: PALETTE, borderColor: cssVar('--surface'), borderWidth: 2 }]
     },
     options: { aspectRatio: 1.6, cutout: '58%', plugins: { legend: { position: 'right' } } }
+});
+// Expense/Income toggle on the category card (buttons only render when the
+// user has categorized income).
+const categoryViews = { expense: spendingData, income: incomeByCategoryData };
+const categoryTitles = { expense: 'Spending by category', income: 'Income by category' };
+document.querySelectorAll('#categoryChartToggle button').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const data = categoryViews[btn.dataset.view];
+        categoryPie.data.labels = data.map(d => d.category);
+        categoryPie.data.datasets[0].data = data.map(d => d.total);
+        categoryPie.update();
+        document.getElementById('categoryChartTitle').textContent = categoryTitles[btn.dataset.view];
+        document.querySelectorAll('#categoryChartToggle button').forEach(
+            b => b.classList.toggle('active', b === btn));
+    });
 });
 new Chart(document.getElementById('cashFlowBar'), {
     type: 'bar',

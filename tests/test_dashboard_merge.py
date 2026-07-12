@@ -98,6 +98,58 @@ def test_yoy_absent_when_no_prior_year_data(client_a):
     assert b"Year over year" not in response.data
 
 
+# --- income-by-category toggle (v10.12) --------------------------------------------
+
+def test_income_toggle_renders_with_categorized_income(client_a, users):
+    a = users["a"]
+    inc = create_category(a["id"], "Salary", kind="income")
+    create_transaction(a["id"], a["account_id"], 2500.00, date.today(),
+                       transaction_type="income", category_id=inc)
+    response = client_a.get("/dashboard")
+    assert response.status_code == 200
+    assert b'id="categoryChartToggle"' in response.data
+    assert b"Salary" in response.data           # in the income payload
+    assert b"2500.0" in response.data
+
+
+def test_income_toggle_hidden_without_categorized_income(client_a, users):
+    a = users["a"]
+    # Uncategorized income exists, but the rollup JOINs categories — no payload,
+    # no toggle (the fixture's seeded expense keeps the chart grid rendering).
+    create_transaction(a["id"], a["account_id"], 900.00, date.today(),
+                       transaction_type="income", category_id=None)
+    response = client_a.get("/dashboard")
+    assert response.status_code == 200
+    assert b'id="categoryChartToggle"' not in response.data
+
+
+def test_income_payload_respects_month_filter(client_a, users):
+    # Income in another month -> empty income payload for the filtered view, so
+    # the category name is absent and the toggle doesn't render. (The amount
+    # itself still legitimately shows in the all-time net-balance trend.)
+    a = users["a"]
+    inc = create_category(a["id"], "Salary", kind="income")
+    create_transaction(a["id"], a["account_id"], 1111.00, date(2025, 3, 15),
+                       transaction_type="income", category_id=inc)
+    response = client_a.get(f"/dashboard?month={date.today().strftime('%Y-%m')}")
+    assert response.status_code == 200
+    assert b"Salary" not in response.data
+    assert b'id="categoryChartToggle"' not in response.data
+
+
+def test_income_chart_json_escapes_script_breakout(client_a, users):
+    # The income payload goes through |tojson like the other seven.
+    a = users["a"]
+    evil = "</script><script>alert(2)</script>"
+    inc = create_category(a["id"], evil, kind="income")
+    create_transaction(a["id"], a["account_id"], 7.00, date.today(),
+                       transaction_type="income", category_id=inc)
+    response = client_a.get("/dashboard")
+    assert response.status_code == 200
+    assert b"</script><script>alert(2)</script>" not in response.data
+    assert b"\\u003c/script\\u003e" in response.data
+
+
 # --- tojson hardening -------------------------------------------------------------
 
 def test_chart_json_escapes_script_breakout(client_a, users):

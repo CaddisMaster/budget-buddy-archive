@@ -179,6 +179,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 1.2rem 1.25rem; }
 .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 0.9rem; color: var(--text); }
 .chart-card.wide { grid-column: 1 / -1; }
+.chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
+.chart-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.chart-toggle button { border: none; background: transparent; color: var(--text-muted); font: inherit; font-size: 12px; padding: 0.15rem 0.7rem; cursor: pointer; }
+.chart-toggle button.active { background: var(--accent-soft); color: var(--text); font-weight: 600; }
 
 /* Table wrapper for horizontal scroll on mobile */
 .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }

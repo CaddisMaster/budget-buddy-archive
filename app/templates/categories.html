@@ -8,6 +8,11 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Name</label>
     <input type="text" name="name" required>
+    <label>Kind</label>
+    <select name="kind">
+        <option value="expense" selected>Expense</option>
+        <option value="income">Income</option>
+    </select>
     <label>Description</label>
     <input type="text" name="description">
     <button type="submit" class="btn btn-primary" style="margin-top:1rem">Add category</button>
@@ -15,13 +20,13 @@
 <h2>Existing categories</h2>
 <div class="table-wrapper">
     <table>
-        <thead><tr><th>Name</th><th>Description</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Kind</th><th>Description</th><th>Actions</th></tr></thead>
         <tbody id="category-rows">
         {% for cat in categories %}
         {% include 'partials/_category_row.html' %}
         {% endfor %}
         {% if not categories %}
-        <tr id="cat-empty"><td colspan="3" style="color:var(--text-muted)">No categories yet. Add one above.</td></tr>
+        <tr id="cat-empty"><td colspan="4" style="color:var(--text-muted)">No categories yet. Add one above.</td></tr>
         {% endif %}
         </tbody>
     </table>

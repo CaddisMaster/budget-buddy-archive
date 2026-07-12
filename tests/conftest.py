@@ -225,6 +225,17 @@ def fetch_budget(budget_id):
     return row
 
 
+def fetch_category_kind(category_id):
+    """Return a category's kind straight from the DB, or None if missing."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT kind FROM categories WHERE id = %s", (category_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else None
+
+
 def find_category_id(user_id, name):
     """Look up a user's category id by name (CRUD tests create via the app,
     then need the generated id to verify/clean up)."""
@@ -240,12 +251,12 @@ def find_category_id(user_id, name):
     return row[0] if row else None
 
 
-def create_category(user_id, name):
+def create_category(user_id, name, kind="expense"):
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO categories (name, user_id) VALUES (%s, %s) RETURNING id",
-        (name, user_id),
+        "INSERT INTO categories (name, kind, user_id) VALUES (%s, %s, %s) RETURNING id",
+        (name, kind, user_id),
     )
     cid = cur.fetchone()[0]
     conn.commit()

@@ -24,6 +24,8 @@ CREATE TABLE public.categories (
     id SERIAL PRIMARY KEY,
     name character varying(50) NOT NULL,
     description text,
+    kind VARCHAR(10) NOT NULL DEFAULT 'expense'
+        CHECK (kind IN ('expense', 'income')),
     created_at timestamp without time zone DEFAULT now(),
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );

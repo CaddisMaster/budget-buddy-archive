@@ -12,13 +12,15 @@ from app.helpers import is_htmx, hx_toast, GENERIC_ERROR
 bp = Blueprint('categories', __name__)
 
 # Hand-built rows for the edit error/re-render paths — field names mirror the
-# "SELECT id, name, description" shape so templates read both identically.
-CategoryRow = namedtuple('CategoryRow', 'id name description')
+# "SELECT id, name, description, kind" shape so templates read both identically.
+CategoryRow = namedtuple('CategoryRow', 'id name description kind')
+
+KINDS = ('expense', 'income')
 
 
 def _own_category_or_404(cursor, category_id):
     cursor.execute(
-        "SELECT id, name, description FROM categories WHERE id = %s AND user_id = %s",
+        "SELECT id, name, description, kind FROM categories WHERE id = %s AND user_id = %s",
         (category_id, current_user.id),
     )
     row = cursor.fetchone()
@@ -33,11 +35,14 @@ def categories():
     if request.method == 'POST':
         name = request.form['name'].strip()
         description = request.form.get('description', '').strip()
+        kind = request.form.get('kind', 'expense')
         error = None
         if not name:
             error = 'Name is required'
         elif len(name) > 50:
             error = 'Name must be 50 characters or fewer'
+        elif kind not in KINDS:
+            error = 'Kind must be expense or income'
         if error:
             if is_htmx():
                 return hx_toast(make_response('', 200), error, 'error')
@@ -46,9 +51,9 @@ def categories():
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "INSERT INTO categories (name, description, user_id) "
-                    "VALUES (%s, %s, %s) RETURNING id, name, description",
-                    (name, description, current_user.id),
+                    "INSERT INTO categories (name, description, kind, user_id) "
+                    "VALUES (%s, %s, %s, %s) RETURNING id, name, description, kind",
+                    (name, description, kind, current_user.id),
                 )
                 cat = cursor.fetchone()
         except psycopg2.Error:
@@ -65,7 +70,7 @@ def categories():
 
     with db_cursor() as cursor:
         cursor.execute(
-            "SELECT id, name, description FROM categories WHERE user_id = %s ORDER BY name",
+            "SELECT id, name, description, kind FROM categories WHERE user_id = %s ORDER BY name",
             (current_user.id,),
         )
         all_categories = cursor.fetchall()
@@ -83,26 +88,29 @@ def edit_category(category_id):
     if request.method == 'POST':
         name = request.form['name'].strip()
         description = request.form.get('description', '').strip()
+        kind = request.form.get('kind', 'expense')
         error = None
         if not name:
             error = 'Name is required'
         elif len(name) > 50:
             error = 'Name must be 50 characters or fewer'
+        elif kind not in KINDS:
+            error = 'Kind must be expense or income'
         if error:
             return render_template('partials/_category_edit_row.html',
-                                   cat=CategoryRow(category_id, name, description), error=error)
+                                   cat=CategoryRow(category_id, name, description, kind), error=error)
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "UPDATE categories SET name=%s, description=%s WHERE id=%s AND user_id=%s",
-                    (name, description, category_id, current_user.id),
+                    "UPDATE categories SET name=%s, description=%s, kind=%s WHERE id=%s AND user_id=%s",
+                    (name, description, kind, category_id, current_user.id),
                 )
         except psycopg2.Error:
             current_app.logger.exception('edit category failed')
             return render_template('partials/_category_edit_row.html',
-                                   cat=CategoryRow(category_id, name, description), error=GENERIC_ERROR)
+                                   cat=CategoryRow(category_id, name, description, kind), error=GENERIC_ERROR)
         resp = make_response(render_template('partials/_category_row.html',
-                                             cat=CategoryRow(category_id, name, description)))
+                                             cat=CategoryRow(category_id, name, description, kind)))
         return hx_toast(resp, 'Category updated')
 
     return render_template('partials/_category_edit_row.html', cat=cat)

@@ -11,6 +11,7 @@ from tests.conftest import (
     fetch_account,
     fetch_budget,
     fetch_category,
+    fetch_category_kind,
     find_category_id,
 )
 
@@ -43,6 +44,35 @@ def test_delete_category(client_a, users):
     cid = create_category(users["a"]["id"], "Disposable")
     client_a.delete(f"/categories/{cid}", follow_redirects=True)
     assert fetch_category(cid) is None
+
+
+def test_create_category_income_kind(client_a, users):
+    client_a.post("/categories", data={"name": "Freelance", "kind": "income"},
+                  follow_redirects=True)
+    cid = find_category_id(users["a"]["id"], "Freelance")
+    assert cid is not None
+    assert fetch_category_kind(cid) == "income"
+
+
+def test_create_category_defaults_to_expense_kind(client_a, users):
+    # No kind posted (also the shape of every pre-v10.12 form) -> expense.
+    client_a.post("/categories", data={"name": "KindlessCat"}, follow_redirects=True)
+    cid = find_category_id(users["a"]["id"], "KindlessCat")
+    assert fetch_category_kind(cid) == "expense"
+
+
+def test_create_category_rejects_bogus_kind(client_a, users):
+    client_a.post("/categories", data={"name": "BogusKind", "kind": "sideways"},
+                  follow_redirects=True)
+    assert find_category_id(users["a"]["id"], "BogusKind") is None
+
+
+def test_edit_category_flips_kind(client_a, users):
+    cid = create_category(users["a"]["id"], "Side hustle")
+    client_a.post(f"/categories/{cid}/edit",
+                  data={"name": "Side hustle", "description": "", "kind": "income"},
+                  follow_redirects=True)
+    assert fetch_category_kind(cid) == "income"
 
 
 # --- accounts ---------------------------------------------------------------

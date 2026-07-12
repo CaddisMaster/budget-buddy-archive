@@ -6,12 +6,16 @@ ownership-resolution logic and the route both run end-to-end while CI (which has
 no ANTHROPIC_API_KEY) stays offline and free. The pure helpers (_normalize,
 _match_id) are also tested directly.
 """
+from collections import namedtuple
 from datetime import date
 
 import app.ai as ai
 from app.ai import _ParsedTransaction, _match_id, _normalize, ParseError
 
 HX = {"HX-Request": "true"}
+
+# ai.py reads owned rows by attribute (v10.12) — mirror the feeder shape.
+Row = namedtuple("Row", "id name")
 
 
 def _parsed(**over):
@@ -24,21 +28,21 @@ def _parsed(**over):
 # --- pure helpers -----------------------------------------------------------
 
 def test_match_id_is_case_insensitive():
-    rows = [(1, "Groceries"), (2, "Rent")]
+    rows = [Row(1, "Groceries"), Row(2, "Rent")]
     assert _match_id("groceries", rows) == 1
     assert _match_id("RENT", rows) == 2
 
 
 def test_match_id_unmatched_or_none():
-    rows = [(1, "Groceries")]
+    rows = [Row(1, "Groceries")]
     assert _match_id("Utilities", rows) is None
     assert _match_id(None, rows) is None
     assert _match_id("", rows) is None
 
 
 def test_normalize_resolves_names_to_ids():
-    cats = [(1, "Groceries")]
-    accts = [(7, "Checking")]
+    cats = [Row(1, "Groceries")]
+    accts = [Row(7, "Checking")]
     out = _normalize(_parsed(category="groceries", account="Checking"),
                      cats, accts, date(2026, 6, 21))
     assert out["transaction_type"] == "expense"
@@ -62,7 +66,7 @@ def test_normalize_bad_date_falls_back_to_today():
 
 
 def test_normalize_unmatched_category_is_none():
-    out = _normalize(_parsed(category="Nope"), [(1, "Groceries")], [],
+    out = _normalize(_parsed(category="Nope"), [Row(1, "Groceries")], [],
                      date(2026, 6, 21))
     assert out["category_id"] is None
 

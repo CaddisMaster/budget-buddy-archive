@@ -40,9 +40,8 @@ class _ParsedTransaction(BaseModel):
 def parse_transaction_text(text, categories, accounts, *, today=None):
     """Parse free-text into resolved, ready-to-prefill transaction fields.
 
-    `categories` is the user's own rows as (id, name) tuples and `accounts` as
-    (account_id, name) tuples — the same shape new_transaction already loads.
-    Returns:
+    `categories` and `accounts` are the user's own rows carrying .id/.name
+    attributes (the account feeder aliases account_id/account_name). Returns:
 
         {transaction_type, amount, description,
          category_id, account_id, transaction_date}
@@ -61,8 +60,8 @@ def parse_transaction_text(text, categories, accounts, *, today=None):
     if not api_key:
         raise ParseError("ANTHROPIC_API_KEY is not set")
 
-    category_names = [c[1] for c in categories]
-    account_names = [a[1] for a in accounts]
+    category_names = [c.name for c in categories]
+    account_names = [a.name for a in accounts]
 
     parsed = _call_model(text, category_names, account_names, today, api_key)
     if parsed is None:
@@ -140,15 +139,17 @@ def _normalize(parsed, categories, accounts, today):
 
 
 def _match_id(name, rows):
-    """Case-insensitive exact match of `name` against (id, name) rows → id, else
-    None. This is the server-side guard that the model can only select a row the
-    current user actually owns."""
+    """Case-insensitive exact match of `name` against rows carrying .id/.name →
+    id, else None. This is the server-side guard that the model can only select
+    a row the current user actually owns. Account feeders alias their columns
+    (account_id AS id, account_name AS name) so one attribute contract serves
+    both row shapes."""
     if not name:
         return None
     target = str(name).strip().lower()
     for row in rows:
-        if str(row[1]).strip().lower() == target:
-            return row[0]
+        if str(row.name).strip().lower() == target:
+            return row.id
     return None
 
 
@@ -497,7 +498,7 @@ def classify_transactions(rows, categories, *, today=None):
     if not api_key:
         raise ParseError("ANTHROPIC_API_KEY is not set")
 
-    category_names = [c[1] for c in categories]
+    category_names = [c.name for c in categories]
     parsed = _call_categorize_model(rows, category_names, today, api_key)
     if parsed is None:
         raise ParseError("Model returned no structured output")
@@ -539,8 +540,8 @@ def _normalize_suggestions(parsed, categories, valid_ids):
 def _name_for(category_id, categories):
     """The owned category's display name for a resolved id (None if not found)."""
     for row in categories:
-        if row[0] == category_id:
-            return row[1]
+        if row.id == category_id:
+            return row.name
     return None
 
 
@@ -632,7 +633,7 @@ def propose_budgets(facts, categories, *, today=None):
     if not api_key:
         raise ParseError("ANTHROPIC_API_KEY is not set")
 
-    category_names = [c[1] for c in categories]
+    category_names = [c.name for c in categories]
     parsed = _call_budget_model(facts, category_names, today, api_key)
     if parsed is None:
         raise ParseError("Model returned no structured output")

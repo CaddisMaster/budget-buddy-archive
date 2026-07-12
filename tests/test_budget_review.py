@@ -7,6 +7,7 @@ while CI (no key) stays offline. The model proposes the amounts here — so the
 normalizer's clamp/ownership resolution and the apply path's IDOR guard are the
 security boundary under test.
 """
+from collections import namedtuple
 from datetime import date, timedelta
 from types import SimpleNamespace
 
@@ -20,6 +21,9 @@ from conftest import (
 )
 
 HX = {"HX-Request": "true"}
+
+# ai.py reads owned rows by attribute (v10.12) — mirror the feeder shape.
+Row = namedtuple("Row", "id name")
 
 
 # --- helpers ----------------------------------------------------------------
@@ -63,7 +67,7 @@ def ai_on(monkeypatch):
 # --- pure normalizer ---------------------------------------------------------
 
 def test_normalize_resolves_name_and_passes_in_range_amount():
-    cats = [(10, "Groceries"), (11, "Gas")]
+    cats = [Row(10, "Groceries"), Row(11, "Gas")]
     facts = _by_name(_fact("Groceries", avg=100, totals=[("2026-05", 100.0)]))
     parsed = _review("ok", _prop("groceries", 150))       # case-insensitive
     out = _normalize_budget_proposals(parsed, cats, facts)
@@ -72,14 +76,14 @@ def test_normalize_resolves_name_and_passes_in_range_amount():
 
 
 def test_normalize_drops_unknown_category():
-    cats = [(10, "Groceries")]
+    cats = [Row(10, "Groceries")]
     facts = _by_name(_fact("Groceries", avg=100))
     parsed = _review("ok", _prop("Crypto", 100))          # not the user's category
     assert _normalize_budget_proposals(parsed, cats, facts) == []
 
 
 def test_normalize_drops_duplicate_first_wins():
-    cats = [(10, "Groceries")]
+    cats = [Row(10, "Groceries")]
     facts = _by_name(_fact("Groceries", avg=100, totals=[("2026-05", 100.0)]))
     parsed = _review("ok", _prop("Groceries", 120), _prop("Groceries", 60))
     out = _normalize_budget_proposals(parsed, cats, facts)
@@ -88,7 +92,7 @@ def test_normalize_drops_duplicate_first_wins():
 
 def test_normalize_snaps_out_of_range_amounts():
     # avg=100, worst month 180 -> range [50, 200]; snap, don't drop.
-    cats = [(10, "Groceries"), (11, "Gas")]
+    cats = [Row(10, "Groceries"), Row(11, "Gas")]
     facts = _by_name(_fact("Groceries", avg=100, totals=[("2026-05", 180.0)]),
                      _fact("Gas", avg=100, totals=[("2026-05", 180.0)]))
     parsed = _review("ok", _prop("Groceries", 10), _prop("Gas", 900))
@@ -98,7 +102,7 @@ def test_normalize_snaps_out_of_range_amounts():
 
 def test_normalize_range_widens_to_worst_observed_month():
     # A 350 spike month beats the 2x-avg ceiling, so budgeting for it is allowed.
-    cats = [(10, "Groceries")]
+    cats = [Row(10, "Groceries")]
     facts = _by_name(_fact("Groceries", avg=100, totals=[("2026-05", 350.0)]))
     parsed = _review("ok", _prop("Groceries", 300))
     out = _normalize_budget_proposals(parsed, cats, facts)
@@ -106,14 +110,14 @@ def test_normalize_range_widens_to_worst_observed_month():
 
 
 def test_normalize_drops_garbage_amounts():
-    cats = [(10, "Groceries"), (11, "Gas")]
+    cats = [Row(10, "Groceries"), Row(11, "Gas")]
     facts = _by_name(_fact("Groceries", avg=100), _fact("Gas", avg=100))
     parsed = _review("ok", _prop("Groceries", "abc"), _prop("Gas", -5))
     assert _normalize_budget_proposals(parsed, cats, facts) == []
 
 
 def test_normalize_reason_default_and_truncation():
-    cats = [(10, "Groceries"), (11, "Gas")]
+    cats = [Row(10, "Groceries"), Row(11, "Gas")]
     facts = _by_name(_fact("Groceries", avg=100), _fact("Gas", avg=100))
     parsed = _review("ok", _prop("Groceries", 100, reason="  "),
                      _prop("Gas", 100, reason="x" * 300))
@@ -123,7 +127,7 @@ def test_normalize_reason_default_and_truncation():
 
 
 def test_normalize_drops_no_basis_and_unasked_categories():
-    cats = [(10, "Groceries"), (11, "Gas")]
+    cats = [Row(10, "Groceries"), Row(11, "Gas")]
     # Groceries has no avg AND no saved budget; Gas wasn't in the facts at all.
     facts = _by_name(_fact("Groceries", avg=None, current=None))
     parsed = _review("ok", _prop("Groceries", 100), _prop("Gas", 100))
@@ -136,12 +140,12 @@ def test_propose_budgets_empty_candidates_short_circuits(monkeypatch):
     # No key needed and no model call when there's nothing to review.
     monkeypatch.setattr(ai, "_call_budget_model",
                         lambda *a, **k: pytest.fail("should not call the model"))
-    out = propose_budgets({"categories": []}, [(10, "Groceries")])
+    out = propose_budgets({"categories": []}, [Row(10, "Groceries")])
     assert out == {"summary": "", "proposals": []}
 
 
 def test_propose_budgets_happy_path_and_empty_summary(monkeypatch, ai_on):
-    cats = [(10, "Groceries")]
+    cats = [Row(10, "Groceries")]
     facts = {"categories": [_fact("Groceries", avg=100,
                                   totals=[("2026-05", 100.0)])]}
     monkeypatch.setattr(ai, "_call_budget_model",

@@ -188,7 +188,13 @@ def parse_transaction():
     with db_cursor() as cursor:
         cursor.execute("SELECT id, name, kind FROM categories WHERE user_id = %s ORDER BY name", (current_user.id,))
         all_categories = cursor.fetchall()
-        cursor.execute("SELECT account_id, account_name FROM account WHERE user_id = %s ORDER BY account_name", (current_user.id,))
+        # Dual-named on purpose: the form partial reads .account_id/.account_name
+        # (the canonical account columns), ai.py's _match_id reads .id/.name (its
+        # one attribute contract across category AND account rows).
+        cursor.execute("""
+            SELECT account_id, account_name, account_id AS id, account_name AS name
+            FROM account WHERE user_id = %s ORDER BY account_name
+        """, (current_user.id,))
         all_accounts = cursor.fetchall()
 
     def _form(prefill):

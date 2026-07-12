@@ -7,6 +7,7 @@ while CI (no key) stays offline. The model only PROPOSES; the app picks the
 candidates and owns the write — so the isolation/IDOR tests live on the apply
 path (the security boundary), like the rest of the suite.
 """
+from collections import namedtuple
 from datetime import date, timedelta
 from types import SimpleNamespace
 
@@ -19,6 +20,9 @@ from app.db import get_db_connection
 from conftest import create_transaction, create_category
 
 HX = {"HX-Request": "true"}
+
+# ai.py reads owned rows by attribute (v10.12) — mirror the feeder shape.
+Row = namedtuple("Row", "id name")
 
 
 # --- helpers ----------------------------------------------------------------
@@ -51,7 +55,7 @@ def ai_on(monkeypatch):
 # --- pure normalizer --------------------------------------------------------
 
 def test_normalize_resolves_name_to_owned_id():
-    cats = [(10, "Groceries"), (11, "Gas")]
+    cats = [Row(10, "Groceries"), Row(11, "Gas")]
     parsed = _batch(_sugg(1, "groceries", "high"))  # case-insensitive
     out = _normalize_suggestions(parsed, cats, {1})
     assert out == [{"id": 1, "category_id": 10, "category_name": "Groceries",
@@ -59,13 +63,13 @@ def test_normalize_resolves_name_to_owned_id():
 
 
 def test_normalize_drops_unknown_category():
-    cats = [(10, "Groceries")]
+    cats = [Row(10, "Groceries")]
     parsed = _batch(_sugg(1, "Crypto", "high"))     # not the user's category
     assert _normalize_suggestions(parsed, cats, {1}) == []
 
 
 def test_normalize_drops_ids_outside_batch_and_defaults_confidence():
-    cats = [(10, "Groceries")]
+    cats = [Row(10, "Groceries")]
     parsed = _batch(_sugg(99, "Groceries", "high"),   # id we never asked about
                     _sugg(1, "Groceries", "bogus"))   # bad confidence -> low
     out = _normalize_suggestions(parsed, cats, {1})
@@ -74,7 +78,7 @@ def test_normalize_drops_ids_outside_batch_and_defaults_confidence():
 
 
 def test_classify_transactions_uses_seam(monkeypatch, ai_on):
-    cats = [(10, "Groceries")]
+    cats = [Row(10, "Groceries")]
     monkeypatch.setattr(ai, "_call_categorize_model",
                         lambda *a, **k: _batch(_sugg(1, "Groceries", "high")))
     out = classify_transactions([{"id": 1, "description": "Safeway"}], cats)
@@ -85,7 +89,7 @@ def test_classify_empty_rows_short_circuits(monkeypatch):
     # No key needed and no model call when there's nothing to classify.
     monkeypatch.setattr(ai, "_call_categorize_model",
                         lambda *a, **k: pytest.fail("should not call the model"))
-    assert classify_transactions([], [(10, "Groceries")]) == []
+    assert classify_transactions([], [Row(10, "Groceries")]) == []
 
 
 # --- candidate query + count -----------------------------------------------

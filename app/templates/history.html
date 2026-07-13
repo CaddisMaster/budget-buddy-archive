@@ -2,8 +2,8 @@
 {% block title %}Transaction History — Budget Buddy{% endblock %}
 {% block content %}
 <h1>Transaction history</h1>
-<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;align-items:flex-end">
-  <form method="get" style="display:flex;gap:0.5rem;align-items:flex-end">
+<div class="toolbar">
+  <form method="get">
     {% if selected_month %}<input type="hidden" name="month" value="{{ selected_month }}">{% endif %}
     <div>
       <label>Search</label>
@@ -12,7 +12,7 @@
     <button type="submit" class="btn btn-primary">Search</button>
     {% if search %}<a href="{{ url_for('transactions.transactions') }}{% if selected_month %}?month={{ selected_month }}{% endif %}" class="btn">Clear</a>{% endif %}
   </form>
-  <form method="get" style="display:flex;gap:0.5rem;align-items:flex-end">
+  <form method="get">
     {% if search %}<input type="hidden" name="search" value="{{ search }}">{% endif %}
     <div>
       <label>Filter by month</label>
@@ -59,7 +59,7 @@
 </div>
 {% endif %}
 {% if total_pages > 1 %}
-<div style="display:flex;gap:0.5rem;margin-top:1rem;align-items:center">
+<div class="pager">
   {% if page > 1 %}
   <a href="?page={{ page - 1 }}{% if selected_month %}&month={{ selected_month }}{% endif %}{% if search %}&search={{ search }}{% endif %}" class="btn">← Previous</a>
   {% endif %}

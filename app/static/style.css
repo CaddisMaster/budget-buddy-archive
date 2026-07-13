@@ -292,6 +292,11 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
 .goal-summary-bar { flex: 1 1 160px; margin: 0; height: 14px; }
 .goal-summary-pct { font-size: var(--fs-sm); color: var(--text-muted); font-weight: 600; white-space: nowrap; }
 
+/* v10.13 — page toolbars (filter/search rows) + pagination. */
+.toolbar { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: flex-end; }
+.toolbar form { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; }
+.pager { display: flex; gap: 0.5rem; margin-top: 1rem; align-items: center; }
+
 /* v10.13 — the What's-new strip on the merged home/dashboard. */
 .whatsnew { padding: 0.8rem 1rem; margin-bottom: 1.25rem; }
 .whatsnew-head { display: flex; align-items: center; gap: 0.6rem; }
@@ -395,6 +400,10 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
   .txn-table tr.editing { display: block; }
   .txn-table tr.editing td { display: block; width: 100%; padding: 0.15rem 0; }
   .txn-table tr.editing td.bulk-col { display: none; }
+  /* Toolbars stack tighter on phones; buttons stay tappable full-row. */
+  .toolbar { gap: 0.6rem; }
+  .toolbar form { flex: 1 1 100%; }
+  .toolbar form > div { flex: 1; }
 }
 
 /* HTMX indicator (shown while a request is in flight) */

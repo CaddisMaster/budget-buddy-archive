@@ -1,16 +1,16 @@
 <tr id="txn-{{ t.id }}" class="{% if t.is_transfer %}transfer {% endif %}{% if t.transaction_type == 'income' %}income{% else %}expense{% endif %}">
   <td class="bulk-col">{% if not t.is_transfer %}<input type="checkbox" class="row-select" name="row_id" value="{{ t.id }}" aria-label="Select row">{% endif %}</td>
-  <td>{{ t.transaction_date }}</td>
-  <td>{{ t.transaction_type | capitalize }}</td>
-  <td>{{ t.amount }}</td>
-  <td>
+  <td class="c-date">{{ t.transaction_date }}</td>
+  <td class="c-type">{{ t.transaction_type | capitalize }}</td>
+  <td class="c-amount">{{ t.amount }}</td>
+  <td class="c-desc">
     {{ t.description }}
     {% if t.is_transfer %}<span class="transfer-badge">⇄ Transfer</span>{% endif %}
     {% if t.is_adjustment %}<span class="recurring-badge">Adjustment</span>{% endif %}
   </td>
-  <td>{{ t.category_name or 'Uncategorised' }}</td>
-  <td>{{ t.account_name or 'No account' }}</td>
-  <td class="{% if t.running_balance >= 0 %}income{% else %}expense{% endif %}">${{ t.running_balance|money }}</td>
+  <td class="c-cat">{{ t.category_name or 'Uncategorised' }}</td>
+  <td class="c-acct">{{ t.account_name or 'No account' }}</td>
+  <td class="c-bal {% if t.running_balance >= 0 %}income{% else %}expense{% endif %}">${{ t.running_balance|money }}</td>
   <td class="row-actions">
     {% if t.is_transfer %}
     <button type="button" class="btn btn-sm"

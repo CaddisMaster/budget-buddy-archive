@@ -351,6 +351,50 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
   .quick-add-btn svg { width: 24px; height: 24px; }
   .quick-add-btn span { display: none; }
   #toast-host { left: 1rem; right: 1rem; bottom: calc(1rem + 64px); max-width: none; }
+
+  /* v10.13 — History becomes stacked cards on phones: same <tr> markup, the
+     9-column table is unusable at 375px. Each row is a grid card; the Type
+     cell hides (the row's income/expense class colors the amount instead). */
+  .txn-table thead { display: none; }
+  .txn-table, .txn-table tbody { display: block; }
+  .txn-table tbody tr {
+    display: grid;
+    position: relative;
+    grid-template-columns: auto auto 1fr auto;
+    grid-template-areas:
+      "desc desc desc amount"
+      "date cat  acct bal"
+      "actions actions actions actions";
+    gap: 0.15rem 0.7rem;
+    align-items: baseline;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow-sm);
+    padding: 0.6rem 0.8rem; margin-bottom: 0.6rem;
+  }
+  .txn-table tbody tr:hover td { background: transparent; } /* the row IS the surface */
+  .txn-table td { display: block; border: none; padding: 0; font-size: 13px; }
+  .txn-table td.c-desc { grid-area: desc; font-size: 14px; font-weight: 600; }
+  .txn-table td.c-amount { grid-area: amount; text-align: right; font-size: 14px; font-weight: 650; }
+  .txn-table tr.income td.c-amount { color: var(--success); }
+  .txn-table tr.income td.c-amount::before { content: '+'; }
+  .txn-table tr.expense td.c-amount { color: var(--danger); }
+  .txn-table tr.expense td.c-amount::before { content: '−'; }
+  .txn-table td.c-date, .txn-table td.c-cat, .txn-table td.c-acct { color: var(--text-muted); font-size: 12px; }
+  .txn-table td.c-date { grid-area: date; }
+  .txn-table td.c-cat { grid-area: cat; }
+  .txn-table td.c-acct { grid-area: acct; }
+  .txn-table td.c-bal { grid-area: bal; text-align: right; font-size: 12px; }
+  .txn-table td.c-type { display: none; }
+  .txn-table td.row-actions { grid-area: actions; display: flex; gap: 0.4rem; margin-top: 0.35rem; }
+  /* Bulk mode: the checkbox floats top-left of the card, content shifts right.
+     (No select-all — the thead is hidden; per-row selection still works.) */
+  body.bulk-mode .txn-table td.bulk-col { display: block; position: absolute; left: 0.65rem; top: 0.7rem; width: auto; }
+  body.bulk-mode .txn-table tbody tr { padding-left: 2.6rem; }
+  /* Inline edit swaps a <tr class="editing"> in — a stacked full-width form
+     card, not the grid (its cells don't map to the card areas). */
+  .txn-table tr.editing { display: block; }
+  .txn-table tr.editing td { display: block; width: 100%; padding: 0.15rem 0; }
+  .txn-table tr.editing td.bulk-col { display: none; }
 }
 
 /* HTMX indicator (shown while a request is in flight) */

@@ -38,6 +38,13 @@ def test_nav_has_no_analytics_link(client_a):
     assert b'href="/analytics"' not in response.data
 
 
+def test_chartjs_is_vendored(client_a):
+    # v10.13: Chart.js ships from /static/, not the jsdelivr CDN.
+    response = client_a.get("/dashboard")
+    assert b"chart.umd.min.js" in response.data
+    assert b"cdn.jsdelivr" not in response.data
+
+
 # --- the moved Ask box ----------------------------------------------------------
 
 def test_ask_box_renders_on_dashboard(client_a, monkeypatch):

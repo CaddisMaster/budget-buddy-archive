@@ -131,7 +131,7 @@
         <canvas id="budgetBar"></canvas>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>
 <script>
 const spendingData = {{ spending_data | tojson }};
 const incomeByCategoryData = {{ income_by_category_data | tojson }};

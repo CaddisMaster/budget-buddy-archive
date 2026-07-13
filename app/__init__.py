@@ -54,6 +54,14 @@ with open(os.path.join(app.static_folder, 'style.css'), 'rb') as _css:
     app.jinja_env.globals['css_v'] = hashlib.md5(_css.read()).hexdigest()[:8]
 
 
+# The brand mark, read once at startup so the sidebar inlines the SAME SVG the
+# favicon/rasters are built from — no hand-copied duplicate to drift (the old
+# base.html inline copy was exactly that). base.html renders it |safe inside
+# a sized .brand-mark wrapper.
+with open(os.path.join(app.static_folder, 'icons', 'icon.svg')) as _mark:
+    app.jinja_env.globals['brand_svg'] = _mark.read()
+
+
 # Display-format an amount: thousands separators, 2dp — "1234.5" → "1,234.56".
 # Number only; templates write the $ and any sign styling around it. DISPLAY
 # templates only: AI fact-builders pass raw numbers, chart payloads stay

@@ -1,0 +1,12 @@
+<svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Full-bleed build source (not served): square blue to the edges, glyph
+       scaled so the coin sits inside the maskable safe zone (inner 80%).
+       Also the source for apple-touch-icon — iOS rounds the corners itself,
+       so transparent corners (the old halo bug) never appear. -->
+  <rect width="32" height="32" fill="#378ADD"/>
+  <g transform="translate(16 16) scale(0.895) translate(-16 -16)">
+    <circle cx="16" cy="16" r="9.5" fill="#fff"/>
+    <path d="M18.5 12.5H14.75a1.75 1.75 0 0 0 0 3.5h2.5a1.75 1.75 0 0 1 0 3.5H13" stroke="#378ADD" stroke-width="1.9" stroke-linecap="round" fill="none"/>
+    <path d="M16 10.5v11" stroke="#378ADD" stroke-width="1.9" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -6,7 +6,7 @@
  * pages, POSTs, auth — falls straight through to the network untouched.
  * Served at /sw.js by a Flask route so its scope covers '/', which
  * installability requires. Bump the cache name to force a purge. */
-const CACHE = 'bb-static-v1';
+const CACHE = 'bb-static-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 

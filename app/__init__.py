@@ -53,6 +53,16 @@ def set_security_headers(response):
 with open(os.path.join(app.static_folder, 'style.css'), 'rb') as _css:
     app.jinja_env.globals['css_v'] = hashlib.md5(_css.read()).hexdigest()[:8]
 
+
+# Display-format an amount: thousands separators, 2dp — "1234.5" → "1,234.56".
+# Number only; templates write the $ and any sign styling around it. DISPLAY
+# templates only: AI fact-builders pass raw numbers, chart payloads stay
+# |tojson floats, and form <input value>s stay raw (a comma'd value would fail
+# parse_positive_amount on resubmit).
+@app.template_filter('money')
+def money_filter(value):
+    return f'{float(value):,.2f}'
+
 csrf = CSRFProtect(app)
 
 limiter = Limiter(

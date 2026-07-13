@@ -1,11 +1,11 @@
 <tr id="account-{{ account.account_id }}">
   <td>{{ account.account_name }}</td>
   <td>{{ account.type }}</td>
-  <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account.balance) }}
+  <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ account.balance|money }}
     {% set cu = credit_utilization(account.balance, account.credit_limit) if account.type == 'Credit Card' else none %}
     {% if cu %}
     <div class="goal-bar credit-bar"><div class="goal-bar-fill {{ cu.tier }}" style="width:{{ cu.bar_pct }}%"></div></div>
-    <span class="credit-meta">{{ cu.pct }}% of ${{ "%.0f"|format(cu.limit) }} · ${{ "%.2f"|format(cu.available) }} available</span>
+    <span class="credit-meta">{{ cu.pct }}% of ${{ "%.0f"|format(cu.limit) }} · ${{ cu.available|money }} available</span>
     {% endif %}
   </td>
   <td class="{% if account.checkin_stale %}checkin-stale{% endif %}" style="{% if not account.checkin_stale %}color:var(--text-muted){% endif %}">

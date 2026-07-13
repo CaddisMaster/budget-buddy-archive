@@ -10,7 +10,7 @@
   </td>
   <td>{{ t.category_name or 'Uncategorised' }}</td>
   <td>{{ t.account_name or 'No account' }}</td>
-  <td class="{% if t.running_balance >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(t.running_balance) }}</td>
+  <td class="{% if t.running_balance >= 0 %}income{% else %}expense{% endif %}">${{ t.running_balance|money }}</td>
   <td class="row-actions">
     {% if t.is_transfer %}
     <button type="button" class="btn btn-sm"

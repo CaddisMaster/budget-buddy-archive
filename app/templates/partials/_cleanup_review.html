@@ -19,7 +19,7 @@
         <td><input type="checkbox" name="row_id" value="{{ it.id }}" checked></td>
         <td>{{ it.description }}{% if it.current_category %}
           <span style="color:var(--text-muted)">(now: {{ it.current_category }})</span>{% endif %}</td>
-        <td>{{ '%.2f'|format(it.amount) }}</td>
+        <td>{{ it.amount|money }}</td>
         <td>
           <select name="category_{{ it.id }}">
             {% for c in categories %}

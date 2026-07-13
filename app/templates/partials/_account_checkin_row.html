@@ -2,7 +2,7 @@
   <td>{{ account.account_name }}</td>
   <td>{{ account.type }}</td>
   <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">
-    App says ${{ "%.2f"|format(account.balance) }}
+    App says ${{ account.balance|money }}
   </td>
   <td>
     <input type="number" name="actual_balance" step="0.01" required

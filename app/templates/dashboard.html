@@ -17,7 +17,7 @@
         <div>
             <div class="hero-label">Net position · {{ summary.label }}</div>
             <div class="hero-net {{ 'pos' if summary.net >= 0 else 'neg' }}">
-                {{ '−' if summary.net < 0 else '+' }}${{ "%.2f"|format(summary.net|abs) }}
+                {{ '−' if summary.net < 0 else '+' }}${{ summary.net|abs|money }}
             </div>
             <div class="hero-caption">
                 {% if summary.savings_rate is not none %}
@@ -31,16 +31,16 @@
     <div class="hero-stats">
         <div class="hero-stat">
             <div class="hero-stat-label">Income</div>
-            <div class="hero-stat-val pos">${{ "%.2f"|format(summary.income) }}</div>
+            <div class="hero-stat-val pos">${{ summary.income|money }}</div>
         </div>
         <div class="hero-stat">
             <div class="hero-stat-label">Expenses</div>
-            <div class="hero-stat-val neg">${{ "%.2f"|format(summary.expenses) }}</div>
+            <div class="hero-stat-val neg">${{ summary.expenses|money }}</div>
         </div>
         <div class="hero-stat">
             <div class="hero-stat-label">Net</div>
             <div class="hero-stat-val {{ 'pos' if summary.net >= 0 else 'neg' }}">
-                {{ '−' if summary.net < 0 else '' }}${{ "%.2f"|format(summary.net|abs) }}
+                {{ '−' if summary.net < 0 else '' }}${{ summary.net|abs|money }}
             </div>
         </div>
     </div>
@@ -61,11 +61,11 @@
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-label">{{ selected_month }} spending</div>
-        <div class="stat-value {% if yoy.this_year <= yoy.last_year %}income{% else %}expense{% endif %}">${{ "%.2f"|format(yoy.this_year) }}</div>
+        <div class="stat-value {% if yoy.this_year <= yoy.last_year %}income{% else %}expense{% endif %}">${{ yoy.this_year|money }}</div>
     </div>
     <div class="stat-card">
         <div class="stat-label">Same month last year</div>
-        <div class="stat-value">${{ "%.2f"|format(yoy.last_year) }}</div>
+        <div class="stat-value">${{ yoy.last_year|money }}</div>
     </div>
     <div class="stat-card">
         <div class="stat-label">Change</div>
@@ -87,7 +87,7 @@
         </div>
         <div class="goal-bar"><div class="goal-bar-fill" style="width:{{ g.percent }}%"></div></div>
         <p class="goal-figures">
-            ${{ "%.2f"|format(g.saved) }} / ${{ "%.2f"|format(g.target_amount) }}
+            ${{ g.saved|money }} / ${{ g.target_amount|money }}
             <span class="goal-pct">({{ g.percent }}%)</span>
         </p>
     </div>

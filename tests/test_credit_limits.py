@@ -134,7 +134,7 @@ def test_card_with_limit_shows_utilization(client_a, users):
     html = client_a.get("/accounts").get_data(as_text=True)
     assert "credit-bar" in html
     assert "25.0% of $2000" in html
-    assert "$1500.00 available" in html
+    assert "$1,500.00 available" in html  # v10.13 |money: comma-separated
 
 
 def test_bank_account_with_stored_limit_shows_no_bar(client_a, users):
@@ -160,7 +160,7 @@ def test_summary_line_sums_across_cards(client_a, users):
     html = client_a.get("/accounts").get_data(as_text=True)
     # (1000 - 400) + 3000 = 3600 available of 4000 in limits
     assert "Available credit across cards" in html
-    assert "$3600.00" in html
+    assert "$3,600.00" in html  # v10.13 |money: comma-separated
     assert "$4000 in limits" in html
 
 

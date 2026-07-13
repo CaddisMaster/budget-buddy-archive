@@ -11,7 +11,7 @@
            placeholder="Credit limit" title="Optional — credit cards only"
            style="margin-top:0.35rem">
   </td>
-  <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ "%.2f"|format(account.balance) }}</td>
+  <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ account.balance|money }}</td>
   <td style="color:var(--text-muted)">{{ account.last_checked_in.strftime('%b %-d, %Y') if account.last_checked_in else 'Never' }}</td>
   <td class="row-actions">
     <button type="button" class="btn btn-sm btn-primary"

@@ -24,7 +24,7 @@
 {% if credit_summary %}
 <p style="margin:0 0 0.75rem;color:var(--text-muted);font-size:14px">
   Available credit across cards:
-  <strong>${{ "%.2f"|format(credit_summary.available) }}</strong>
+  <strong>${{ credit_summary.available|money }}</strong>
   of ${{ "%.0f"|format(credit_summary.limit) }} in limits
 </p>
 {% endif %}

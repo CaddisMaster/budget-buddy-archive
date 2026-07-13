@@ -21,8 +21,8 @@
             <td>{% if row.budget is not none %}${{ '%.0f'|format(row.budget) }}{% else %}<span style="color:var(--text-muted)">—</span>{% endif %}</td>
             {% for cell in row.cells %}
             <td class="{% if cell.verdict == 'hit' %}report-hit{% elif cell.verdict == 'miss' %}report-miss{% endif %}"
-                {% if cell.verdict %}title="${{ '%.2f'|format(cell.spent) }} spent vs ${{ '%.0f'|format(row.budget) }} budget"{% endif %}>
-                ${{ '%.2f'|format(cell.spent) }}</td>
+                {% if cell.verdict %}title="${{ cell.spent|money }} spent vs ${{ '%.0f'|format(row.budget) }} budget"{% endif %}>
+                ${{ cell.spent|money }}</td>
             {% endfor %}
             <td>{% if row.streak %}{{ row.streak.length }} mo {{ row.streak.kind }}{% else %}<span style="color:var(--text-muted)">— no budget —</span>{% endif %}</td>
             <td class="trend-{{ row.trend.direction }}">

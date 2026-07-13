@@ -4,7 +4,7 @@
 <tr id="transfer-schedule-{{ schedule.id }}">
   <td>{{ schedule.from_account_name or 'No account' }}</td>
   <td>{{ schedule.to_account_name or 'No account' }}</td>
-  <td>${{ "%.2f"|format(schedule.amount) }}</td>
+  <td>${{ schedule.amount|money }}</td>
   <td>{{ schedule.description or '—' }}</td>
   <td>
     {{ frequency_labels.get(schedule.frequency, schedule.frequency) }}

@@ -1,7 +1,7 @@
 {# schedule = a SCHEDULE_ROW_SQL row (namedtuple — read by field name). #}
 <tr id="schedule-{{ schedule.id }}" class="{% if schedule.transaction_type == 'income' %}income{% else %}expense{% endif %}">
   <td>{{ schedule.transaction_type | capitalize }}</td>
-  <td>${{ "%.2f"|format(schedule.amount) }}</td>
+  <td>${{ schedule.amount|money }}</td>
   <td>{{ schedule.description or '—' }}</td>
   <td>{{ schedule.category_name or 'Uncategorised' }}</td>
   <td>{{ schedule.account_name or 'No account' }}</td>

@@ -67,6 +67,14 @@ def test_dashboard_shows_hero_summary(client_a):
     assert b"42.50" in response.data
 
 
+def test_global_quick_add_button_renders(client_a):
+    """v10.13 nav regroup — "Add transaction" left the sidebar for a persistent
+    quick-add button in the topbar (FAB on mobile) present on every page."""
+    response = client_a.get("/transactions")
+    assert b'class="quick-add-btn"' in response.data
+    assert b'href="/transactions/new"' in response.data
+
+
 def test_logout_redirects_to_login(client_a):
     response = client_a.post("/logout")
     assert response.status_code == 302

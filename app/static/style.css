@@ -102,6 +102,8 @@ h2 { font-size: var(--fs-md); font-weight: 600; letter-spacing: -0.01em; margin:
 .sidebar nav a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .sidebar nav a.active svg { opacity: 1; }
 .nav-sep { height: 1px; background: var(--border); margin: 0.5rem 0.7rem; border: none; }
+/* v10.13 nav regroup — non-link section labels between nav groups. */
+.nav-group-label { display: block; padding: 0.7rem 0.7rem 0.15rem; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
 /* Logout is a POST (CSRF-proof) so it's a tiny form — the button must render
    exactly like the sibling nav <a> links. */
 .sidebar nav .nav-logout { margin: 0; }
@@ -116,6 +118,14 @@ h2 { font-size: var(--fs-md); font-weight: 600; letter-spacing: -0.01em; margin:
 /* Hamburger */
 .hamburger { background: none; border: none; cursor: pointer; padding: 4px; color: var(--text); font-size: 20px; display: flex; align-items: center; }
 .hamburger:hover { color: var(--accent); }
+
+/* v10.13 — the global "Add transaction" entry point: a pill in the topbar on
+   desktop, a floating action button on mobile (see the media block). */
+.page-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.quick-add-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.5rem 1.15rem; border-radius: 999px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; line-height: 1.2; box-shadow: var(--shadow-sm); transition: background 0.15s, transform 0.05s; }
+.quick-add-btn:hover { background: var(--accent-hover); color: #fff; }
+.quick-add-btn:active { transform: translateY(1px); }
+.quick-add-btn svg { width: 16px; height: 16px; }
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
@@ -320,7 +330,11 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
   .hero-net { font-size: var(--fs-xl); }
   .hero-stats { grid-template-columns: 1fr 1fr; }
   td, th { padding: 0.5rem 0.6rem; font-size: 13px; }
-  #toast-host { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; }
+  /* The quick-add pill becomes a floating action button; toasts sit above it. */
+  .quick-add-btn { position: fixed; right: 1rem; bottom: 1rem; width: 56px; height: 56px; border-radius: 50%; justify-content: center; padding: 0; box-shadow: var(--shadow-lg); z-index: 90; }
+  .quick-add-btn svg { width: 24px; height: 24px; }
+  .quick-add-btn span { display: none; }
+  #toast-host { left: 1rem; right: 1rem; bottom: calc(1rem + 64px); max-width: none; }
 }
 
 /* HTMX indicator (shown while a request is in flight) */

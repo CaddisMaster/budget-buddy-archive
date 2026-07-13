@@ -274,7 +274,7 @@ def test_dashboard_uses_cache_without_calling_model(client_a, users, monkeypatch
     client_a.post("/forecasts/generate",
                   data={"year": year, "month": month}, headers=HX)
     assert seam.calls == 1
-    resp = client_a.get("/dashboard")
+    resp = client_a.get("/")
     assert resp.status_code == 200
     assert b"Cached outlook text." in resp.data   # cached narrative rendered
     assert seam.calls == 1                         # dashboard never hit the model
@@ -313,6 +313,6 @@ def test_dashboard_never_shows_another_users_forecast(client_a, users, monkeypat
     create_forecast(users["b"]["id"], year, month,
                     {"summary": "B-PRIVATE-FORECAST", "tips": []})
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    resp = client_a.get("/dashboard")
+    resp = client_a.get("/")
     assert resp.status_code == 200
     assert b"B-PRIVATE-FORECAST" not in resp.data

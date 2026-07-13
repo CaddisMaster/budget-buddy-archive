@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import Blueprint, render_template, request
+from flask import Blueprint, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
 from app.db import db_cursor
 from app.helpers import ai_enabled, parse_month_param, recent_months
@@ -47,15 +47,17 @@ def upcoming_occurrences(next_due, frequency, anchor_day, second_day,
     return out
 
 
+@bp.route('/dashboard')
+def dashboard():
+    """Legacy URL — the dashboard became the home page (v10.13). The redirect
+    keeps old bookmarks alive and carries the month filter; no @login_required
+    since / enforces auth after the hop (the /analytics precedent)."""
+    return redirect(url_for('main.index', month=request.args.get('month')))
+
+
 @bp.route('/')
 @login_required
 def index():
-    return render_template('index.html', ai_enabled=ai_enabled())
-
-
-@bp.route('/dashboard')
-@login_required
-def dashboard():
     from app.blueprints.schedules import run_due_schedules  # lazy: avoids import cycle
     from app.blueprints.transfers import run_due_transfers
     run_due_schedules(current_user.id)

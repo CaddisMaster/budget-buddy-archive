@@ -11,7 +11,6 @@ from tests.conftest import USER_A
 
 PROTECTED_PAGES = [
     "/",
-    "/dashboard",
     "/transactions",
     "/transactions/new",
     "/scheduled",
@@ -58,13 +57,28 @@ def test_login_with_bad_password_stays_on_login(anon_client, users):
 
 
 def test_dashboard_shows_hero_summary(client_a):
-    """v10.6 Refresh — the dashboard renders the at-a-glance hero (net position +
-    income/expenses) for a user with transactions."""
-    response = client_a.get("/dashboard")
+    """v10.6 Refresh — the dashboard (the home page since v10.13) renders the
+    at-a-glance hero (net position + income/expenses) for a user with
+    transactions."""
+    response = client_a.get("/")
     assert response.status_code == 200
     assert b"Net position" in response.data
     # USER_A is seeded with a single $42.50 expense, so it surfaces in the hero.
     assert b"42.50" in response.data
+
+
+def test_legacy_dashboard_url_redirects_home(client_a):
+    """v10.13 merge — /dashboard became /; the stub keeps old bookmarks alive
+    (the /analytics precedent)."""
+    response = client_a.get("/dashboard")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+
+
+def test_legacy_dashboard_redirect_carries_month_filter(client_a):
+    response = client_a.get("/dashboard?month=2026-05")
+    assert response.status_code == 302
+    assert "month=2026-05" in response.headers["Location"]
 
 
 def test_global_quick_add_button_renders(client_a):

@@ -140,7 +140,7 @@ def test_dashboard_uses_cache_without_calling_model(client_a, users, monkeypatch
     client_a.post("/insights/generate",
                   data={"year": year, "month": month}, headers=HX)
     assert seam.calls == 1
-    resp = client_a.get("/dashboard")
+    resp = client_a.get("/")
     assert resp.status_code == 200
     assert b"Cached recap text." in resp.data    # cached narrative rendered
     assert seam.calls == 1                        # dashboard never hit the model
@@ -184,6 +184,6 @@ def test_dashboard_never_shows_another_users_insight(client_a, users, monkeypatc
     create_insight(users["b"]["id"], year, month,
                    {"summary": "B-PRIVATE-SUMMARY", "tips": []})
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    resp = client_a.get("/dashboard")
+    resp = client_a.get("/")
     assert resp.status_code == 200
     assert b"B-PRIVATE-SUMMARY" not in resp.data

@@ -1,7 +1,87 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard — Budget Buddy{% endblock %}
+{% block title %}Home — Budget Buddy{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
+<h1>Home</h1>
+
+{# ── What's new — ONE strip per release (released whenever Sean calls it). On the
+   first feature commit after a release ships, REPLACE the strip's contents with
+   the CURRENT release: the RELEASE VERSION in the heading + data-version, the
+   release date in the badge (set/corrected at ship), and one .whatsnew-block per
+   feature. One bundle per strip; only ever one strip here at a time. Dismiss is
+   per-device (localStorage, keyed by version) — a new version resurfaces it. #}
+<div class="card whatsnew" id="whatsnew" data-version="v10.13.0" hidden>
+  <div class="whatsnew-head">
+    <strong>What's new in v10.13.0</strong>
+    <span class="recurring-badge">2026-07-12</span>
+    <span class="whatsnew-actions">
+      <button type="button" class="btn btn-sm" id="whatsnew-toggle">Details</button>
+      <button type="button" class="btn btn-sm" id="whatsnew-dismiss" aria-label="Dismiss">✕</button>
+    </span>
+  </div>
+  <div class="whatsnew-body" hidden>
+    <div class="whatsnew-block">
+      <strong>Home is your dashboard now</strong>
+      <ul class="whatsnew-list">
+        <li><strong>One page, not two:</strong> The dashboard moved to the home page — log in
+            and everything is right there. Old /dashboard links still work.</li>
+        <li><strong>Quick add up top:</strong> The type-a-sentence quick add now lives here
+            too, so logging a purchase is the first thing on screen.</li>
+      </ul>
+    </div>
+    <div class="whatsnew-block">
+      <strong>Better charts</strong>
+      <ul class="whatsnew-list">
+        <li><strong>No more third-party downloads:</strong> The chart library now ships with
+            the app itself, so charts load without reaching out to an external server.</li>
+        <li><strong>Categories keep their colors:</strong> A category now gets the same color
+            every visit — it no longer changes as categories come and go, and the Expenses /
+            Income views color consistently too.</li>
+        <li><strong>Less scrolling:</strong> The chart section folds away — open by default
+            on desktop, tucked behind a tap on your phone.</li>
+      </ul>
+    </div>
+    <div class="whatsnew-block">
+      <strong>Readable amounts</strong>
+      <ul class="whatsnew-list">
+        <li><strong>Thousands separators everywhere:</strong> $12345.67 now reads $12,345.67 —
+            on the dashboard, History, accounts, goals, and everywhere else money shows.</li>
+      </ul>
+    </div>
+    <div class="whatsnew-block">
+      <strong>A tidier sidebar + an always-there Add button</strong>
+      <ul class="whatsnew-list">
+        <li><strong>Grouped navigation:</strong> The sidebar's flat list is now organized into
+            Money, Plan, and Setup groups so the right page is easier to find.</li>
+        <li><strong>Add from anywhere:</strong> "Add transaction" moved out of the sidebar into
+            a persistent Add button — top-right on desktop, a floating button on your phone.</li>
+        <li><strong>Less clutter:</strong> Change password now lives on the Profile page.</li>
+      </ul>
+    </div>
+    {# Next feature block:
+    <div class="whatsnew-block">
+      <strong>Next feature title</strong>
+      <ul class="whatsnew-list"><li>…</li></ul>
+    </div>
+    #}
+  </div>
+</div>
+<script>
+(() => {
+  const el = document.getElementById('whatsnew');
+  if (localStorage.getItem('whatsnew-dismissed') !== el.dataset.version) el.hidden = false;
+  const body = el.querySelector('.whatsnew-body');
+  document.getElementById('whatsnew-toggle').addEventListener('click', () => { body.hidden = !body.hidden; });
+  document.getElementById('whatsnew-dismiss').addEventListener('click', () => {
+    localStorage.setItem('whatsnew-dismissed', el.dataset.version);
+    el.hidden = true;
+  });
+})();
+</script>
+
+{% include 'partials/_quick_add.html' %}
+{# Pre-filled form appears here after a quick-add parse; empty until then. #}
+<div id="txn-form-wrap"></div>
+
 <form method="get" style="margin-bottom:1rem">
     <label>Filter by month</label>
     <select name="month" onchange="this.form.submit()">

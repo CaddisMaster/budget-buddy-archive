@@ -44,6 +44,6 @@ def test_dashboard_renders_comma_separated_amounts(client_a, users):
     create_transaction(
         users["a"]["id"], users["a"]["account_id"], 2000.00, date.today()
     )
-    response = client_a.get("/dashboard")
+    response = client_a.get("/")
     assert response.status_code == 200
     assert b"2,042.50" in response.data

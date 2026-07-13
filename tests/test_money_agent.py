@@ -341,7 +341,7 @@ def test_dashboard_shows_card_without_calling_model(client_a, users, monkeypatch
     create_agent_run(users["a"]["id"], WEEK,
                      {"summary": "Cached quiet week.", "findings": [],
                       "tools_used": ["recent_transactions"]})
-    resp = client_a.get("/dashboard")
+    resp = client_a.get("/")
     html = resp.get_data(as_text=True)
     assert "Money agent" in html
     assert "Cached quiet week." in html
@@ -350,7 +350,7 @@ def test_dashboard_shows_card_without_calling_model(client_a, users, monkeypatch
 
 def test_dashboard_hides_card_without_key(client_a, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    resp = client_a.get("/dashboard")
+    resp = client_a.get("/")
     assert "Money agent" not in resp.get_data(as_text=True)
 
 

@@ -209,7 +209,7 @@ def test_goals_page_renders_summary_strip(client_a, users):
 
 def test_dashboard_renders_goal_grid(client_a, users):
     _seed_incomplete_goal(users["a"])
-    resp = client_a.get("/dashboard")
+    resp = client_a.get("/")
     assert resp.status_code == 200
     assert b"goal-grid" in resp.data
     assert b"goal-summary" in resp.data

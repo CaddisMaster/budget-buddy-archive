@@ -63,7 +63,7 @@ def test_parse_int_param(raw, expected):
 
 @pytest.mark.parametrize("qs", ["?month=foo", "?month=2024", "?month=2026-13"])
 def test_dashboard_bad_month_falls_back_to_all_time(client_a, qs):
-    response = client_a.get(f"/dashboard{qs}")
+    response = client_a.get(f"/{qs}")
     assert response.status_code == 200
 
 

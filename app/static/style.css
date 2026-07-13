@@ -292,6 +292,15 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
 .goal-summary-bar { flex: 1 1 160px; margin: 0; height: 14px; }
 .goal-summary-pct { font-size: var(--fs-sm); color: var(--text-muted); font-weight: 600; white-space: nowrap; }
 
+/* v10.13 — the What's-new strip on the merged home/dashboard. */
+.whatsnew { padding: 0.8rem 1rem; margin-bottom: 1.25rem; }
+.whatsnew-head { display: flex; align-items: center; gap: 0.6rem; }
+.whatsnew-actions { margin-left: auto; display: flex; gap: 0.4rem; }
+.whatsnew-body { margin-top: 1rem; }
+.whatsnew-block > strong { display: block; margin-bottom: 0.35rem; }
+.whatsnew-block + .whatsnew-block { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; }
+.whatsnew-list { margin: 0; padding-left: 1.2rem; color: var(--text-muted); font-size: 14px; line-height: 1.7; }
+
 /* v10.13 — collapsible dashboard Charts section. */
 .charts-details summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none; }
 .charts-details summary::-webkit-details-marker { display: none; }

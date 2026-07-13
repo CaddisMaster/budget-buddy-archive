@@ -69,7 +69,7 @@ def test_transfer_excluded_from_analytics_but_kept_in_balance(client_a, users):
     to_acct = create_account(users["a"]["id"], "acct-A-savings")
     create_transfer(users["a"]["id"], from_acct, to_acct, 500.00, TODAY)
 
-    response = client_a.get("/dashboard")
+    response = client_a.get("/")
     assert response.status_code == 200
     # Real expense total stays 42.50, not 542.50; real income stays 0.
     assert b">$42.50<" in response.data

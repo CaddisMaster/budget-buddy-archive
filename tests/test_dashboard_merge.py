@@ -45,6 +45,15 @@ def test_chartjs_is_vendored(client_a):
     assert b"cdn.jsdelivr" not in response.data
 
 
+def test_charts_section_is_collapsible(client_a):
+    # v10.13 de-scroll: the chart grid sits inside a <details> (open on
+    # desktop, collapsed on mobile via JS); the canvases are still always
+    # server-rendered.
+    response = client_a.get("/dashboard")
+    assert b'id="charts-details"' in response.data
+    assert b'id="spendingPie"' in response.data
+
+
 # --- the moved Ask box ----------------------------------------------------------
 
 def test_ask_box_renders_on_dashboard(client_a, monkeypatch):

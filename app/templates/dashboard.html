@@ -96,7 +96,11 @@
 <p style="margin-bottom:1.5rem"><a href="{{ url_for('goals.goals') }}">Manage goals →</a></p>
 {% endif %}
 {% if has_transactions %}
-<h2>Charts</h2>
+{# Collapsible on purpose (v10.13 de-scroll): open on desktop, collapsed on
+   mobile. Charts are lazily initialized on first open — Chart.js renders
+   0-height inside a closed <details>. #}
+<details id="charts-details" class="charts-details" open>
+<summary><h2>Charts</h2></summary>
 <div class="chart-grid">
     <div class="chart-card">
         <div class="chart-head">
@@ -131,6 +135,12 @@
         <canvas id="budgetBar"></canvas>
     </div>
 </div>
+</details>
+<script>
+// Before first paint of the section: collapsed by default on mobile.
+if (window.matchMedia('(max-width: 768px)').matches)
+    document.getElementById('charts-details').removeAttribute('open');
+</script>
 <script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>
 <script>
 const spendingData = {{ spending_data | tojson }};
@@ -164,6 +174,13 @@ Chart.defaults.plugins.legend.labels.padding = 14;
 const gridColor = cssVar('--border');
 const gridScales = { x: { grid: { color: gridColor } }, y: { beginAtZero: true, grid: { color: gridColor } } };
 
+// Charts (and the pill-toggle listeners that reference them) are built only
+// once the <details> is open, so canvases always have layout when Chart.js
+// measures them.
+let chartsInitialized = false;
+function initCharts() {
+if (chartsInitialized) return;
+chartsInitialized = true;
 const categoryPie = new Chart(document.getElementById('spendingPie'), {
     type: 'doughnut',
     data: {
@@ -247,6 +264,11 @@ new Chart(document.getElementById('budgetBar'), {
     },
     options: { aspectRatio: 3.2, scales: gridScales }
 });
+}
+
+const chartsDetails = document.getElementById('charts-details');
+if (chartsDetails.open) initCharts();
+chartsDetails.addEventListener('toggle', () => { if (chartsDetails.open) initCharts(); });
 </script>
 {% else %}
 <p style="color:var(--text-muted)">No transactions yet. <a href="{{ url_for('transactions.new_transaction') }}">Add your first transaction</a> to see your dashboard.</p>

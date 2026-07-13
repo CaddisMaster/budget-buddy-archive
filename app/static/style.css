@@ -292,6 +292,13 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
 .goal-summary-bar { flex: 1 1 160px; margin: 0; height: 14px; }
 .goal-summary-pct { font-size: var(--fs-sm); color: var(--text-muted); font-weight: 600; white-space: nowrap; }
 
+/* v10.13 — collapsible dashboard Charts section. */
+.charts-details summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none; }
+.charts-details summary::-webkit-details-marker { display: none; }
+.charts-details summary h2 { display: inline; margin: 0.5rem 0; }
+.charts-details summary::after { content: ''; width: 9px; height: 9px; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); transform: rotate(-45deg); transition: transform 0.15s; }
+.charts-details[open] summary::after { transform: rotate(45deg); }
+
 /* Toasts */
 #toast-host {
   position: fixed; bottom: 1.25rem; right: 1.25rem;

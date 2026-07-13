@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login — Budget Buddy</title>
+  {# PWA head tags (v10.13) — mirrors base.html, which this page doesn't extend. #}
+  <meta name="theme-color" content="#378ADD">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/icon.svg') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
   {# css_v = automatic content hash (app/__init__.py) — same value as base.html. #}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ css_v }}">
 </head>

@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, redirect, render_template, request, url_for
 from flask_login import login_required, current_user
 from app.db import db_cursor
 from app.helpers import ai_enabled, parse_month_param, recent_months
@@ -45,6 +45,15 @@ def upcoming_occurrences(next_due, frequency, anchor_day, second_day,
                                second_day=second_day)
         steps += 1
     return out
+
+
+@bp.route('/sw.js')
+def service_worker():
+    """The PWA service worker (v10.13). Served from the root — a worker's
+    scope is capped at its URL's directory, and installability requires it to
+    control start_url '/', so /static/sw.js wouldn't do. No @login_required:
+    the browser re-fetches it outside any session."""
+    return current_app.send_static_file('sw.js')
 
 
 @bp.route('/dashboard')

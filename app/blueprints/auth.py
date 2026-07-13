@@ -34,7 +34,10 @@ def login():
         password_ok = bcrypt.check_password_hash(password_hash, password)
         if user and password_ok:
             session.clear()  # drop any pre-login session state (fixation hygiene)
-            login_user(user)
+            # remember=True (v10.13): the installed-PWA case — without the
+            # remember cookie a standalone app re-prompts login every launch.
+            # The REMEMBER_COOKIE_* flags were already configured in __init__.py.
+            login_user(user, remember=True)
             return redirect(url_for('main.index'))
         flash('Invalid username or password')
     return render_template('login.html')

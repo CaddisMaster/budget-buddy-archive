@@ -226,6 +226,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
   border: 1px solid var(--border);
   color: var(--text-muted);
   margin-left: 6px;
+  white-space: nowrap; /* a date/frequency label must never break mid-token */
 }
 
 .transfer-badge {
@@ -418,6 +419,11 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
   .toolbar { gap: 0.6rem; }
   .toolbar form { flex: 1 1 100%; }
   .toolbar form > div { flex: 1; }
+  /* v10.15 — the What's-new head stays one line on phones: the date badge
+     hides (the version heading carries the identity; Details still expands)
+     and the heading ellipsizes instead of wrapping on very narrow screens. */
+  .whatsnew-head > strong { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .whatsnew-head .recurring-badge { display: none; }
 }
 
 /* HTMX indicator (shown while a request is in flight) */

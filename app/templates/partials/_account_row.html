@@ -7,6 +7,10 @@
     <div class="goal-bar credit-bar"><div class="goal-bar-fill {{ cu.tier }}" style="width:{{ cu.bar_pct }}%"></div></div>
     <span class="credit-meta">{{ cu.pct }}% of ${{ "%.0f"|format(cu.limit) }} · ${{ cu.available|money }} available</span>
     {% endif %}
+    {% set mi = monthly_interest(account.balance, account.apr) if account.type == 'Credit Card' else none %}
+    {% if mi %}
+    <span class="credit-meta">~${{ mi.monthly|money }}/mo interest at {{ mi.apr }}% APR</span>
+    {% endif %}
   </td>
   <td class="{% if account.checkin_stale %}checkin-stale{% endif %}" style="{% if not account.checkin_stale %}color:var(--text-muted){% endif %}">
     {{ account.last_checked_in.strftime('%b %-d, %Y') if account.last_checked_in else 'Never' }}

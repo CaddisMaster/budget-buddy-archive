@@ -69,6 +69,33 @@ def credit_utilization(balance, credit_limit):
             'bar_pct': min(pct, 100.0), 'tier': tier}
 
 
+@bp.app_template_global('monthly_interest')
+def monthly_interest(balance, apr):
+    """Approximate monthly interest cost of a credit card's current debt — the
+    twin of credit_utilization(), shared by the /accounts row, the ask tool,
+    and the digest/insight facts. debt × (apr/100)/12 approximates daily
+    compounding, so every surface words the figure with '~'.
+
+    `balance` is the signed account balance (credit cards run negative);
+    `apr` is a percent and may be None. Returns None when there is no usable
+    apr OR no debt (the "is this interesting?" gate lives here, like
+    credit_utilization returning None = no bar), else {apr, debt, monthly}.
+    Guards independently of _parse_apr — stored values could predate it.
+    """
+    if apr is None:
+        return None
+    # psycopg2 hands numeric back as Decimal; coerce both so mixed
+    # Decimal/float arithmetic can't raise.
+    apr = float(apr)
+    if apr <= 0 or apr != apr:  # apr != apr catches NaN
+        return None
+    debt = max(0.0, -float(balance))
+    if debt <= 0:
+        return None
+    return {'apr': round(apr, 2), 'debt': round(debt, 2),
+            'monthly': round(debt * (apr / 100.0) / 12.0, 2)}
+
+
 def credit_card_utilization_facts(user_id):
     """[{name, limit, debt, available, utilization_pct}] for the user's Credit
     Card accounts with a usable limit set, name order; [] otherwise.

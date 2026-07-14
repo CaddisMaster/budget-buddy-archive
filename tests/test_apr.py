@@ -8,10 +8,11 @@ Insight/Digest are driven against seeded users. No AI seams involved — every
 figure here is computed by the app.
 """
 from datetime import date
+from decimal import Decimal
 
 from app.db import get_db_connection
-from app.blueprints.accounts import _parse_apr
-from tests.conftest import create_account
+from app.blueprints.accounts import _parse_apr, monthly_interest
+from tests.conftest import create_account, create_transaction
 
 HX = {"HX-Request": "true"}
 
@@ -59,6 +60,33 @@ def test_parse_apr_accepts_exactly_100():
     assert _parse_apr("100") == (100.0, None)
 
 
+# --- pure: monthly_interest ------------------------------------------------------
+
+def test_interest_none_without_usable_apr():
+    assert monthly_interest(-1000.0, None) is None
+    assert monthly_interest(-1000.0, 0) is None
+    assert monthly_interest(-1000.0, -5) is None
+    assert monthly_interest(-1000.0, float("nan")) is None
+
+
+def test_interest_none_without_debt():
+    # A paid-off or overpaid card costs nothing — no line, no facts entry.
+    assert monthly_interest(0.0, 24.99) is None
+    assert monthly_interest(250.0, 24.99) is None
+
+
+def test_interest_decimal_inputs_do_not_raise():
+    # psycopg2 hands numeric back as Decimal — the helper must coerce.
+    mi = monthly_interest(Decimal("-1200.00"), Decimal("24.99"))
+    assert mi["debt"] == 1200.0
+    assert mi["apr"] == 24.99
+    assert mi["monthly"] == 24.99  # 1200 × 0.2499 / 12
+
+
+def test_interest_rounds_to_cents():
+    assert monthly_interest(-1000.0, 19.99)["monthly"] == 16.66
+
+
 # --- the edit error path (raw-apr echo) ----------------------------------------
 
 def test_edit_error_path_rerenders_typed_apr(client_a, users):
@@ -99,6 +127,58 @@ def test_create_with_invalid_apr_writes_nothing(client_a, users):
     cur.close()
     conn.close()
     assert row is None
+
+
+# --- /accounts rendering ---------------------------------------------------------
+
+def test_card_with_apr_and_debt_shows_interest_line(client_a, users):
+    aid = create_account(users["a"]["id"], "AprCard", "Credit Card", apr=24.99)
+    create_transaction(users["a"]["id"], aid, 1200, date.today())
+    html = client_a.get("/accounts").get_data(as_text=True)
+    assert "~$24.99/mo interest at 24.99% APR" in html
+
+
+def test_card_with_apr_no_debt_shows_no_interest_line(client_a, users):
+    create_account(users["a"]["id"], "AprIdle", "Credit Card", apr=24.99)
+    html = client_a.get("/accounts").get_data(as_text=True)
+    assert "/mo interest" not in html
+
+
+def test_card_without_apr_shows_no_interest_line(client_a, users):
+    aid = create_account(users["a"]["id"], "NoAprCard", "Credit Card")
+    create_transaction(users["a"]["id"], aid, 500, date.today())
+    html = client_a.get("/accounts").get_data(as_text=True)
+    assert "/mo interest" not in html
+
+
+def test_bank_account_with_stored_apr_shows_no_interest_line(client_a, users):
+    # An apr stored on a non-card (e.g. after a type flip) is ignored.
+    aid = create_account(users["a"]["id"], "OddAprBank", "Bank Account", apr=24.99)
+    create_transaction(users["a"]["id"], aid, 500, date.today())
+    html = client_a.get("/accounts").get_data(as_text=True)
+    assert "/mo interest" not in html
+
+
+def test_interest_line_independent_of_limit(client_a, users):
+    # APR without a credit limit: interest line renders, utilization bar doesn't.
+    aid = create_account(users["a"]["id"], "AprNoLimit", "Credit Card", apr=12.0)
+    create_transaction(users["a"]["id"], aid, 1000, date.today())
+    html = client_a.get("/accounts").get_data(as_text=True)
+    assert "~$10.00/mo interest at 12.0% APR" in html
+    assert "credit-bar" not in html
+
+
+def test_edit_save_returns_row_fragment_with_interest(client_a, users):
+    aid = create_account(users["a"]["id"], "HtmxApr", "Credit Card")
+    create_transaction(users["a"]["id"], aid, 600, date.today())
+    resp = client_a.post(f"/accounts/{aid}/edit",
+                         data={"name": "HtmxApr", "type": "Credit Card",
+                               "credit_limit": "", "apr": "20"},
+                         headers=HX)
+    html = resp.get_data(as_text=True)
+    assert "<html" not in html  # fragment, not a page
+    assert "~$10.00/mo interest at 20.0% APR" in html  # 600 × 0.20 / 12
+    assert float(_fetch_apr(aid)) == 20.0
 
 
 def test_create_and_edit_persist_apr(client_a, users):

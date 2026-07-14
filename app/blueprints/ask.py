@@ -30,7 +30,9 @@ from app.db import db_cursor
 from app.helpers import hx_toast
 from app.blueprints.insights import compute_month_facts, category_spending
 from app.blueprints.budgets import compute_budget_vs_actual
-from app.blueprints.accounts import ACCOUNT_ROW_SQL, credit_utilization
+from app.blueprints.accounts import (
+    ACCOUNT_ROW_SQL, credit_utilization, monthly_interest,
+)
 
 bp = Blueprint('ask', __name__)
 
@@ -252,8 +254,9 @@ def _t_upcoming_scheduled(user_id, args):
 def _t_account_balances(user_id, args):
     # Reuse the Accounts page's balance query (the single source of the balance
     # formula). Credit cards with a limit set also report limit / available /
-    # utilization (v10.10 — same shared math as the /accounts bar). Present
-    # highest balance first.
+    # utilization (v10.10 — same shared math as the /accounts bar); cards with
+    # an apr set that carry a balance also report apr / ~monthly interest
+    # (v10.15). Present highest balance first.
     with db_cursor() as cursor:
         cursor.execute(ACCOUNT_ROW_SQL.format(extra=""), (user_id,))
         rows = cursor.fetchall()
@@ -266,6 +269,11 @@ def _t_account_balances(user_id, args):
                 entry.update({"credit_limit": cu['limit'],
                               "available_credit": cu['available'],
                               "utilization_pct": cu['pct']})
+            # Independent of the limit — a card can have an apr without one.
+            mi = monthly_interest(r.balance, r.apr)
+            if mi:
+                entry.update({"apr": mi['apr'],
+                              "est_monthly_interest": mi['monthly']})
         accts.append(entry)
     accts.sort(key=lambda a: a["balance"], reverse=True)
     return {"accounts": accts}
@@ -388,9 +396,12 @@ ASK_TOOLS = [
     ({"name": "account_balances",
       "description": "Current balance of each of the user's accounts. For "
                      "credit cards with a limit set, also returns the credit "
-                     "limit, available credit, and utilization percent. Use for "
+                     "limit, available credit, and utilization percent. For "
+                     "cards with an APR set that carry a balance, also returns "
+                     "the APR and the approximate monthly interest cost. Use for "
                      "'how much do I have' / 'account balance' / 'how much room "
-                     "is left on my card' questions.",
+                     "is left on my card' / 'what is my card costing me' "
+                     "questions.",
       "strict": True, "input_schema": _no_args()},
      _t_account_balances),
 ]

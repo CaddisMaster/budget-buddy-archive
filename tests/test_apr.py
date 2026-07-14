@@ -7,11 +7,13 @@ the enriched account_balances ask tool, and the deterministic facts feeding
 Insight/Digest are driven against seeded users. No AI seams involved — every
 figure here is computed by the app.
 """
+import json
 from datetime import date
 from decimal import Decimal
 
 from app.db import get_db_connection
 from app.blueprints.accounts import _parse_apr, monthly_interest
+import app.blueprints.ask as ask
 from tests.conftest import create_account, create_transaction
 
 HX = {"HX-Request": "true"}
@@ -127,6 +129,41 @@ def test_create_with_invalid_apr_writes_nothing(client_a, users):
     cur.close()
     conn.close()
     assert row is None
+
+
+# --- ask tool: account_balances enrichment ---------------------------------------
+
+def test_account_balances_enriched_with_apr(users):
+    aid = create_account(users["a"]["id"], "AskAprCard", "Credit Card",
+                         credit_limit=2000, apr=24.0)
+    create_transaction(users["a"]["id"], aid, 1000, date.today())
+    content, is_error = ask.dispatch(users["a"]["id"], "account_balances", {})
+    assert is_error is False
+    accounts = {a["account"]: a for a in json.loads(content)["accounts"]}
+    card = accounts["AskAprCard"]
+    assert card["apr"] == 24.0
+    assert card["est_monthly_interest"] == 20.0  # 1000 × 0.24 / 12
+    assert card["utilization_pct"] == 50.0  # the limit keys still ride along
+    # The seeded bank account carries no interest keys.
+    assert "apr" not in accounts["acct-A"]
+
+
+def test_account_balances_apr_without_limit_still_enriched(users):
+    aid = create_account(users["a"]["id"], "AskAprOnly", "Credit Card", apr=18.0)
+    create_transaction(users["a"]["id"], aid, 600, date.today())
+    content, _ = ask.dispatch(users["a"]["id"], "account_balances", {})
+    accounts = {a["account"]: a for a in json.loads(content)["accounts"]}
+    card = accounts["AskAprOnly"]
+    assert card["est_monthly_interest"] == 9.0  # 600 × 0.18 / 12
+    assert "utilization_pct" not in card  # independence from the limit
+
+
+def test_account_balances_card_apr_no_debt_not_enriched(users):
+    create_account(users["a"]["id"], "AskAprIdle", "Credit Card", apr=24.0)
+    content, _ = ask.dispatch(users["a"]["id"], "account_balances", {})
+    accounts = {a["account"]: a for a in json.loads(content)["accounts"]}
+    assert "apr" not in accounts["AskAprIdle"]
+    assert "est_monthly_interest" not in accounts["AskAprIdle"]
 
 
 # --- /accounts rendering ---------------------------------------------------------

@@ -8,7 +8,7 @@ request context); the 404 ownership guards are exercised through the routes.
 from datetime import date
 
 from app.blueprints.goals import build_goals_view
-from app.db import get_db_connection
+from app.db import db_cursor, get_db_connection
 from tests.conftest import (
     create_account,
     create_goal,
@@ -21,11 +21,11 @@ TODAY = date.today().isoformat()
 
 
 def _goal_view(user_id, goal_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    view = build_goals_view(cur, user_id)
-    cur.close()
-    conn.close()
+    # db_cursor (not a raw get_db_connection cursor): the app always calls
+    # build_goals_view with NamedTupleCursor rows, and since v10.15 _goal_view
+    # reads the row by attribute.
+    with db_cursor() as cur:
+        view = build_goals_view(cur, user_id)
     return next(g for g in view if g["id"] == goal_id)
 
 

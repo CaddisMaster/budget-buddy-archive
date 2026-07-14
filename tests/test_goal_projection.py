@@ -98,3 +98,81 @@ def test_payoff_required_per_month_is_debt_over_months():
     # $2,400 still owed, 12 months to the date → $200/mo to be debt-free on time.
     p = compute_goal_projection(3000, 600, date(2027, 1, 1), 0, today=TODAY)
     assert p["required_per_month"] == 200.0
+
+
+# --- v10.15 — interest-aware payoff projection (apr param) --------------------
+
+def test_apr_none_output_unchanged():
+    # Backward compat: every pre-v10.15 figure identical, the new key is None.
+    p = compute_goal_projection(1200, 0, date(2027, 1, 1), 200, today=TODAY)
+    q = compute_goal_projection(1200, 0, date(2027, 1, 1), 200, today=TODAY,
+                                apr=None)
+    assert p == q
+    assert p["est_monthly_interest"] is None
+
+
+def test_est_monthly_interest_figure():
+    # $1,200 owed at 24% APR → 1200 × 0.02 = $24/mo.
+    p = compute_goal_projection(1200, 0, None, 0, today=TODAY, apr=24)
+    assert p["est_monthly_interest"] == 24.0
+
+
+def test_interest_pushes_projected_date_later():
+    # Interest-free: 1200 at 100/mo = 12 months (2027-01-01). At 24% APR the
+    # simulation needs 14 (the first payments mostly fight the 2%/mo accrual).
+    free = compute_goal_projection(1200, 0, None, 100, today=TODAY)
+    apr = compute_goal_projection(1200, 0, None, 100, today=TODAY, apr=24)
+    assert free["projected_date"] == date(2027, 1, 1)
+    assert apr["projected_date"] == date(2027, 3, 1)
+
+
+def test_pace_below_interest_never_finishes():
+    # $24/mo against $24/mo of interest — the balance never moves.
+    p = compute_goal_projection(1200, 0, date(2027, 1, 1), 24, today=TODAY,
+                                apr=24)
+    assert p["projected_date"] is None
+    assert p["on_track"] is False
+    assert p["est_monthly_interest"] == 24.0
+
+
+def test_pace_below_interest_no_target_date():
+    p = compute_goal_projection(1200, 0, None, 24, today=TODAY, apr=24)
+    assert p["projected_date"] is None
+    assert p["on_track"] is None
+
+
+def test_required_per_month_amortized():
+    # 1200 over 12 months at 2%/mo: the amortized payment (113.47) beats the
+    # straight-line 100 — paying 100/mo would land short by the interest.
+    p = compute_goal_projection(1200, 0, date(2027, 1, 1), 0, today=TODAY,
+                                apr=24)
+    assert p["required_per_month"] == 113.47
+
+
+def test_complete_goal_has_no_interest_figure():
+    p = compute_goal_projection(3000, 3050, None, 0, today=TODAY, apr=24)
+    assert p["complete"] is True
+    assert p["est_monthly_interest"] is None
+
+
+def test_apr_decimal_input_does_not_raise():
+    from decimal import Decimal
+    p = compute_goal_projection(1200, 0, None, 100, today=TODAY,
+                                apr=Decimal("24.00"))
+    assert p["est_monthly_interest"] == 24.0
+
+
+def test_unusable_apr_falls_back_to_interest_free():
+    # Zero/negative/NaN apr (stored values could predate the parser) → the
+    # interest-free math, not a crash.
+    for bad in (0, -5, float("nan")):
+        p = compute_goal_projection(1200, 0, None, 100, today=TODAY, apr=bad)
+        assert p["est_monthly_interest"] is None
+        assert p["projected_date"] == date(2027, 1, 1)
+
+
+def test_simulation_cap_terminates():
+    # A pace a hair above the monthly interest would take ~626 months — past
+    # the 600-month horizon, so it reads as "never" (and the loop is bounded).
+    p = compute_goal_projection(1200, 0, None, 24.0001, today=TODAY, apr=24)
+    assert p["projected_date"] is None

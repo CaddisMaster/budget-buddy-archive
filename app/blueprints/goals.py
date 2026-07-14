@@ -20,7 +20,7 @@ bp = Blueprint('goals', __name__)
 
 GOAL_SELECT = (
     "SELECT g.id, g.name, g.target_amount, g.target_date, g.account_id, "
-    "g.baseline_amount, g.goal_type, a.account_name "
+    "g.baseline_amount, g.goal_type, a.account_name, a.apr AS account_apr "
     "FROM goals g JOIN account a ON g.account_id = a.account_id "
     "WHERE g.user_id = %s"
 )
@@ -42,8 +42,13 @@ GoalEditRow = namedtuple('GoalEditRow', (
 ))
 
 
+# The interest simulation's horizon: a payoff that hasn't cleared in 50 years
+# is "never" for projection purposes (also bounds the loop).
+PROJECTION_MAX_MONTHS = 600
+
+
 def compute_goal_projection(target_amount, saved, target_date,
-                            monthly_net_inflow, today=None):
+                            monthly_net_inflow, today=None, apr=None):
     """Pure projection math for a savings goal — no DB access, easy to unit test
     (sibling of compute_next_due()).
 
@@ -56,16 +61,33 @@ def compute_goal_projection(target_amount, saved, target_date,
         to hit the target on time (None if no date or already complete).
       - projected_date / on_track: from the recent inflow pace, when the goal is
         projected to complete and whether that beats the target_date.
+
+    `apr` (v10.15, payoff goals only — the linked card's rate) makes all three
+    interest-aware: est_monthly_interest = remaining × apr/100/12 (the same
+    approximation as accounts.monthly_interest, hence the '~' wording),
+    required_per_month becomes the amortized payment, and the pace projection
+    simulates interest accruing month by month — a pace that can't outrun the
+    interest projects no finish date (on_track False when there's a target).
+    With apr=None every figure is unchanged from the pre-v10.15 math.
     """
     today = today or date.today()
     target_amount = float(target_amount)
     saved = float(saved)
     monthly_net_inflow = float(monthly_net_inflow)
+    if apr is not None:
+        apr = float(apr)  # psycopg2 numeric → Decimal; coerce
+        if apr <= 0 or apr != apr:  # unusable (incl. NaN) → interest-free math
+            apr = None
 
     remaining = round(target_amount - saved, 2)
     percent = round(saved / target_amount * 100, 1) if target_amount > 0 else 0.0
     percent = max(0.0, min(percent, 100.0))
     complete = remaining <= 0
+
+    monthly_rate = apr / 100.0 / 12.0 if apr is not None else None
+    est_monthly_interest = None
+    if monthly_rate and not complete:
+        est_monthly_interest = round(remaining * monthly_rate, 2)
 
     required_per_month = None
     if target_date and not complete:
@@ -73,20 +95,41 @@ def compute_goal_projection(target_amount, saved, target_date,
         months_left = delta.years * 12 + delta.months + (1 if delta.days > 0 else 0)
         if months_left <= 0:
             months_left = 1  # target is here/overdue — needs it within the month
-        required_per_month = round(remaining / months_left, 2)
+        if monthly_rate:
+            # Amortized payment: clears `remaining` at this rate in months_left
+            # equal installments (straight-line would land short by the interest).
+            required_per_month = round(
+                remaining * monthly_rate
+                / (1 - (1 + monthly_rate) ** -months_left), 2)
+        else:
+            required_per_month = round(remaining / months_left, 2)
 
     projected_date = None
     on_track = None
     if not complete:
+        months_to_finish = None
         if monthly_net_inflow > 0:
-            months_to_finish = math.ceil(remaining / monthly_net_inflow)
+            if monthly_rate:
+                # Simulate: interest accrues, then the month's paydown lands.
+                # A pace at/below the monthly interest never clears the balance
+                # and runs into the cap → no projected date.
+                bal = remaining
+                months = 0
+                while bal > 0 and months < PROJECTION_MAX_MONTHS:
+                    bal = bal * (1 + monthly_rate) - monthly_net_inflow
+                    months += 1
+                if bal <= 0:
+                    months_to_finish = months
+            else:
+                months_to_finish = math.ceil(remaining / monthly_net_inflow)
+        if months_to_finish is not None:
             projected_date = today + relativedelta(months=months_to_finish)
             if target_date:
                 on_track = projected_date <= target_date
-        else:
-            # No positive inflow → never projected to finish at the current pace.
-            if target_date:
-                on_track = False
+        elif target_date:
+            # No positive inflow (or interest outpaces it) → never projected
+            # to finish at the current pace.
+            on_track = False
     elif target_date:
         on_track = True
 
@@ -98,6 +141,7 @@ def compute_goal_projection(target_amount, saved, target_date,
         'projected_date': projected_date,
         'on_track': on_track,
         'monthly_net_inflow': round(monthly_net_inflow, 2),
+        'est_monthly_interest': est_monthly_interest,
     }
 
 
@@ -184,20 +228,22 @@ def _goal_view(cursor, user_id, row):
     """Turn one goal row (GOAL_SELECT shape) into a view dict with progress +
     projections. For a payoff goal the same math reads as: saved = paid off
     since creation, remaining = the current actual debt (self-correcting if
-    more gets charged), complete = balance back at $0."""
-    (gid, name, target_amount, target_date, account_id,
-     baseline, goal_type, account_name) = row
-    balance = _account_balance(cursor, user_id, account_id)
-    saved = balance - float(baseline)
-    inflow = _recent_monthly_inflow(cursor, user_id, account_id)
-    projection = compute_goal_projection(target_amount, saved, target_date, inflow)
+    more gets charged), complete = balance back at $0. Payoff goals feed the
+    linked account's apr into the projection (v10.15) — interest only makes
+    sense against a debt, so save goals pass None."""
+    balance = _account_balance(cursor, user_id, row.account_id)
+    saved = balance - float(row.baseline_amount)
+    inflow = _recent_monthly_inflow(cursor, user_id, row.account_id)
+    apr = row.account_apr if row.goal_type == 'payoff' else None
+    projection = compute_goal_projection(row.target_amount, saved,
+                                         row.target_date, inflow, apr=apr)
     return {
-        'id': gid,
-        'name': name,
-        'type': goal_type,
-        'target_amount': float(target_amount),
-        'target_date': target_date,
-        'account_name': account_name,
+        'id': row.id,
+        'name': row.name,
+        'type': row.goal_type,
+        'target_amount': float(row.target_amount),
+        'target_date': row.target_date,
+        'account_name': row.account_name,
         'saved': round(saved, 2),
         **projection,
     }
@@ -230,7 +276,7 @@ def compute_goal_coach_facts(cursor, user_id):
 
         {goals: [{name, target_amount, saved, percent, remaining, complete,
                   on_track, required_per_month, projected_date, target_date,
-                  monthly_net_inflow}, ...],
+                  monthly_net_inflow, est_monthly_interest}, ...],
          count, incomplete_count, on_track_count, total_saved, total_target}
     """
     goals = build_goals_view(cursor, user_id)
@@ -247,6 +293,7 @@ def compute_goal_coach_facts(cursor, user_id):
         'projected_date': g['projected_date'],
         'target_date': g['target_date'],
         'monthly_net_inflow': g['monthly_net_inflow'],
+        'est_monthly_interest': g['est_monthly_interest'],
     } for g in goals]
     return {
         'goals': goal_facts,

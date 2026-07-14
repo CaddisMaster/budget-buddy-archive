@@ -20,7 +20,7 @@
     </p>
     {% if not g.complete %}
     <p class="goal-sub">
-        ${{ g.remaining|money }} still owed.
+        ${{ g.remaining|money }} still owed{% if g.est_monthly_interest %} — interest adds ~${{ g.est_monthly_interest|money }}/mo{% endif %}.
         {% if g.required_per_month is not none and g.target_date %}
         Set aside ${{ g.required_per_month|money }}/mo to hit {{ g.target_date }}.
         {% endif %}
@@ -28,6 +28,8 @@
         At your recent pace (${{ g.monthly_net_inflow|money }}/mo) you'll be debt-free around {{ g.projected_date }}.
         {% elif g.monthly_net_inflow <= 0 %}
         No recent net paydown on this account yet.
+        {% elif g.est_monthly_interest %}
+        Interest currently outpaces your paydown — this balance won't clear at the recent pace.
         {% endif %}
     </p>
     {% endif %}

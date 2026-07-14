@@ -16,7 +16,7 @@ from app.blueprints.accounts import (
     _parse_apr, monthly_interest, credit_card_utilization_facts,
 )
 import app.blueprints.ask as ask
-from tests.conftest import create_account, create_transaction
+from tests.conftest import create_account, create_goal, create_transaction
 
 HX = {"HX-Request": "true"}
 
@@ -281,6 +281,24 @@ def test_edit_save_returns_row_fragment_with_interest(client_a, users):
     assert "<html" not in html  # fragment, not a page
     assert "~$10.00/mo interest at 20.0% APR" in html  # 600 × 0.20 / 12
     assert float(_fetch_apr(aid)) == 20.0
+
+
+# --- payoff-goal card (the v10.15 rider) ------------------------------------------
+
+def test_payoff_goal_card_shows_interest_add(client_a, users):
+    aid = create_account(users["a"]["id"], "PayoffApr", "Credit Card", apr=24.0)
+    create_transaction(users["a"]["id"], aid, 1200, date.today())  # $1,200 debt
+    create_goal(users["a"]["id"], aid, 1200, baseline=-1200, goal_type="payoff")
+    html = client_a.get("/goals").get_data(as_text=True)
+    assert "interest adds ~$24.00/mo" in html  # 1200 × 0.24 / 12
+
+
+def test_payoff_goal_card_no_apr_no_interest_text(client_a, users):
+    aid = create_account(users["a"]["id"], "PayoffPlain", "Credit Card")
+    create_transaction(users["a"]["id"], aid, 1200, date.today())
+    create_goal(users["a"]["id"], aid, 1200, baseline=-1200, goal_type="payoff")
+    html = client_a.get("/goals").get_data(as_text=True)
+    assert "interest adds" not in html
 
 
 def test_create_and_edit_persist_apr(client_a, users):

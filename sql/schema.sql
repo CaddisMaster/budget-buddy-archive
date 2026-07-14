@@ -40,7 +40,8 @@ CREATE TABLE public.account (
     created_at timestamp without time zone DEFAULT now(),
     user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     last_checked_in date,  -- v10.9 balance check-in; NULL = never reconciled
-    credit_limit numeric(10,2)  -- v10.10 credit limit; NULL = not set; meaningful for Credit Card accounts
+    credit_limit numeric(10,2),  -- v10.10 credit limit; NULL = not set; meaningful for Credit Card accounts
+    apr numeric(5,2)  -- v10.15 APR percent; NULL = not set; meaningful for Credit Card accounts
 );
 
 -- ------------------------------------------------------------

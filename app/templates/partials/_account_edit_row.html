@@ -10,6 +10,10 @@
            value="{{ account.credit_limit if account.credit_limit is not none else '' }}"
            placeholder="Credit limit" title="Optional — credit cards only"
            style="margin-top:0.35rem">
+    <input type="number" name="apr" step="0.01" min="0.01" max="100"
+           value="{{ account.apr if account.apr is not none else '' }}"
+           placeholder="APR %" title="Optional — credit cards only"
+           style="margin-top:0.35rem">
   </td>
   <td class="{% if account.balance >= 0 %}income{% else %}expense{% endif %}">${{ account.balance|money }}</td>
   <td style="color:var(--text-muted)">{{ account.last_checked_in.strftime('%b %-d, %Y') if account.last_checked_in else 'Never' }}</td>

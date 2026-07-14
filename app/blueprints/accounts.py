@@ -25,12 +25,13 @@ ACCOUNT_ROW_SQL = """
         a.last_checked_in,
         (a.last_checked_in IS NULL
             OR a.last_checked_in < CURRENT_DATE - {stale_days}) AS checkin_stale,
-        a.credit_limit
+        a.credit_limit,
+        a.apr
     FROM account a
     LEFT JOIN transactions t ON a.account_id = t.account_id AND t.user_id = a.user_id
     WHERE a.user_id = %s {extra}
     GROUP BY a.account_id, a.account_name, a.type, a.last_checked_in,
-        a.credit_limit
+        a.credit_limit, a.apr
     ORDER BY a.account_name
 """.replace('{stale_days}', str(CHECKIN_STALE_DAYS))
 
@@ -98,6 +99,26 @@ def _parse_credit_limit(raw):
     return parse_positive_amount(raw, 'Credit limit')
 
 
+# A percent has a hard real-world ceiling a dollar limit doesn't: the realistic
+# failure is a units typo ('2499' for 24.99%) that would narrate absurd interest
+# figures as ground truth.
+APR_MAX = 100
+
+
+def _parse_apr(raw):
+    """Optional APR field: blank → (None, None) = not set; otherwise the shared
+    positive-amount validation plus the percent sanity cap."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None, None
+    apr, error = parse_positive_amount(raw, 'APR')
+    if error:
+        return None, error
+    if apr > APR_MAX:
+        return None, 'APR must be 100 or less'
+    return apr, None
+
+
 def _fetch_account_row(cursor, account_id):
     """Single account row (with balance) for the current user, or 404."""
     cursor.execute(ACCOUNT_ROW_SQL.format(extra="AND a.account_id = %s"),
@@ -127,6 +148,8 @@ def accounts():
         error = _validate(name, account_type)
         if not error:
             credit_limit, error = _parse_credit_limit(request.form.get('credit_limit'))
+        if not error:
+            apr, error = _parse_apr(request.form.get('apr'))
         if error:
             if is_htmx():
                 return hx_toast(make_response('', 200), error, 'error')
@@ -135,9 +158,9 @@ def accounts():
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "INSERT INTO account (account_name, type, credit_limit, user_id) "
-                    "VALUES (%s, %s, %s, %s) RETURNING account_id",
-                    (name, account_type, credit_limit, current_user.id),
+                    "INSERT INTO account (account_name, type, credit_limit, apr, user_id) "
+                    "VALUES (%s, %s, %s, %s, %s) RETURNING account_id",
+                    (name, account_type, credit_limit, apr, current_user.id),
                 )
                 new_id = cursor.fetchone()[0]
         except psycopg2.Error:
@@ -178,28 +201,33 @@ def edit_account(account_id):
     if request.method == 'POST':
         name = request.form['name'].strip()
         account_type = request.form.get('type', '').strip()
-        # Error paths re-render the edit row with the RAW posted limit string
-        # (so the user sees what they typed); happy path stores the parsed value.
+        # Error paths re-render the edit row with the RAW posted limit/apr
+        # strings (so the user sees what they typed); happy path stores the
+        # parsed values.
         raw_limit = request.form.get('credit_limit', '')
+        raw_apr = request.form.get('apr', '')
         error = _validate(name, account_type)
         credit_limit = None
+        apr = None
         if not error:
             credit_limit, error = _parse_credit_limit(raw_limit)
+        if not error:
+            apr, error = _parse_apr(raw_apr)
         if error:
             account = account._replace(account_name=name, type=account_type,
-                                       credit_limit=raw_limit)
+                                       credit_limit=raw_limit, apr=raw_apr)
             return render_template('partials/_account_edit_row.html', account=account, error=error)
         try:
             with db_cursor(commit=True) as cursor:
                 cursor.execute(
-                    "UPDATE account SET account_name=%s, type=%s, credit_limit=%s "
+                    "UPDATE account SET account_name=%s, type=%s, credit_limit=%s, apr=%s "
                     "WHERE account_id=%s AND user_id=%s",
-                    (name, account_type, credit_limit, account_id, current_user.id),
+                    (name, account_type, credit_limit, apr, account_id, current_user.id),
                 )
         except psycopg2.Error:
             current_app.logger.exception('edit account failed')
             account = account._replace(account_name=name, type=account_type,
-                                       credit_limit=raw_limit)
+                                       credit_limit=raw_limit, apr=raw_apr)
             return render_template('partials/_account_edit_row.html', account=account, error=GENERIC_ERROR)
         with db_cursor() as cursor:
             account = _fetch_account_row(cursor, account_id)

@@ -68,6 +68,10 @@
 }
 
 /* Base */
+/* html gets an explicit background because iOS 26 tints the standalone-PWA
+   status bar from the sampled page background (theme-color is ignored now) —
+   without it the bar renders as a gray glass band over the app. */
+html { background: var(--bg); }
 body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: var(--fs-base); color: var(--text); background: var(--bg); line-height: 1.6; -webkit-font-smoothing: antialiased; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { color: var(--accent-hover); }
@@ -86,6 +90,7 @@ h2 { font-size: var(--fs-md); font-weight: 600; letter-spacing: -0.01em; margin:
   flex-direction: column;
   position: fixed;
   top: 0; left: 0; bottom: 0;
+  padding-top: env(safe-area-inset-top);
   transition: transform 0.25s ease;
   z-index: 100;
   overflow: hidden;
@@ -113,7 +118,11 @@ h2 { font-size: var(--fs-md); font-weight: 600; letter-spacing: -0.01em; margin:
 .sidebar nav .nav-logout button:hover { background: var(--surface-2); color: var(--text); }
 
 /* Main content */
-.main-content { flex: 1; margin-left: var(--sidebar-width); padding: 2rem; transition: margin-left 0.25s ease; }
+/* min-width: 0 — as a flex item, .main-content's automatic minimum is its
+   content's min-content width; a wide table would inflate the whole page
+   past the viewport (body pans sideways) instead of scrolling inside its
+   .table-wrapper. Zeroing it keeps overflow where the wrappers expect it. */
+.main-content { flex: 1; min-width: 0; margin-left: var(--sidebar-width); padding: 2rem; transition: margin-left 0.25s ease; }
 .main-content.expanded { margin-left: 0; }
 
 /* Hamburger */
@@ -341,6 +350,10 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
   .main-content {
     margin-left: 0;
     padding: 1rem;
+    /* Installed-PWA safe areas (viewport-fit=cover): keep content clear of the
+       status bar / home indicator instead of sliding under the clock. */
+    padding-top: calc(1rem + env(safe-area-inset-top));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   }
   .main-content.expanded {
     margin-left: 0;
@@ -353,10 +366,10 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
   .hero-stats { grid-template-columns: 1fr 1fr; }
   td, th { padding: 0.5rem 0.6rem; font-size: 13px; }
   /* The quick-add pill becomes a floating action button; toasts sit above it. */
-  .quick-add-btn { position: fixed; right: 1rem; bottom: 1rem; width: 56px; height: 56px; border-radius: 50%; justify-content: center; padding: 0; box-shadow: var(--shadow-lg); z-index: 90; }
+  .quick-add-btn { position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 50%; justify-content: center; padding: 0; box-shadow: var(--shadow-lg); z-index: 90; }
   .quick-add-btn svg { width: 24px; height: 24px; }
   .quick-add-btn span { display: none; }
-  #toast-host { left: 1rem; right: 1rem; bottom: calc(1rem + 64px); max-width: none; }
+  #toast-host { left: 1rem; right: 1rem; bottom: calc(1rem + 64px + env(safe-area-inset-bottom)); max-width: none; }
 
   /* v10.13 — History becomes stacked cards on phones: same <tr> markup, the
      9-column table is unusable at 375px. Each row is a grid card; the Type

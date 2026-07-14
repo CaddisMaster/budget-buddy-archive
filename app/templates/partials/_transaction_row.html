@@ -2,7 +2,7 @@
   <td class="bulk-col">{% if not t.is_transfer %}<input type="checkbox" class="row-select" name="row_id" value="{{ t.id }}" aria-label="Select row">{% endif %}</td>
   <td class="c-date">{{ t.transaction_date }}</td>
   <td class="c-type">{{ t.transaction_type | capitalize }}</td>
-  <td class="c-amount">{{ t.amount }}</td>
+  <td class="c-amount">${{ t.amount|money }}</td>
   <td class="c-desc">
     {{ t.description }}
     {% if t.is_transfer %}<span class="transfer-badge">⇄ Transfer</span>{% endif %}

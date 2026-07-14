@@ -85,9 +85,12 @@ def compute_month_facts(user_id, year, month):
          prev: {income, expenses, net},
          top_categories: [{name, amount}, ...],   # this month's top expenses
          overruns: [{category, budget, actual, over}, ...],  # actual > budget
-         credit_cards: [{name, limit, debt, available, utilization_pct}, ...]}
-           # v10.10 — CURRENT card utilization snapshot (cards with a limit
-           # set only; always present, [] when none)
+         credit_cards: [{name, limit?, debt, available?, utilization_pct?,
+                         apr?, est_monthly_interest?}, ...]}
+           # v10.10 — CURRENT card snapshot (always present, [] when none).
+           # Per-key presence: limit keys when a limit is set; apr +
+           # est_monthly_interest (v10.15) when an apr is set and the card
+           # carries debt
     """
     year, month = int(year), int(month)
     with db_cursor() as cursor:

@@ -97,11 +97,15 @@ def monthly_interest(balance, apr):
 
 
 def credit_card_utilization_facts(user_id):
-    """[{name, limit, debt, available, utilization_pct}] for the user's Credit
-    Card accounts with a usable limit set, name order; [] otherwise.
-    Deterministic — the only source of utilization figures the AI narrates.
-    Reports positive `debt` rather than the signed balance so the narration
-    can't misread a minus sign."""
+    """Per-card facts for the user's Credit Card accounts, name order; [] when
+    none qualify. Deterministic — the only source of card figures the AI
+    narrates. A card qualifies with a usable limit OR usable interest (v10.15),
+    and the keys are per-feature: {name} always, plus
+    {limit, debt, available, utilization_pct} when a limit is set, plus
+    {debt, apr, est_monthly_interest} when an apr is set and the card carries
+    debt (both branches compute the same `debt`). Reports positive `debt`
+    rather than the signed balance so the narration can't misread a minus
+    sign."""
     with db_cursor() as cursor:
         cursor.execute(ACCOUNT_ROW_SQL.format(extra=""), (user_id,))
         rows = cursor.fetchall()
@@ -110,10 +114,17 @@ def credit_card_utilization_facts(user_id):
         if r.type != 'Credit Card':
             continue
         cu = credit_utilization(r.balance, r.credit_limit)
-        if cu is None:
+        mi = monthly_interest(r.balance, r.apr)
+        if cu is None and mi is None:
             continue
-        facts.append({'name': r.account_name, 'limit': cu['limit'], 'debt': cu['debt'],
-                      'available': cu['available'], 'utilization_pct': cu['pct']})
+        fact = {'name': r.account_name}
+        if cu:
+            fact.update({'limit': cu['limit'], 'debt': cu['debt'],
+                         'available': cu['available'], 'utilization_pct': cu['pct']})
+        if mi:
+            fact.update({'debt': mi['debt'], 'apr': mi['apr'],
+                         'est_monthly_interest': mi['monthly']})
+        facts.append(fact)
     return facts
 
 

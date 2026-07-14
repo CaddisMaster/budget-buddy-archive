@@ -12,7 +12,9 @@ from datetime import date
 from decimal import Decimal
 
 from app.db import get_db_connection
-from app.blueprints.accounts import _parse_apr, monthly_interest
+from app.blueprints.accounts import (
+    _parse_apr, monthly_interest, credit_card_utilization_facts,
+)
 import app.blueprints.ask as ask
 from tests.conftest import create_account, create_transaction
 
@@ -129,6 +131,69 @@ def test_create_with_invalid_apr_writes_nothing(client_a, users):
     cur.close()
     conn.close()
     assert row is None
+
+
+# --- facts for Insight / Digest ---------------------------------------------------
+
+def test_facts_interest_only_card(users):
+    # APR set, no limit — the card still makes the facts, interest keys only.
+    aid = create_account(users["a"]["id"], "FactAprOnly", "Credit Card", apr=24.0)
+    create_transaction(users["a"]["id"], aid, 500, date.today())
+    facts = credit_card_utilization_facts(users["a"]["id"])
+    assert facts == [{"name": "FactAprOnly", "debt": 500.0, "apr": 24.0,
+                      "est_monthly_interest": 10.0}]
+
+
+def test_facts_both_limit_and_apr(users):
+    aid = create_account(users["a"]["id"], "FactBoth", "Credit Card",
+                         credit_limit=2000, apr=24.0)
+    create_transaction(users["a"]["id"], aid, 500, date.today())
+    facts = credit_card_utilization_facts(users["a"]["id"])
+    assert facts == [{"name": "FactBoth", "limit": 2000.0, "debt": 500.0,
+                      "available": 1500.0, "utilization_pct": 25.0,
+                      "apr": 24.0, "est_monthly_interest": 10.0}]
+
+
+def test_facts_apr_card_without_debt_keeps_utilization_only(users):
+    # Limit set, APR set, no debt → utilization keys only (interest gate: debt > 0).
+    create_account(users["a"]["id"], "FactIdle", "Credit Card",
+                   credit_limit=1000, apr=24.0)
+    facts = credit_card_utilization_facts(users["a"]["id"])
+    assert facts == [{"name": "FactIdle", "limit": 1000.0, "debt": 0.0,
+                      "available": 1000.0, "utilization_pct": 0.0}]
+
+
+def test_facts_empty_without_limits_or_apr(users):
+    aid = create_account(users["a"]["id"], "FactPlain", "Credit Card")
+    create_transaction(users["a"]["id"], aid, 500, date.today())
+    assert credit_card_utilization_facts(users["a"]["id"]) == []
+
+
+def test_facts_user_isolation_apr(users):
+    aid = create_account(users["a"]["id"], "IsoAprA", "Credit Card", apr=24.0)
+    create_transaction(users["a"]["id"], aid, 500, date.today())
+    assert credit_card_utilization_facts(users["b"]["id"]) == []
+
+
+def test_month_facts_carry_interest(users):
+    from app.blueprints.insights import compute_month_facts
+    aid = create_account(users["a"]["id"], "InsightApr", "Credit Card", apr=12.0)
+    create_transaction(users["a"]["id"], aid, 1000, date.today())
+    today = date.today()
+    facts = compute_month_facts(users["a"]["id"], today.year, today.month)
+    assert facts["credit_cards"] == [
+        {"name": "InsightApr", "debt": 1000.0, "apr": 12.0,
+         "est_monthly_interest": 10.0}]
+
+
+def test_digest_facts_pass_interest_through(users):
+    from app.blueprints.digests import compute_digest_facts
+    aid = create_account(users["a"]["id"], "DigestApr", "Credit Card", apr=12.0)
+    create_transaction(users["a"]["id"], aid, 1000, date.today())
+    facts = compute_digest_facts(users["a"]["id"])
+    assert facts["credit_cards"] == [
+        {"name": "DigestApr", "debt": 1000.0, "apr": 12.0,
+         "est_monthly_interest": 10.0}]
 
 
 # --- ask tool: account_balances enrichment ---------------------------------------

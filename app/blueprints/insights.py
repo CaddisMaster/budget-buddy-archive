@@ -163,11 +163,12 @@ def generate():
         year, month = today.year, today.month
     facts = compute_month_facts(current_user.id, year, month)
 
-    def _card(insight):
+    def _card(insight, just_generated=False):
         return make_response(render_template(
             'partials/_insight_card.html',
             insight=insight, facts=facts,
-            insight_year=year, insight_month=month, ai_enabled=True))
+            insight_year=year, insight_month=month, ai_enabled=True,
+            just_generated=just_generated))
 
     if facts['income'] == 0 and facts['expenses'] == 0:
         return hx_toast(_card(None), 'Not enough data for this month yet', 'error')
@@ -184,8 +185,13 @@ def generate():
             ON CONFLICT (user_id, year, month)
             DO UPDATE SET content = EXCLUDED.content, model = EXCLUDED.model,
                           created_at = now()
+            RETURNING created_at
         """, (current_user.id, year, month, json.dumps(result), MODEL))
+        created_at = cursor.fetchone().created_at
 
     insight = dict(result)
-    insight['created_at'] = today
-    return hx_toast(_card(insight), 'Insight ready')
+    # The DB timestamp, not datetime.today() — data-generated must render the
+    # same value the next dashboard load reads back, or the read-state collapse
+    # treats the card as new once more.
+    insight['created_at'] = created_at
+    return hx_toast(_card(insight, just_generated=True), 'Insight ready')

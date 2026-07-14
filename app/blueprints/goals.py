@@ -369,10 +369,11 @@ def coach_generate():
     with db_cursor() as cursor:
         facts = compute_goal_coach_facts(cursor, current_user.id)
 
-    def _card(coach):
+    def _card(coach, just_generated=False):
         return make_response(render_template(
             'partials/_goal_coach_card.html',
-            coach=coach, facts=facts, ai_enabled=True))
+            coach=coach, facts=facts, ai_enabled=True,
+            just_generated=just_generated))
 
     if facts['incomplete_count'] == 0:
         return hx_toast(_card(None), 'No goals in progress to coach yet', 'error')
@@ -390,14 +391,17 @@ def coach_generate():
                 ON CONFLICT (user_id, year, month)
                 DO UPDATE SET content = EXCLUDED.content, model = EXCLUDED.model,
                               created_at = now()
+                RETURNING created_at
             """, (current_user.id, year, month, json.dumps(result), MODEL))
+            created_at = cursor.fetchone().created_at
     except psycopg2.Error:
         current_app.logger.exception('save goal coach failed')
         return hx_toast(_card(None), "Couldn't save coaching right now", 'error')
 
     coach = dict(result)
-    coach['created_at'] = today
-    return hx_toast(_card(coach), 'Coaching ready')
+    # DB timestamp, not datetime.today() — see insights.generate.
+    coach['created_at'] = created_at
+    return hx_toast(_card(coach, just_generated=True), 'Coaching ready')
 
 
 @bp.route('/goals/<int:goal_id>/edit', methods=['GET', 'POST'])

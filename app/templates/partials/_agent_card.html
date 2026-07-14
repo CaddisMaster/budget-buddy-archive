@@ -2,13 +2,17 @@
    {summary, findings:[{title, detail, evidence}], tools_used, period_start,
    created_at} or None (never run yet — the empty state carries the Run-now
    button). POST /agent/run swaps this whole card. #}
-<div id="agent-card" class="card ai-card agent-card">
-  <div class="ai-head">
+{# Read-state collapse (v10.15) — see _insight_card.html. #}
+<details id="agent-card" class="card ai-card agent-card" data-ai-key="agent"
+         {%- if agent_run and agent_run.created_at %} data-generated="{{ agent_run.created_at.isoformat() }}"{% endif %}
+         {%- if just_generated or not agent_run %} open{% endif %}>
+  <summary class="ai-head">
     {% include 'partials/_ai_spark.html' %}
     <h2>Money agent — weekly check</h2>
     <span class="ai-badge">AI</span>
     <span id="agent-spinner" class="htmx-indicator insight-spinner">Investigating…</span>
-  </div>
+    {% if agent_run %}<span class="ai-headline{{ ' warn' if agent_run.findings }}">{% if agent_run.findings %}{{ agent_run.findings|length }} finding{{ '' if agent_run.findings|length == 1 else 's' }}{% else %}All quiet{% endif %}</span>{% endif %}
+  </summary>
   {% if agent_run %}
   {% if agent_run.findings %}
   <ul class="agent-findings">
@@ -36,4 +40,4 @@
           hx-target="#agent-card" hx-swap="outerHTML"
           hx-indicator="#agent-spinner">Run now</button>
   {% endif %}
-</div>
+</details>

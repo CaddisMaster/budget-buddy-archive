@@ -9,10 +9,10 @@
    release date in the badge (set/corrected at ship), and one .whatsnew-block per
    feature. One bundle per strip; only ever one strip here at a time. Dismiss is
    per-device (localStorage, keyed by version) — a new version resurfaces it. #}
-<div class="card whatsnew" id="whatsnew" data-version="v10.14.0" hidden>
+<div class="card whatsnew" id="whatsnew" data-version="v10.15.0" hidden>
   <div class="whatsnew-head">
-    <strong>What's new in v10.14.0</strong>
-    <span class="recurring-badge">2026-07-13</span>
+    <strong>What's new in v10.15.0</strong>
+    <span class="recurring-badge">TBD</span>
     <span class="whatsnew-actions">
       <button type="button" class="btn btn-sm" id="whatsnew-toggle">Details</button>
       <button type="button" class="btn btn-sm" id="whatsnew-dismiss" aria-label="Dismiss">✕</button>
@@ -20,14 +20,19 @@
   </div>
   <div class="whatsnew-body" hidden>
     <div class="whatsnew-block">
-      <strong>A real app icon</strong>
+      <strong>AI cards get out of your way</strong>
       <ul class="whatsnew-list">
-        <li><strong>New brand mark:</strong> The faint wallet outline is gone — Budget Buddy's
-            icon is now a bold white coin with a dollar sign, easy to spot at a glance.</li>
-        <li><strong>Everywhere the app shows its face:</strong> Home screen icon, browser tab,
-            and the sidebar logo all match.</li>
-        <li><strong>Already installed on your phone?</strong> Remove and re-add the home-screen
-            icon to pick up the new look.</li>
+        {# "Money agent" spelled as "weekly money check" on purpose — the strip
+           renders with AI off, and tests assert the agent CARD's absence by
+           that exact string. #}
+        <li><strong>Read it once, then it folds up:</strong> Insight, Forecast, the weekly
+            money check, and Goal Coach collapse to a one-line header after you've seen
+            them — no more scrolling past paragraphs you already read.</li>
+        <li><strong>Fresh content opens itself:</strong> A new month's insight or this week's
+            agent check arrives expanded, so you never miss anything new.</li>
+        <li><strong>The header still talks:</strong> Collapsed cards show the number that
+            matters — the month's net, the projected net, or how many findings the agent
+            turned up. Tap to reopen anytime.</li>
       </ul>
     </div>
     {# Next feature block:

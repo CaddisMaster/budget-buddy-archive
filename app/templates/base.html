@@ -114,6 +114,24 @@ document.body.addEventListener('showToast', (e) => {
   showToast(d.message || d.value || d, d.kind);
 });
 
+// AI-card read-state collapse (v10.15): cards render closed; unseen content
+// (data-generated not yet in localStorage) opens on first view and that view
+// marks it read. Cards without data-generated (empty states) are left alone —
+// the server renders those open. Re-runs after HTMX swaps a regenerated card.
+function initAiCollapse(root) {
+  root.querySelectorAll('details[data-ai-key][data-generated]').forEach((el) => {
+    const key = 'bb-ai-seen:' + el.dataset.aiKey;
+    if (localStorage.getItem(key) !== el.dataset.generated) {
+      el.open = true;
+      localStorage.setItem(key, el.dataset.generated);
+    }
+  });
+}
+initAiCollapse(document);
+document.body.addEventListener('htmx:afterSwap', (e) => {
+  if (e.target instanceof Element) initAiCollapse(e.target.parentElement || document);
+});
+
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 </script>
 </body>

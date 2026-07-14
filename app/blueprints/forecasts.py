@@ -248,11 +248,12 @@ def generate():
         year, month = today.year, today.month
     facts = compute_forecast(current_user.id, year, month)
 
-    def _card(forecast):
+    def _card(forecast, just_generated=False):
         return make_response(render_template(
             'partials/_forecast_card.html',
             forecast=forecast, forecast_facts=facts,
-            forecast_year=year, forecast_month=month, ai_enabled=True))
+            forecast_year=year, forecast_month=month, ai_enabled=True,
+            just_generated=just_generated))
 
     if (facts['income_to_date'] == 0 and facts['expenses_to_date'] == 0
             and not facts['remaining_items']):
@@ -273,8 +274,11 @@ def generate():
             ON CONFLICT (user_id, year, month)
             DO UPDATE SET content = EXCLUDED.content, model = EXCLUDED.model,
                           created_at = now()
+            RETURNING created_at
         """, (current_user.id, year, month, json.dumps(result), MODEL))
+        created_at = cursor.fetchone().created_at
 
     forecast = dict(result)
-    forecast['created_at'] = today
-    return hx_toast(_card(forecast), 'Forecast ready')
+    # DB timestamp, not datetime.today() — see insights.generate.
+    forecast['created_at'] = created_at
+    return hx_toast(_card(forecast, just_generated=True), 'Forecast ready')

@@ -1,11 +1,15 @@
 {% set month_names = ['','January','February','March','April','May','June','July','August','September','October','November','December'] %}
-<div id="forecast-card" class="card ai-card forecast-card">
-  <div class="ai-head">
+{# Read-state collapse (v10.15) — see _insight_card.html. #}
+<details id="forecast-card" class="card ai-card forecast-card" data-ai-key="forecast"
+         {%- if forecast and forecast.created_at %} data-generated="{{ forecast.created_at.isoformat() }}"{% endif %}
+         {%- if just_generated or not forecast %} open{% endif %}>
+  <summary class="ai-head">
     {% include 'partials/_ai_spark.html' %}
     <h2>Forecast — {{ month_names[forecast_month] }} {{ forecast_year }}</h2>
     <span class="ai-badge">AI</span>
     <span id="forecast-spinner" class="htmx-indicator insight-spinner">Forecasting…</span>
-  </div>
+    {% if forecast %}<span class="ai-headline {{ 'pos' if forecast_facts.projected_net >= 0 else 'neg' }}">Proj. net ${{ "%.0f"|format(forecast_facts.projected_net) }}</span>{% endif %}
+  </summary>
   {% if forecast %}
   <div class="facts-strip">
     <div class="fact"><span class="fact-label">Projected income</span><span class="fact-val">${{ "%.0f"|format(forecast_facts.projected_income) }}</span></div>
@@ -40,4 +44,4 @@
           hx-target="#forecast-card" hx-swap="outerHTML"
           hx-indicator="#forecast-spinner">Generate forecast</button>
   {% endif %}
-</div>
+</details>

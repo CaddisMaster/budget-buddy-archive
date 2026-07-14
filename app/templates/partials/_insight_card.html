@@ -1,11 +1,18 @@
 {% set month_names = ['','January','February','March','April','May','June','July','August','September','October','November','December'] %}
-<div id="insight-card" class="card ai-card insight-card">
-  <div class="ai-head">
+{# Read-state collapse (v10.15): closed by default; open when there's nothing
+   cached yet (the Generate button must stay reachable without JS) or when the
+   generate route just swapped this fragment in. initAiCollapse (base.html)
+   opens unseen content and records data-generated in localStorage. #}
+<details id="insight-card" class="card ai-card insight-card" data-ai-key="insight"
+         {%- if insight and insight.created_at %} data-generated="{{ insight.created_at.isoformat() }}"{% endif %}
+         {%- if just_generated or not insight %} open{% endif %}>
+  <summary class="ai-head">
     {% include 'partials/_ai_spark.html' %}
     <h2>Insight — {{ month_names[insight_month] }} {{ insight_year }}</h2>
     <span class="ai-badge">AI</span>
     <span id="insight-spinner" class="htmx-indicator insight-spinner">Generating…</span>
-  </div>
+    {% if insight %}<span class="ai-headline {{ 'pos' if facts.net >= 0 else 'neg' }}">Net ${{ "%.0f"|format(facts.net) }}</span>{% endif %}
+  </summary>
   {% if insight %}
   <div class="facts-strip">
     <div class="fact"><span class="fact-label">Income</span><span class="fact-val">${{ "%.0f"|format(facts.income) }}</span></div>
@@ -41,4 +48,4 @@
           hx-target="#insight-card" hx-swap="outerHTML"
           hx-indicator="#insight-spinner">Generate insight</button>
   {% endif %}
-</div>
+</details>

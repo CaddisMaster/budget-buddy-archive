@@ -108,16 +108,19 @@ def run():
     precedent) — the upsert overwrites this week's row. Any failure falls back
     to the previously cached card + an error toast, so the dashboard never
     breaks."""
-    def _card(agent_run):
+    def _card(agent_run, just_generated=False):
         return make_response(render_template(
-            'partials/_agent_card.html', agent_run=agent_run))
+            'partials/_agent_card.html', agent_run=agent_run,
+            just_generated=just_generated))
 
     try:
         agent_run = run_money_agent(current_user.id)
     except ParseError:
+        # The fallback re-renders the PREVIOUS cached run — old content, so it
+        # keeps the default collapsed-when-read behaviour (no just_generated).
         with db_cursor() as cursor:
             agent_run = load_agent_run(cursor, current_user.id)
         return hx_toast(_card(agent_run),
                         "Couldn't run the money agent right now", 'error')
 
-    return hx_toast(_card(agent_run), 'Weekly check complete')
+    return hx_toast(_card(agent_run, just_generated=True), 'Weekly check complete')

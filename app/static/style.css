@@ -430,6 +430,18 @@ body.bulk-mode td.bulk-col { cursor: pointer; } /* whole cell toggles the box */
 .ai-card { border-left: 3px solid var(--accent-2); }
 .ai-head { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
 .ai-head h2, .ai-head label { margin: 0; }
+/* Read-state collapse (v10.15): the AI cards are <details> and .ai-head is
+   their <summary> — same hidden-marker + CSS-chevron treatment as
+   .charts-details. Collapsed, the card is just this header line. */
+summary.ai-head { list-style: none; cursor: pointer; user-select: none; }
+summary.ai-head::-webkit-details-marker { display: none; }
+summary.ai-head::after { content: ''; width: 9px; height: 9px; flex-shrink: 0; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); transform: rotate(-45deg); transition: transform 0.15s; }
+details[open] > summary.ai-head::after { transform: rotate(45deg); }
+details.ai-card:not([open]) > summary.ai-head { margin-bottom: 0; }
+.ai-headline { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.ai-headline.pos { color: var(--success); }
+.ai-headline.neg { color: var(--danger); }
+.ai-headline.warn { color: var(--warning); }
 .ai-spark { width: 18px; height: 18px; color: var(--accent-2); flex-shrink: 0; }
 .ai-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-2); background: var(--accent-2-soft); border: 1px solid var(--accent-2); border-radius: 999px; padding: 1px 7px; }
 .ai-intro { font-size: 12px; color: var(--text-muted); margin: 0 0 0.6rem; }
@@ -474,4 +486,6 @@ tr:hover td.report-miss { background: var(--danger-soft); }
 /* v10.9 merged dashboard — Insight + Forecast share a row on wide screens;
    a lone card (only one of the two showing) stretches full width. */
 .ai-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; align-items: start; margin-bottom: 1rem; }
-.ai-row .card { margin-bottom: 0; height: 100%; }
+/* No height:100% here (was pre-v10.15): a collapsed card must not stretch to
+   match an expanded sibling — align-items:start sizes each to its content. */
+.ai-row .card { margin-bottom: 0; }

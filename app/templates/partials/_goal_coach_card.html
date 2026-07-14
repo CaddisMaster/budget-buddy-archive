@@ -1,10 +1,14 @@
-<div id="goal-coach-card" class="card ai-card goal-coach-card">
-  <div class="ai-head">
+{# Read-state collapse (v10.15) — see _insight_card.html. #}
+<details id="goal-coach-card" class="card ai-card goal-coach-card" data-ai-key="coach"
+         {%- if coach and coach.created_at %} data-generated="{{ coach.created_at.isoformat() }}"{% endif %}
+         {%- if just_generated or not coach %} open{% endif %}>
+  <summary class="ai-head">
     {% include 'partials/_ai_spark.html' %}
     <h2>Goal Coach</h2>
     <span class="ai-badge">AI</span>
     <span id="coach-spinner" class="htmx-indicator insight-spinner">Generating…</span>
-  </div>
+    {% if coach %}<span class="ai-headline">{{ facts.on_track_count }} of {{ facts.incomplete_count }} on track</span>{% endif %}
+  </summary>
   {% if coach %}
   <div class="facts-strip">
     <div class="fact"><span class="fact-label">Goals</span><span class="fact-val">{{ facts.count }}</span></div>
@@ -30,4 +34,4 @@
           hx-target="#goal-coach-card" hx-swap="outerHTML"
           hx-indicator="#coach-spinner">Generate coaching</button>
   {% endif %}
-</div>
+</details>

@@ -1,3 +1,25 @@
+> # 📦 Archived
+>
+> **Active development has moved to
+> [CaddisMaster/budget-buddy](https://github.com/CaddisMaster/budget-buddy),
+> starting fresh at `v0.1.0`.**
+>
+> This repository is the historical record of the project's first era —
+> **`v1` through `v10.15.0`** — and is kept read-only for reference. Every
+> commit, tag, release note, and issue from that period lives here and is not
+> going anywhere.
+>
+> Nothing was lost in the move. The application itself carried over intact; only
+> the *envelope* around it was rebuilt: an issue → branch → PR workflow, CI and
+> CD in GitHub Actions, container images on GitHub Container Registry instead of
+> Docker Hub, and proper contributor documentation. The version number reset to
+> `0.1.0` to reflect a `0.x` no-stability-contract scheme, replacing the old
+> scheme whose MAJOR had been frozen at `10`.
+>
+> Looking for the history behind a particular feature? It is here. Looking for
+> the code that runs today? It is
+> [over there](https://github.com/CaddisMaster/budget-buddy).
+
 # Budget Buddy
 
 [![CI](https://github.com/CaddisMaster/budget-buddy/actions/workflows/ci.yml/badge.svg)](https://github.com/CaddisMaster/budget-buddy/actions/workflows/ci.yml)
